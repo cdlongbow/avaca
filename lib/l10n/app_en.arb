@@ -25,6 +25,8 @@
   "filterAndSort": "Filter & Sort",
   "add": "Add",
   "settings": "Settings",
+  "themeAndColors": "Theme & Colors",
+  "interfaceSettings": "Interface",
   "loadFailed": "Failed to load: {error}",
   "@loadFailed": {
     "placeholders": {
@@ -42,7 +44,7 @@
   "darkTheme": "Dark",
   "customTheme": "Custom Theme",
   "pureBlackAmoled": "Pure Black AMOLED",
-  "pureBlackOnlyDarkOrCustom": "Only works with dark / custom theme",
+  "pureBlackOnlyDark": "Only works with dark theme",
   "colorSurface": "Background",
   "colorSurfaceContainer": "Card Background",
   "colorOnSurface": "Primary Text",
@@ -85,5 +87,8 @@
   "language": "Language",
   "traditionalChineseTaiwan": "Traditional Chinese (Taiwan)",
   "english": "English",
-  "simplifiedChinese": "Simplified Chinese"
+  "simplifiedChinese": "Simplified Chinese",
+  "works": "Works",
+  "loadFailedGeneric": "Failed to load",
+  "actressWorksTitle": "Works featuring {actressName}"
 }

@@ -5,11 +5,7 @@ import '../controllers/detail_controller.dart';
 import '../core/database.dart';
 
 class DetailView extends StatefulWidget {
-  const DetailView({
-    super.key,
-    required this.db,
-    required this.actressId,
-  });
+  const DetailView({super.key, required this.db, required this.actressId});
 
   final AppDatabase db;
   final int actressId;
@@ -35,10 +31,7 @@ class _DetailViewState extends State<DetailView> {
   void initState() {
     super.initState();
 
-    controller = DetailController(
-      db: widget.db,
-      actressId: widget.actressId,
-    );
+    controller = DetailController(db: widget.db, actressId: widget.actressId);
     controller.addListener(_handleControllerChanged);
 
     initFuture = _initialize();
@@ -84,16 +77,14 @@ class _DetailViewState extends State<DetailView> {
   }
 
   Future<void> _toggleEditMode() async {
-    final editState = await controller.toggleEditMode(
-      context,
-      _getFormData(),
-    );
+    final editState = await controller.toggleEditMode(context, _getFormData());
 
     selectedAttrs
       ..clear()
       ..addAll(
-        (editState['current_attrs'] as List<dynamic>? ?? [])
-            .map((e) => e.toString()),
+        (editState['current_attrs'] as List<dynamic>? ?? []).map(
+          (e) => e.toString(),
+        ),
       );
 
     if (!controller.isEditing) {
@@ -136,9 +127,7 @@ class _DetailViewState extends State<DetailView> {
             title: _buildAppBarTitle(),
             actions: [
               IconButton(
-                icon: Icon(
-                  controller.isEditing ? Icons.save : Icons.edit,
-                ),
+                icon: Icon(controller.isEditing ? Icons.save : Icons.edit),
                 onPressed: _toggleEditMode,
               ),
               if (!controller.isEditing)
@@ -152,29 +141,12 @@ class _DetailViewState extends State<DetailView> {
           body: SafeArea(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(16),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final isWide = constraints.maxWidth >= 800;
-
-                  if (isWide) {
-                    return Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(flex: 4, child: _buildProfilePanel()),
-                        const SizedBox(width: 16),
-                        Expanded(flex: 8, child: _buildInfoPanel()),
-                      ],
-                    );
-                  }
-
-                  return Column(
-                    children: [
-                      _buildProfilePanel(),
-                      const SizedBox(height: 16),
-                      _buildInfoPanel(),
-                    ],
-                  );
-                },
+              child: Column(
+                children: [
+                  _buildProfilePanel(),
+                  const SizedBox(height: 16),
+                  _buildInfoPanel(),
+                ],
               ),
             ),
           ),
@@ -186,23 +158,23 @@ class _DetailViewState extends State<DetailView> {
   Widget _buildAppBarTitle() {
     if (controller.isEditing) {
       return TextField(
+        key: const Key('detail-name-field'),
         controller: nameController,
         textAlign: TextAlign.center,
-        decoration: const InputDecoration(border: InputBorder.none),
-        style: const TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
+        textAlignVertical: TextAlignVertical.center,
+        decoration: const InputDecoration(
+          isDense: true,
+          contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          border: OutlineInputBorder(),
         ),
+        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
       );
     }
 
     return Text(
       controller.actressData['name']?.toString() ??
           AppLocalizations.of(context).dataNotFound,
-      style: const TextStyle(
-        fontSize: 22,
-        fontWeight: FontWeight.bold,
-      ),
+      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
     );
   }
 
@@ -212,36 +184,71 @@ class _DetailViewState extends State<DetailView> {
     final isEditing = controller.isEditing;
 
     return Container(
-      padding: isEditing ? const EdgeInsets.all(20) : EdgeInsets.zero,
       decoration: isEditing
           ? BoxDecoration(
               color: colorScheme.surfaceContainerLow,
               borderRadius: BorderRadius.circular(16),
             )
           : null,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          _buildProfileImage(),
-          if (isEditing) ...[
-            const SizedBox(height: 12),
-            _buildPhotoEditRow(),
-          ],
-          const SizedBox(height: 16),
-          isEditing ? _buildAttrEditRow() : _buildAttrViewRow(),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          const horizontalGap = 16.0;
+          final imageSize = ((constraints.maxWidth - horizontalGap) / 2).clamp(
+            0.0,
+            220.0,
+          );
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: imageSize,
+                child: Column(
+                  children: [
+                    _buildProfileImage(imageSize),
+                    if (isEditing) ...[
+                      const SizedBox(height: 12),
+                      _buildPhotoEditRow(),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: horizontalGap),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    OutlinedButton(
+                      key: const Key('detail-works-button'),
+                      onPressed: _openWorks,
+                      child: Text(AppLocalizations.of(context).works),
+                    ),
+                    const SizedBox(height: 12),
+                    KeyedSubtree(
+                      key: const Key('detail-attributes'),
+                      child: isEditing
+                          ? _buildAttrEditRow()
+                          : _buildAttrViewRow(),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
-  Widget _buildProfileImage() {
+  Widget _buildProfileImage(double imageSize) {
     final imgPath = controller.actressData['img_path']?.toString() ?? '';
     final colorScheme = Theme.of(context).colorScheme;
 
     if (imgPath.isEmpty) {
       return Container(
-        width: 220,
-        height: 220,
+        key: const Key('detail-profile-image'),
+        width: imageSize,
+        height: imageSize,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: colorScheme.surfaceContainerHigh,
@@ -256,11 +263,12 @@ class _DetailViewState extends State<DetailView> {
     }
 
     return ClipRRect(
+      key: const Key('detail-profile-image'),
       borderRadius: BorderRadius.circular(20),
       child: Image.file(
         File(imgPath),
-        width: 220,
-        height: 220,
+        width: imageSize,
+        height: imageSize,
         fit: BoxFit.cover,
       ),
     );
@@ -269,22 +277,26 @@ class _DetailViewState extends State<DetailView> {
   Widget _buildPhotoEditRow() {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+    return Wrap(
+      alignment: WrapAlignment.center,
+      spacing: 8,
+      runSpacing: 4,
       children: [
         ElevatedButton.icon(
           onPressed: () => controller.changePhoto(context),
           icon: const Icon(Icons.add_a_photo),
           label: Text(AppLocalizations.of(context).changePhoto),
+          style: ElevatedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+          ),
         ),
-        const SizedBox(width: 8),
         TextButton.icon(
           onPressed: controller.deletePhoto,
-          icon: Icon(
-            Icons.delete,
-            color: colorScheme.error,
-          ),
+          icon: Icon(Icons.delete, color: colorScheme.error),
           label: Text(AppLocalizations.of(context).deletePhoto),
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+          ),
         ),
       ],
     );
@@ -296,15 +308,12 @@ class _DetailViewState extends State<DetailView> {
     if (controller.currentAttrs.isEmpty) {
       return Text(
         AppLocalizations.of(context).noAttributesSet,
-        style: TextStyle(
-          fontSize: 13,
-          color: colorScheme.outline,
-        ),
+        style: TextStyle(fontSize: 13, color: colorScheme.outline),
       );
     }
 
     return Wrap(
-      alignment: WrapAlignment.center,
+      alignment: WrapAlignment.start,
       spacing: 14,
       runSpacing: 6,
       children: controller.currentAttrs.map((attr) {
@@ -322,12 +331,16 @@ class _DetailViewState extends State<DetailView> {
 
   Widget _buildAttrEditRow() {
     return Wrap(
-      alignment: WrapAlignment.center,
-      spacing: 8,
+      alignment: WrapAlignment.start,
+      spacing: 4,
       runSpacing: 4,
       children: controller.getAttrOptions(context).map((option) {
         return FilterChip(
-          label: Text(option),
+          label: Text(option, style: const TextStyle(fontSize: 14)),
+          labelPadding: const EdgeInsets.symmetric(horizontal: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          visualDensity: const VisualDensity(horizontal: -2, vertical: -4),
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
           selected: selectedAttrs.contains(option),
           onSelected: (selected) {
             setState(() {
@@ -339,6 +352,10 @@ class _DetailViewState extends State<DetailView> {
         );
       }).toList(),
     );
+  }
+
+  void _openWorks() {
+    Navigator.of(context).pushNamed('/works/${widget.actressId}');
   }
 
   // 顯示身體資料與私人筆記。
@@ -434,10 +451,7 @@ class _DetailViewState extends State<DetailView> {
     );
   }
 
-  Widget _buildCard({
-    required String title,
-    required Widget child,
-  }) {
+  Widget _buildCard({required String title, required Widget child}) {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Container(

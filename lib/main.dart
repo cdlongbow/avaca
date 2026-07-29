@@ -9,6 +9,7 @@ import 'views/add_view.dart';
 import 'views/detail_view.dart';
 import 'views/home_view.dart';
 import 'views/settings_view.dart';
+import 'views/works_view.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,10 +21,7 @@ Future<void> main() async {
 }
 
 class AvacaApp extends StatefulWidget {
-  const AvacaApp({
-    super.key,
-    required this.db,
-  });
+  const AvacaApp({super.key, required this.db});
 
   final AppDatabase db;
 
@@ -206,6 +204,14 @@ class _AvacaAppState extends State<AvacaApp> {
 
       if (id != null) {
         return _page(DetailView(db: widget.db, actressId: id));
+      }
+    }
+
+    if (name.startsWith('/works/')) {
+      final id = int.tryParse(name.split('/').last);
+
+      if (id != null) {
+        return _page(WorksView(db: widget.db, actressId: id));
       }
     }
 

@@ -8,10 +8,7 @@ import '../core/database.dart';
 ///
 /// 負責顯示收藏資料、搜尋列、篩選排序選單，以及導向新增、設定與詳細頁。
 class HomeView extends StatefulWidget {
-  const HomeView({
-    super.key,
-    required this.db,
-  });
+  const HomeView({super.key, required this.db});
 
   final AppDatabase db;
 
@@ -109,9 +106,7 @@ class _HomeViewState extends State<HomeView> {
       body: Column(
         children: [
           _buildSearchBar(),
-          Expanded(
-            child: _buildGalleryFuture(),
-          ),
+          Expanded(child: _buildGalleryFuture()),
         ],
       ),
     );
@@ -150,17 +145,15 @@ class _HomeViewState extends State<HomeView> {
       future: galleryFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(),
-          );
+          return const Center(child: CircularProgressIndicator());
         }
 
         if (snapshot.hasError) {
           return Center(
             child: Text(
-              AppLocalizations.of(context).loadFailed(
-                snapshot.error.toString(),
-              ),
+              AppLocalizations.of(
+                context,
+              ).loadFailed(snapshot.error.toString()),
             ),
           );
         }
@@ -168,9 +161,7 @@ class _HomeViewState extends State<HomeView> {
         final data = snapshot.data ?? [];
 
         if (data.isEmpty) {
-          return Center(
-            child: Text(AppLocalizations.of(context).noData),
-          );
+          return Center(child: Text(AppLocalizations.of(context).noData));
         }
 
         return _buildGallery(data);
@@ -238,19 +229,19 @@ class _HomeViewState extends State<HomeView> {
   Widget _buildGallery(List<Map<String, Object?>> actressData) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        const double targetCardWidth = 180;
+        const double targetCardWidth = 120;
         const double spacing = 10;
         const double padding = 10;
 
         final usableWidth = constraints.maxWidth - padding * 2;
         final crossAxisCount = (usableWidth / (targetCardWidth + spacing))
             .floor()
-            .clamp(2, 6);
+            .clamp(3, 9);
 
         final itemWidth =
             (usableWidth - spacing * (crossAxisCount - 1)) / crossAxisCount;
 
-        final childAspectRatio = _calculateCardAspectRatio(itemWidth);
+        final childAspectRatio = _calculateCardAspectRatio(context, itemWidth);
 
         return GridView.builder(
           padding: const EdgeInsets.all(padding),
@@ -281,12 +272,11 @@ class _HomeViewState extends State<HomeView> {
     return id is int ? id : int.tryParse(id.toString()) ?? 0;
   }
 
-  double _calculateCardAspectRatio(double width) {
-    const double verticalPadding = 20;
+  double _calculateCardAspectRatio(BuildContext context, double width) {
     const double gap = 5;
-    const double nameHeight = 22;
+    final nameHeight = MediaQuery.textScalerOf(context).scale(16);
 
-    final height = width + verticalPadding + gap + nameHeight;
+    final height = width + gap + nameHeight;
     return width / height;
   }
 

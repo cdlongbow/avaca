@@ -84,6 +84,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settings => '設定';
 
   @override
+  String get themeAndColors => '主題與色彩';
+
+  @override
+  String get interfaceSettings => '介面';
+
+  @override
   String loadFailed(String error) {
     return '載入失敗：$error';
   }
@@ -116,7 +122,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get pureBlackAmoled => '純黑 AMOLED';
 
   @override
-  String get pureBlackOnlyDarkOrCustom => '僅深色 / 自訂主題有效';
+  String get pureBlackOnlyDark => '僅深色主題有效';
 
   @override
   String get colorSurface => '背景';
@@ -227,6 +233,17 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get simplifiedChinese => '簡體中文';
+
+  @override
+  String get works => '作品';
+
+  @override
+  String get loadFailedGeneric => '載入失敗';
+
+  @override
+  String actressWorksTitle(String actressName) {
+    return '$actressName演出的作品';
+  }
 }
 
 /// The translations for Chinese, as used in China (`zh_CN`).
@@ -309,6 +326,12 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get settings => '设置';
 
   @override
+  String get themeAndColors => '主题与色彩';
+
+  @override
+  String get interfaceSettings => '界面';
+
+  @override
   String loadFailed(String error) {
     return '加载失败：$error';
   }
@@ -341,7 +364,7 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get pureBlackAmoled => '纯黑 AMOLED';
 
   @override
-  String get pureBlackOnlyDarkOrCustom => '仅深色 / 自定义主题有效';
+  String get pureBlackOnlyDark => '仅深色主题有效';
 
   @override
   String get colorSurface => '背景';
@@ -452,6 +475,17 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get simplifiedChinese => '简体中文';
+
+  @override
+  String get works => '作品';
+
+  @override
+  String get loadFailedGeneric => '加载失败';
+
+  @override
+  String actressWorksTitle(String actressName) {
+    return '$actressName出演的作品';
+  }
 }
 
 /// The translations for Chinese, as used in Taiwan (`zh_TW`).
@@ -534,6 +568,12 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get settings => '設定';
 
   @override
+  String get themeAndColors => '主題與色彩';
+
+  @override
+  String get interfaceSettings => '介面';
+
+  @override
   String loadFailed(String error) {
     return '載入失敗：$error';
   }
@@ -566,7 +606,7 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get pureBlackAmoled => '純黑 AMOLED';
 
   @override
-  String get pureBlackOnlyDarkOrCustom => '僅深色 / 自訂主題有效';
+  String get pureBlackOnlyDark => '僅深色主題有效';
 
   @override
   String get colorSurface => '背景';
@@ -677,4 +717,15 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get simplifiedChinese => '簡體中文';
+
+  @override
+  String get works => '作品';
+
+  @override
+  String get loadFailedGeneric => '載入失敗';
+
+  @override
+  String actressWorksTitle(String actressName) {
+    return '$actressName演出的作品';
+  }
 }

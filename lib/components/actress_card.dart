@@ -4,12 +4,7 @@ import 'package:avaca/l10n/app_localizations.dart';
 
 /// 顯示單一演員資料的卡片。
 class ActressCard extends StatelessWidget {
-  const ActressCard({
-    super.key,
-    required this.name,
-    this.imgPath,
-    this.onTap,
-  });
+  const ActressCard({super.key, required this.name, this.imgPath, this.onTap});
 
   /// 演員名稱。
   final String name;
@@ -22,7 +17,7 @@ class ActressCard extends StatelessWidget {
 
   static const double _cardBorderRadius = 12;
   static const double _imageBorderRadius = 8;
-  static const double _cardPadding = 10;
+  static const double _cardPadding = 5;
   static const double _spacingBetweenImageAndName = 5;
   static const double _placeholderIconSize = 40;
   static const double _placeholderTextSize = 10;
@@ -41,10 +36,7 @@ class ActressCard extends StatelessWidget {
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(_cardBorderRadius),
-          side: BorderSide(
-            width: 1,
-            color: colorScheme.outline,
-          ),
+          side: BorderSide(width: 1, color: colorScheme.outline),
         ),
         child: InkWell(
           onTap: onTap,
@@ -68,10 +60,7 @@ class ActressCard extends StatelessWidget {
 
   /// 建立固定為正方形的圖片區塊。
   Widget _buildImageBox(BuildContext context) {
-    return AspectRatio(
-      aspectRatio: 1.0,
-      child: _buildCoverContent(context),
-    );
+    return AspectRatio(aspectRatio: 1.0, child: _buildCoverContent(context));
   }
 
   /// 根據圖片路徑決定顯示圖片或預設佔位內容。
@@ -135,6 +124,7 @@ class ActressCard extends StatelessWidget {
       textAlign: TextAlign.center,
       style: TextStyle(
         fontSize: _nameTextSize,
+        height: 1.0,
         fontWeight: FontWeight.bold,
         color: Theme.of(context).colorScheme.onSurface,
       ),

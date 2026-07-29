@@ -3,12 +3,7 @@ import 'package:flutter/material.dart';
 /// 使用者可選擇的主題模式。
 ///
 /// OLED 純黑不是獨立的 ThemeMode，而是在解析色票後套用的背景覆蓋規則。
-enum AppThemeMode {
-  system,
-  light,
-  dark,
-  custom,
-}
+enum AppThemeMode { system, light, dark, custom }
 
 /// App 內部使用的用途導向色票。
 ///
@@ -123,7 +118,7 @@ class AppOledPaletteOverride {
 /// 主題設定資料。
 ///
 /// customPalette 只在 custom 模式優先使用。
-/// oledBlack 只會在最後解析結果為深色時影響背景色票。
+/// oledBlack 只會影響系統深色或固定深色，不會覆蓋自訂色票。
 @immutable
 class AppThemeOptions {
   const AppThemeOptions({
@@ -165,7 +160,7 @@ class AppThemeResolver {
         options.customPalette ?? _paletteFromSystemBrightness(systemBrightness),
     };
 
-    if (!options.oledBlack) {
+    if (!options.oledBlack || options.mode == AppThemeMode.custom) {
       return basePalette;
     }
 
@@ -185,6 +180,8 @@ class AppThemeResolver {
 class AppTheme {
   AppTheme._();
 
+  static const _fontFamilyFallback = <String>['AvacaNotoSansTC'];
+
   static ThemeData fromOptions({
     required AppThemeOptions options,
     required Brightness systemBrightness,
@@ -203,6 +200,7 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: palette.brightness,
+      fontFamilyFallback: _fontFamilyFallback,
       colorScheme: scheme,
       scaffoldBackgroundColor: palette.surface,
       appBarTheme: _appBarTheme(palette),
@@ -239,23 +237,21 @@ class AppTheme {
       color: palette.surfaceContainer,
       elevation: 0,
       surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     );
   }
 
   static TextTheme _textTheme(AppPalette palette) {
     return TextTheme(
-      bodyLarge: TextStyle(color: palette.onSurface),
-      bodyMedium: TextStyle(color: palette.onSurface),
-      bodySmall: TextStyle(color: palette.onSurfaceVariant),
-      titleLarge: TextStyle(color: palette.onSurface),
-      titleMedium: TextStyle(color: palette.onSurface),
-      titleSmall: TextStyle(color: palette.onSurface),
-      labelLarge: TextStyle(color: palette.onSurface),
-      labelMedium: TextStyle(color: palette.onSurfaceVariant),
-      labelSmall: TextStyle(color: palette.onSurfaceVariant),
+      bodyLarge: _appTextStyle(color: palette.onSurface),
+      bodyMedium: _appTextStyle(color: palette.onSurface),
+      bodySmall: _appTextStyle(color: palette.onSurfaceVariant),
+      titleLarge: _appTextStyle(color: palette.onSurface),
+      titleMedium: _appTextStyle(color: palette.onSurface),
+      titleSmall: _appTextStyle(color: palette.onSurface),
+      labelLarge: _appTextStyle(color: palette.onSurface),
+      labelMedium: _appTextStyle(color: palette.onSurfaceVariant),
+      labelSmall: _appTextStyle(color: palette.onSurfaceVariant),
     );
   }
 
@@ -263,19 +259,16 @@ class AppTheme {
     return InputDecorationTheme(
       filled: true,
       fillColor: palette.surfaceContainer,
-      labelStyle: TextStyle(color: palette.onSurfaceVariant),
-      hintStyle: TextStyle(color: palette.onSurfaceVariant),
-      helperStyle: TextStyle(color: palette.onSurfaceVariant),
+      labelStyle: _appTextStyle(color: palette.onSurfaceVariant),
+      hintStyle: _appTextStyle(color: palette.onSurfaceVariant),
+      helperStyle: _appTextStyle(color: palette.onSurfaceVariant),
       prefixIconColor: palette.onSurfaceVariant,
       suffixIconColor: palette.onSurfaceVariant,
       enabledBorder: OutlineInputBorder(
         borderSide: BorderSide(color: palette.outline),
       ),
       focusedBorder: OutlineInputBorder(
-        borderSide: BorderSide(
-          color: palette.primary,
-          width: 2,
-        ),
+        borderSide: BorderSide(color: palette.primary, width: 2),
       ),
     );
   }
@@ -311,25 +304,17 @@ class AppTheme {
     return OutlinedButtonThemeData(
       style: ButtonStyle(
         foregroundColor: WidgetStatePropertyAll(palette.primary),
-        side: WidgetStatePropertyAll(
-          BorderSide(color: palette.outline),
-        ),
+        side: WidgetStatePropertyAll(BorderSide(color: palette.outline)),
       ),
     );
   }
 
   static IconThemeData _iconTheme(AppPalette palette) {
-    return IconThemeData(
-      color: palette.onSurface,
-    );
+    return IconThemeData(color: palette.onSurface);
   }
 
   static DividerThemeData _dividerTheme(AppPalette palette) {
-    return DividerThemeData(
-      color: palette.outline,
-      thickness: 1,
-      space: 1,
-    );
+    return DividerThemeData(color: palette.outline, thickness: 1, space: 1);
   }
 
   static SwitchThemeData _switchTheme(AppPalette palette) {
@@ -381,8 +366,8 @@ class AppTheme {
     return ListTileThemeData(
       textColor: palette.onSurface,
       iconColor: palette.onSurface,
-      titleTextStyle: TextStyle(color: palette.onSurface),
-      subtitleTextStyle: TextStyle(color: palette.onSurfaceVariant),
+      titleTextStyle: _appTextStyle(color: palette.onSurface),
+      subtitleTextStyle: _appTextStyle(color: palette.onSurfaceVariant),
     );
   }
 
@@ -390,15 +375,12 @@ class AppTheme {
     return DialogThemeData(
       backgroundColor: palette.surfaceContainer,
       surfaceTintColor: Colors.transparent,
-      titleTextStyle: TextStyle(
+      titleTextStyle: _appTextStyle(
         color: palette.onSurface,
         fontSize: 20,
         fontWeight: FontWeight.w600,
       ),
-      contentTextStyle: TextStyle(
-        color: palette.onSurface,
-        fontSize: 16,
-      ),
+      contentTextStyle: _appTextStyle(color: palette.onSurface, fontSize: 16),
     );
   }
 
@@ -423,11 +405,24 @@ class AppTheme {
       }),
       labelTextStyle: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
-          return TextStyle(color: palette.primary);
+          return _appTextStyle(color: palette.primary);
         }
 
-        return TextStyle(color: palette.onSurfaceVariant);
+        return _appTextStyle(color: palette.onSurfaceVariant);
       }),
+    );
+  }
+
+  static TextStyle _appTextStyle({
+    required Color color,
+    double? fontSize,
+    FontWeight? fontWeight,
+  }) {
+    return TextStyle(
+      color: color,
+      fontSize: fontSize,
+      fontWeight: fontWeight,
+      fontFamilyFallback: _fontFamilyFallback,
     );
   }
 

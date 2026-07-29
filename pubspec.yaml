@@ -18,7 +18,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 ## In Windows, build-name is used as the major, minor, and patch parts
 ## of the product and file versions while build-number is used as the build suffix.
 
-version: 0.4.0+1
+version: 0.5.2+1
 
 environment:
   sdk: ^3.11.5
@@ -74,6 +74,14 @@ flutter:
   ## the material Icons class.
 
   uses-material-design: true
+
+  fonts:
+    - family: AvacaNotoSansTC
+      fonts:
+        - asset: assets/fonts/NotoSansTC-VF.ttf
+
+  assets:
+    - assets/fonts/OFL.txt
 
   ## To add assets to your application, add an assets section, like this:
   ## assets:

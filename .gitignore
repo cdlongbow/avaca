@@ -12,6 +12,12 @@
 .swiftpm/
 migrate_working_dir/
 
+# Local AI/Codex workspace state
+/.ai-os/
+/.codex/
+/AGENTS.md
+/reports/
+
 # IntelliJ related
 *.iml
 *.ipr

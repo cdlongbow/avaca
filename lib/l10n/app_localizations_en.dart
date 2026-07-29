@@ -85,6 +85,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settings => 'Settings';
 
   @override
+  String get themeAndColors => 'Theme & Colors';
+
+  @override
+  String get interfaceSettings => 'Interface';
+
+  @override
   String loadFailed(String error) {
     return 'Failed to load: $error';
   }
@@ -117,7 +123,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pureBlackAmoled => 'Pure Black AMOLED';
 
   @override
-  String get pureBlackOnlyDarkOrCustom => 'Only works with dark / custom theme';
+  String get pureBlackOnlyDark => 'Only works with dark theme';
 
   @override
   String get colorSurface => 'Background';
@@ -230,4 +236,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get simplifiedChinese => 'Simplified Chinese';
+
+  @override
+  String get works => 'Works';
+
+  @override
+  String get loadFailedGeneric => 'Failed to load';
+
+  @override
+  String actressWorksTitle(String actressName) {
+    return 'Works featuring $actressName';
+  }
 }

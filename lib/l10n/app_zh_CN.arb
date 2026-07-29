@@ -25,6 +25,8 @@
   "filterAndSort": "筛选与排序",
   "add": "新增",
   "settings": "设置",
+  "themeAndColors": "主题与色彩",
+  "interfaceSettings": "界面",
   "loadFailed": "加载失败：{error}",
   "@loadFailed": {
     "placeholders": {
@@ -42,7 +44,7 @@
   "darkTheme": "深色",
   "customTheme": "自定义主题",
   "pureBlackAmoled": "纯黑 AMOLED",
-  "pureBlackOnlyDarkOrCustom": "仅深色 / 自定义主题有效",
+  "pureBlackOnlyDark": "仅深色主题有效",
   "colorSurface": "背景",
   "colorSurfaceContainer": "卡片背景",
   "colorOnSurface": "主要文字",
@@ -85,5 +87,8 @@
   "language": "语言",
   "traditionalChineseTaiwan": "繁体中文（台湾）",
   "english": "英文",
-  "simplifiedChinese": "简体中文"
+  "simplifiedChinese": "简体中文",
+  "works": "作品",
+  "loadFailedGeneric": "加载失败",
+  "actressWorksTitle": "{actressName}出演的作品"
 }

@@ -250,6 +250,18 @@ abstract class AppLocalizations {
   /// **'設定'**
   String get settings;
 
+  /// No description provided for @themeAndColors.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'主題與色彩'**
+  String get themeAndColors;
+
+  /// No description provided for @interfaceSettings.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'介面'**
+  String get interfaceSettings;
+
   /// No description provided for @loadFailed.
   ///
   /// In zh_TW, this message translates to:
@@ -310,11 +322,11 @@ abstract class AppLocalizations {
   /// **'純黑 AMOLED'**
   String get pureBlackAmoled;
 
-  /// No description provided for @pureBlackOnlyDarkOrCustom.
+  /// No description provided for @pureBlackOnlyDark.
   ///
   /// In zh_TW, this message translates to:
-  /// **'僅深色 / 自訂主題有效'**
-  String get pureBlackOnlyDarkOrCustom;
+  /// **'僅深色主題有效'**
+  String get pureBlackOnlyDark;
 
   /// No description provided for @colorSurface.
   ///
@@ -531,6 +543,24 @@ abstract class AppLocalizations {
   /// In zh_TW, this message translates to:
   /// **'簡體中文'**
   String get simplifiedChinese;
+
+  /// No description provided for @works.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'作品'**
+  String get works;
+
+  /// No description provided for @loadFailedGeneric.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'載入失敗'**
+  String get loadFailedGeneric;
+
+  /// No description provided for @actressWorksTitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'{actressName}演出的作品'**
+  String actressWorksTitle(String actressName);
 }
 
 class _AppLocalizationsDelegate
