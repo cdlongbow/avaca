@@ -6,7 +6,13 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'platform_adapter.dart';
 
 class AppDatabase {
-  AppDatabase();
+  AppDatabase() : _baseDirOverride = null, _databaseFactoryOverride = null;
+
+  AppDatabase.forTesting({
+    required String baseDir,
+    required DatabaseFactory databaseFactory,
+  }) : _baseDirOverride = baseDir,
+       _databaseFactoryOverride = databaseFactory;
 
   static const String appName = 'AVACA';
   static const String databaseFileName = 'avaca.db';
@@ -15,6 +21,8 @@ class AppDatabase {
   late final String imgDir;
   late final String dbPath;
 
+  final String? _baseDirOverride;
+  final DatabaseFactory? _databaseFactoryOverride;
   Database? _database;
   bool _initialized = false;
 
@@ -24,19 +32,20 @@ class AppDatabase {
       return;
     }
 
-    PlatformAdapter.configureSqliteFactory();
+    if (_databaseFactoryOverride == null) {
+      PlatformAdapter.configureSqliteFactory();
+    }
 
-    baseDir = await PlatformAdapter.resolveAppBaseDir(
-      appName: appName,
-    );
+    baseDir =
+        _baseDirOverride ??
+        await PlatformAdapter.resolveAppBaseDir(appName: appName);
 
     imgDir = path.join(baseDir, 'images');
     dbPath = path.join(baseDir, databaseFileName);
 
     await Directory(imgDir).create(recursive: true);
 
-    _database = await openDatabase(
-      dbPath,
+    final options = OpenDatabaseOptions(
       version: 1,
       onCreate: (db, version) async {
         await _createBaseTable(db);
@@ -47,6 +56,15 @@ class AppDatabase {
         await _createSettingsTable(db);
       },
     );
+    final factory = _databaseFactoryOverride;
+    _database = factory == null
+        ? await openDatabase(
+            dbPath,
+            version: options.version,
+            onCreate: options.onCreate,
+            onOpen: options.onOpen,
+          )
+        : await factory.openDatabase(dbPath, options: options);
 
     _initialized = true;
   }
@@ -79,6 +97,7 @@ class AppDatabase {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL UNIQUE,
         img_path TEXT,
+        birth_date TEXT,
         modified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     ''');
@@ -97,15 +116,11 @@ class AppDatabase {
     }
 
     if (!columns.contains('tags')) {
-      await db.execute(
-        "ALTER TABLE actresses ADD COLUMN tags TEXT DEFAULT ''",
-      );
+      await db.execute("ALTER TABLE actresses ADD COLUMN tags TEXT DEFAULT ''");
     }
 
     if (!columns.contains('memo')) {
-      await db.execute(
-        "ALTER TABLE actresses ADD COLUMN memo TEXT DEFAULT ''",
-      );
+      await db.execute("ALTER TABLE actresses ADD COLUMN memo TEXT DEFAULT ''");
     }
 
     if (!columns.contains('height')) {
@@ -121,15 +136,11 @@ class AppDatabase {
     }
 
     if (!columns.contains('bwh')) {
-      await db.execute(
-        "ALTER TABLE actresses ADD COLUMN bwh TEXT DEFAULT ''",
-      );
+      await db.execute("ALTER TABLE actresses ADD COLUMN bwh TEXT DEFAULT ''");
     }
 
     if (!columns.contains('cup')) {
-      await db.execute(
-        "ALTER TABLE actresses ADD COLUMN cup TEXT DEFAULT ''",
-      );
+      await db.execute("ALTER TABLE actresses ADD COLUMN cup TEXT DEFAULT ''");
     }
 
     if (!columns.contains('modified_at')) {
@@ -138,6 +149,12 @@ class AppDatabase {
       );
       await db.execute(
         'UPDATE actresses SET modified_at = CURRENT_TIMESTAMP WHERE modified_at IS NULL',
+      );
+    }
+
+    if (!columns.contains('birth_date')) {
+      await db.execute(
+        'ALTER TABLE actresses ADD COLUMN birth_date TEXT DEFAULT NULL',
       );
     }
   }
@@ -175,22 +192,21 @@ class AppDatabase {
     final orderBy = switch (sortBy) {
       '新增時間 (新到舊)' => 'id DESC',
       '新增時間 (舊到新)' => 'id ASC',
-      '修改時間 (新到舊)' => 'modified_at DESC',
-      '修改時間 (舊到新)' => 'modified_at ASC',
+      '修改時間 (新到舊)' => 'modified_at DESC, id DESC',
+      '修改時間 (舊到新)' => 'modified_at ASC, id DESC',
+      '年齡 (低到高)' => 'birth_date IS NULL, birth_date DESC, id DESC',
+      '年齡 (高到低)' => 'birth_date IS NULL, birth_date ASC, id DESC',
       '名稱 (A-Z)' => 'name ASC',
       '名稱 (Z-A)' => 'name DESC',
       _ => 'id DESC',
     };
 
-    final rows = await db.rawQuery(
-      '''
+    final rows = await db.rawQuery('''
       SELECT id, name, img_path
       FROM actresses
       WHERE ${whereClauses.join(' AND ')}
       ORDER BY $orderBy
-      ''',
-      params,
-    );
+      ''', params);
 
     return rows
         .map(
@@ -209,7 +225,8 @@ class AppDatabase {
 
     final rows = await db.rawQuery(
       '''
-      SELECT id, name, img_path, main_type, memo, height, weight, bwh, cup
+      SELECT id, name, img_path, main_type, memo, height, weight, bwh, cup,
+             birth_date
       FROM actresses
       WHERE id = ?
       ''',
@@ -232,6 +249,7 @@ class AppDatabase {
       'weight': row['weight'],
       'bwh': row['bwh'],
       'cup': row['cup'],
+      'birth_date': row['birth_date'],
     };
   }
 
@@ -242,16 +260,24 @@ class AppDatabase {
     String mainType = '',
     String tags = '',
     String memo = '',
+    String? birthDate,
   }) async {
+    final normalizedBirthDate = _normalizeBirthDate(birthDate);
+    if (!normalizedBirthDate.valid) {
+      return false;
+    }
+
     try {
       final db = await database;
 
       await db.rawInsert(
         '''
-        INSERT INTO actresses (name, img_path, main_type, tags, memo, modified_at)
-        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        INSERT INTO actresses (
+          name, img_path, main_type, tags, memo, birth_date, modified_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         ''',
-        [name, imgPath, mainType, tags, memo],
+        [name, imgPath, mainType, tags, memo, normalizedBirthDate.value],
       );
 
       return true;
@@ -271,7 +297,13 @@ class AppDatabase {
     String weight = '',
     String bwh = '',
     String cup = '',
+    String? birthDate,
   }) async {
+    final normalizedBirthDate = _normalizeBirthDate(birthDate);
+    if (!normalizedBirthDate.valid) {
+      return false;
+    }
+
     try {
       final db = await database;
 
@@ -286,6 +318,7 @@ class AppDatabase {
             weight = ?,
             bwh = ?,
             cup = ?,
+            birth_date = ?,
             modified_at = CURRENT_TIMESTAMP
         WHERE id = ?
         ''',
@@ -298,6 +331,7 @@ class AppDatabase {
           weight,
           bwh,
           cup,
+          normalizedBirthDate.value,
           actressId,
         ],
       );
@@ -308,15 +342,45 @@ class AppDatabase {
     }
   }
 
+  ({bool valid, String? value}) _normalizeBirthDate(String? birthDate) {
+    final value = birthDate?.trim();
+    if (value == null || value.isEmpty) {
+      return (valid: true, value: null);
+    }
+
+    if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(value)) {
+      return (valid: false, value: null);
+    }
+
+    final parsed = DateTime.tryParse(value);
+    if (parsed == null ||
+        parsed.year < 1900 ||
+        _formatIsoDate(parsed) != value) {
+      return (valid: false, value: null);
+    }
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final date = DateTime(parsed.year, parsed.month, parsed.day);
+    if (date.isAfter(today)) {
+      return (valid: false, value: null);
+    }
+
+    return (valid: true, value: value);
+  }
+
+  String _formatIsoDate(DateTime date) {
+    return '${date.year.toString().padLeft(4, '0')}-'
+        '${date.month.toString().padLeft(2, '0')}-'
+        '${date.day.toString().padLeft(2, '0')}';
+  }
+
   // 刪除指定收藏資料，失敗時保留原本的錯誤輸出行為。
   Future<bool> deleteActress(int actressId) async {
     try {
       final db = await database;
 
-      await db.rawDelete(
-        'DELETE FROM actresses WHERE id = ?',
-        [actressId],
-      );
+      await db.rawDelete('DELETE FROM actresses WHERE id = ?', [actressId]);
 
       return true;
     } on DatabaseException catch (error) {
@@ -339,11 +403,10 @@ class AppDatabase {
   Future<void> setSetting(String key, String value) async {
     final db = await database;
 
-    await db.insert(
-      'settings',
-      {'key': key, 'value': value},
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await db.insert('settings', {
+      'key': key,
+      'value': value,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   // 讀取指定設定值，不存在時回傳 null。
@@ -368,10 +431,6 @@ class AppDatabase {
   Future<void> removeSetting(String key) async {
     final db = await database;
 
-    await db.delete(
-      'settings',
-      where: 'key = ?',
-      whereArgs: [key],
-    );
+    await db.delete('settings', where: 'key = ?', whereArgs: [key]);
   }
 }

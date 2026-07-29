@@ -9,7 +9,7 @@
   "changePhoto": "更换照片",
   "deletePhoto": "删除照片",
   "noAttributesSet": "尚未设置属性",
-  "bodyInfo": "身体资料",
+  "bodyInfo": "详细资料",
   "heightCm": "身高 (cm)",
   "weightKg": "体重 (kg)",
   "cup": "罩杯",
@@ -23,6 +23,29 @@
   "appTitle": "AVACA 收藏库",
   "search": "搜索",
   "filterAndSort": "筛选与排序",
+  "filterSection": "筛选",
+  "sortSection": "排序",
+  "sortCreatedDesc": "新增时间（新到旧）",
+  "sortCreatedAsc": "新增时间（旧到新）",
+  "sortModifiedDesc": "修改时间（新到旧）",
+  "sortModifiedAsc": "修改时间（旧到新）",
+  "sortAgeAsc": "年龄（低到高）",
+  "sortAgeDesc": "年龄（高到低）",
+  "birthDate": "生日",
+  "setBirthDate": "设置生日",
+  "clear": "清除",
+  "done": "完成",
+  "ageWithBirthDate": "{age}岁  {date}",
+  "@ageWithBirthDate": {
+    "placeholders": {
+      "age": {
+        "type": "int"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "add": "新增",
   "settings": "设置",
   "themeAndColors": "主题与色彩",

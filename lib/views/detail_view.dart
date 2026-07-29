@@ -1,8 +1,19 @@
 import 'dart:io';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:avaca/l10n/app_localizations.dart';
 import '../controllers/detail_controller.dart';
 import '../core/database.dart';
+
+const double _detailControlRadius = 6.0;
+
+ButtonStyle _detailOutlinedButtonStyle() {
+  return OutlinedButton.styleFrom(
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(_detailControlRadius),
+    ),
+  );
+}
 
 class DetailView extends StatefulWidget {
   const DetailView({super.key, required this.db, required this.actressId});
@@ -12,6 +23,228 @@ class DetailView extends StatefulWidget {
 
   @override
   State<DetailView> createState() => _DetailViewState();
+}
+
+class _BirthDatePickerResult {
+  const _BirthDatePickerResult({this.date, this.clear = false});
+
+  final DateTime? date;
+  final bool clear;
+}
+
+class _BirthDatePickerSheet extends StatefulWidget {
+  const _BirthDatePickerSheet({required this.initialDate});
+
+  final DateTime? initialDate;
+
+  @override
+  State<_BirthDatePickerSheet> createState() => _BirthDatePickerSheetState();
+}
+
+class _BirthDatePickerSheetState extends State<_BirthDatePickerSheet> {
+  static const double _itemExtent = 48;
+  static const int _firstYear = 1900;
+
+  late final DateTime _today;
+  late int _year;
+  late int _month;
+  late int _day;
+  late final FixedExtentScrollController _yearController;
+  late final FixedExtentScrollController _monthController;
+  late final FixedExtentScrollController _dayController;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _today = DateTime(now.year, now.month, now.day);
+    final initial = widget.initialDate == null
+        ? DateTime(_today.year - 20, _today.month, _today.day)
+        : _clampToToday(widget.initialDate!);
+    _year = initial.year.clamp(_firstYear, _today.year).toInt();
+    _month = initial.month;
+    _day = initial.day;
+    _clampParts();
+    _yearController = FixedExtentScrollController(
+      initialItem: _today.year - _year,
+    );
+    _monthController = FixedExtentScrollController(initialItem: _month - 1);
+    _dayController = FixedExtentScrollController(initialItem: _day - 1);
+  }
+
+  @override
+  void dispose() {
+    _yearController.dispose();
+    _monthController.dispose();
+    _dayController.dispose();
+    super.dispose();
+  }
+
+  DateTime _clampToToday(DateTime value) {
+    final normalized = DateTime(value.year, value.month, value.day);
+    return normalized.isAfter(_today) ? _today : normalized;
+  }
+
+  int get _maxMonth => _year == _today.year ? _today.month : 12;
+
+  int get _maxDay {
+    final monthDays = DateTime(_year, _month + 1, 0).day;
+    if (_year == _today.year && _month == _today.month) {
+      return monthDays < _today.day ? monthDays : _today.day;
+    }
+    return monthDays;
+  }
+
+  void _clampParts() {
+    if (_month > _maxMonth) _month = _maxMonth;
+    if (_day > _maxDay) _day = _maxDay;
+  }
+
+  void _syncControllers() {
+    if (_monthController.hasClients &&
+        _monthController.selectedItem != _month - 1) {
+      _monthController.jumpToItem(_month - 1);
+    }
+    if (_dayController.hasClients && _dayController.selectedItem != _day - 1) {
+      _dayController.jumpToItem(_day - 1);
+    }
+  }
+
+  void _changeYear(int index) {
+    setState(() {
+      _year = _today.year - index;
+      _clampParts();
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncControllers());
+  }
+
+  void _changeMonth(int index) {
+    setState(() {
+      _month = index + 1;
+      _clampParts();
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncControllers());
+  }
+
+  void _changeDay(int index) {
+    setState(() {
+      _day = index + 1;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
+    final overlay = Container(
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      decoration: BoxDecoration(
+        color: colorScheme.primary.withValues(alpha: 0.28),
+        borderRadius: BorderRadius.circular(_detailControlRadius),
+      ),
+    );
+
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: colorScheme.outlineVariant,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              l10n.birthDate,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 200,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: CupertinoPicker(
+                      key: const Key('birth-date-year-picker'),
+                      scrollController: _yearController,
+                      itemExtent: _itemExtent,
+                      useMagnifier: true,
+                      magnification: 1.08,
+                      selectionOverlay: overlay,
+                      onSelectedItemChanged: _changeYear,
+                      children: List.generate(
+                        _today.year - _firstYear + 1,
+                        (index) =>
+                            Center(child: Text('${_today.year - index}')),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: CupertinoPicker(
+                      key: const Key('birth-date-month-picker'),
+                      scrollController: _monthController,
+                      itemExtent: _itemExtent,
+                      useMagnifier: true,
+                      magnification: 1.08,
+                      selectionOverlay: overlay,
+                      onSelectedItemChanged: _changeMonth,
+                      children: List.generate(
+                        _maxMonth,
+                        (index) => Center(child: Text('${index + 1}')),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: CupertinoPicker(
+                      key: const Key('birth-date-day-picker'),
+                      scrollController: _dayController,
+                      itemExtent: _itemExtent,
+                      useMagnifier: true,
+                      magnification: 1.08,
+                      selectionOverlay: overlay,
+                      onSelectedItemChanged: _changeDay,
+                      children: List.generate(
+                        _maxDay,
+                        (index) => Center(child: Text('${index + 1}')),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text(l10n.cancel),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(
+                    context,
+                  ).pop(const _BirthDatePickerResult(clear: true)),
+                  child: Text(l10n.clear),
+                ),
+                const Spacer(),
+                FilledButton(
+                  onPressed: () => Navigator.of(context).pop(
+                    _BirthDatePickerResult(date: DateTime(_year, _month, _day)),
+                  ),
+                  child: Text(l10n.done),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _DetailViewState extends State<DetailView> {
@@ -24,6 +257,7 @@ class _DetailViewState extends State<DetailView> {
   final TextEditingController cupController = TextEditingController();
   final TextEditingController bwhController = TextEditingController();
   final TextEditingController memoController = TextEditingController();
+  DateTime? birthDate;
 
   final Set<String> selectedAttrs = <String>{};
 
@@ -70,6 +304,7 @@ class _DetailViewState extends State<DetailView> {
     cupController.text = data['cup']?.toString() ?? '';
     bwhController.text = data['bwh']?.toString() ?? '';
     memoController.text = data['memo']?.toString() ?? '';
+    birthDate = _parseBirthDate(data['birth_date']?.toString());
 
     selectedAttrs
       ..clear()
@@ -103,6 +338,7 @@ class _DetailViewState extends State<DetailView> {
       'weight': weightController.text,
       'bwh': bwhController.text,
       'cup': cupController.text,
+      'birth_date': birthDate == null ? null : _toIsoDate(birthDate!),
     };
   }
 
@@ -184,6 +420,8 @@ class _DetailViewState extends State<DetailView> {
     final isEditing = controller.isEditing;
 
     return Container(
+      key: const Key('detail-profile-panel'),
+      padding: isEditing ? const EdgeInsets.all(12) : EdgeInsets.zero,
       decoration: isEditing
           ? BoxDecoration(
               color: colorScheme.surfaceContainerLow,
@@ -192,28 +430,17 @@ class _DetailViewState extends State<DetailView> {
           : null,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          const horizontalGap = 16.0;
-          final imageSize = ((constraints.maxWidth - horizontalGap) / 2).clamp(
-            0.0,
-            220.0,
-          );
+          final horizontalGap = isEditing ? 12.0 : 16.0;
+          final availableWidth = constraints.maxWidth - horizontalGap;
+          final imageSize = isEditing
+              ? (availableWidth * 5 / 12).clamp(0.0, 220.0)
+              : (availableWidth / 2).clamp(0.0, 220.0);
 
           return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(
-                width: imageSize,
-                child: Column(
-                  children: [
-                    _buildProfileImage(imageSize),
-                    if (isEditing) ...[
-                      const SizedBox(height: 12),
-                      _buildPhotoEditRow(),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: horizontalGap),
+              SizedBox(width: imageSize, child: _buildProfileImage(imageSize)),
+              SizedBox(width: horizontalGap),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -221,6 +448,7 @@ class _DetailViewState extends State<DetailView> {
                     OutlinedButton(
                       key: const Key('detail-works-button'),
                       onPressed: _openWorks,
+                      style: _detailOutlinedButtonStyle(),
                       child: Text(AppLocalizations.of(context).works),
                     ),
                     const SizedBox(height: 12),
@@ -230,6 +458,10 @@ class _DetailViewState extends State<DetailView> {
                           ? _buildAttrEditRow()
                           : _buildAttrViewRow(),
                     ),
+                    if (isEditing) ...[
+                      const SizedBox(height: 12),
+                      _buildPhotoEditRow(),
+                    ],
                   ],
                 ),
               ),
@@ -276,26 +508,58 @@ class _DetailViewState extends State<DetailView> {
 
   Widget _buildPhotoEditRow() {
     final colorScheme = Theme.of(context).colorScheme;
+    final actionTextStyle = Theme.of(
+      context,
+    ).textTheme.labelMedium!.copyWith(fontSize: 12);
+    final changeStyle = OutlinedButton.styleFrom(
+      foregroundColor: colorScheme.primary,
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      minimumSize: Size.zero,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      textStyle: actionTextStyle,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(_detailControlRadius),
+      ),
+    );
+    final deleteStyle = OutlinedButton.styleFrom(
+      foregroundColor: colorScheme.error,
+      side: BorderSide(color: colorScheme.error),
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      minimumSize: Size.zero,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      textStyle: actionTextStyle,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(_detailControlRadius),
+      ),
+    );
 
-    return Wrap(
-      alignment: WrapAlignment.center,
-      spacing: 8,
-      runSpacing: 4,
+    return Row(
+      key: const Key('detail-photo-actions'),
       children: [
-        ElevatedButton.icon(
-          onPressed: () => controller.changePhoto(context),
-          icon: const Icon(Icons.add_a_photo),
-          label: Text(AppLocalizations.of(context).changePhoto),
-          style: ElevatedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
+        Expanded(
+          child: SizedBox(
+            height: 34,
+            child: OutlinedButton(
+              key: const Key('detail-change-photo-button'),
+              onPressed: () {
+                _dismissKeyboard();
+                controller.changePhoto(context);
+              },
+              style: changeStyle,
+              child: Text(AppLocalizations.of(context).changePhoto),
+            ),
           ),
         ),
-        TextButton.icon(
-          onPressed: controller.deletePhoto,
-          icon: Icon(Icons.delete, color: colorScheme.error),
-          label: Text(AppLocalizations.of(context).deletePhoto),
-          style: TextButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
+        const SizedBox(width: 6),
+        Expanded(
+          child: SizedBox(
+            height: 34,
+            child: OutlinedButton(
+              key: const Key('detail-delete-photo-button'),
+              onPressed: controller.deletePhoto,
+              style: deleteStyle,
+              child: Text(AppLocalizations.of(context).deletePhoto),
+            ),
           ),
         ),
       ],
@@ -330,18 +594,32 @@ class _DetailViewState extends State<DetailView> {
   }
 
   Widget _buildAttrEditRow() {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Wrap(
       alignment: WrapAlignment.start,
       spacing: 4,
       runSpacing: 4,
       children: controller.getAttrOptions(context).map((option) {
+        final selected = selectedAttrs.contains(option);
+
         return FilterChip(
-          label: Text(option, style: const TextStyle(fontSize: 14)),
+          label: Text(
+            option,
+            style: TextStyle(
+              fontSize: 14,
+              color: selected
+                  ? colorScheme.onSurface
+                  : colorScheme.onSurfaceVariant,
+            ),
+          ),
           labelPadding: const EdgeInsets.symmetric(horizontal: 2),
           padding: const EdgeInsets.symmetric(horizontal: 4),
           visualDensity: const VisualDensity(horizontal: -2, vertical: -4),
           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          selected: selectedAttrs.contains(option),
+          selected: selected,
+          showCheckmark: false,
+          selectedColor: colorScheme.primary.withValues(alpha: 0.28),
           onSelected: (selected) {
             setState(() {
               selected
@@ -355,7 +633,12 @@ class _DetailViewState extends State<DetailView> {
   }
 
   void _openWorks() {
+    _dismissKeyboard();
     Navigator.of(context).pushNamed('/works/${widget.actressId}');
+  }
+
+  void _dismissKeyboard() {
+    FocusManager.instance.primaryFocus?.unfocus();
   }
 
   // 顯示身體資料與私人筆記。
@@ -366,22 +649,28 @@ class _DetailViewState extends State<DetailView> {
           title: AppLocalizations.of(context).bodyInfo,
           child: Column(
             children: [
+              _buildBirthDateField(),
+              const SizedBox(height: 6),
               _buildStatField(
+                fieldKey: const Key('detail-height-field'),
                 label: AppLocalizations.of(context).heightCm,
                 controller: heightController,
               ),
               const SizedBox(height: 6),
               _buildStatField(
+                fieldKey: const Key('detail-weight-field'),
                 label: AppLocalizations.of(context).weightKg,
                 controller: weightController,
               ),
               const SizedBox(height: 6),
               _buildStatField(
+                fieldKey: const Key('detail-cup-field'),
                 label: AppLocalizations.of(context).cup,
                 controller: cupController,
               ),
               const SizedBox(height: 6),
               _buildStatField(
+                fieldKey: const Key('detail-measurements-field'),
                 label: AppLocalizations.of(context).measurements,
                 controller: bwhController,
               ),
@@ -411,7 +700,99 @@ class _DetailViewState extends State<DetailView> {
     );
   }
 
+  Widget _buildBirthDateField() {
+    final selectedDate = birthDate;
+    final label = AppLocalizations.of(context).birthDate;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    if (!controller.isEditing) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 90,
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            if (selectedDate != null)
+              Text(
+                AppLocalizations.of(context).ageWithBirthDate(
+                  _ageOn(selectedDate, DateTime.now()),
+                  _displayDate(selectedDate),
+                ),
+                style: const TextStyle(fontSize: 14),
+              )
+            else
+              const Text('—', style: TextStyle(fontSize: 14)),
+          ],
+        ),
+      );
+    }
+
+    return OutlinedButton(
+      key: const Key('detail-birth-date-button'),
+      onPressed: _openBirthDatePicker,
+      style: _detailOutlinedButtonStyle(),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          selectedDate == null
+              ? AppLocalizations.of(context).setBirthDate
+              : _displayDate(selectedDate),
+          style: TextStyle(fontSize: 16, color: colorScheme.onSurfaceVariant),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openBirthDatePicker() async {
+    _dismissKeyboard();
+    final result = await showModalBottomSheet<_BirthDatePickerResult>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _BirthDatePickerSheet(initialDate: birthDate),
+    );
+
+    if (!mounted || result == null) return;
+    setState(() {
+      birthDate = result.clear ? null : result.date;
+    });
+  }
+
+  DateTime? _parseBirthDate(String? value) {
+    if (value == null || value.isEmpty) return null;
+    return DateTime.tryParse(value);
+  }
+
+  String _toIsoDate(DateTime date) {
+    return '${date.year.toString().padLeft(4, '0')}-'
+        '${date.month.toString().padLeft(2, '0')}-'
+        '${date.day.toString().padLeft(2, '0')}';
+  }
+
+  String _displayDate(DateTime date) {
+    return '${date.year.toString().padLeft(4, '0')}/'
+        '${date.month.toString().padLeft(2, '0')}/'
+        '${date.day.toString().padLeft(2, '0')}';
+  }
+
+  int _ageOn(DateTime birthDate, DateTime today) {
+    var age = today.year - birthDate.year;
+    final birthdayPassed =
+        today.month > birthDate.month ||
+        (today.month == birthDate.month && today.day >= birthDate.day);
+    if (!birthdayPassed) age--;
+    return age;
+  }
+
   Widget _buildStatField({
+    required Key fieldKey,
     required String label,
     required TextEditingController controller,
   }) {
@@ -443,10 +824,21 @@ class _DetailViewState extends State<DetailView> {
     }
 
     return TextField(
+      key: fieldKey,
       controller: controller,
       decoration: InputDecoration(
         labelText: label,
-        border: const UnderlineInputBorder(),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(_detailControlRadius),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(_detailControlRadius),
+          borderSide: BorderSide(color: colorScheme.outline),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(_detailControlRadius),
+          borderSide: BorderSide(color: colorScheme.primary, width: 2),
+        ),
       ),
     );
   }
@@ -485,6 +877,7 @@ class _DetailViewState extends State<DetailView> {
 
     if (dialogState['open'] != true) return;
 
+    _dismissKeyboard();
     await showDialog<void>(
       context: context,
       barrierDismissible: false,

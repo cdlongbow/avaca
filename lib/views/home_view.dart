@@ -71,6 +71,7 @@ class _HomeViewState extends State<HomeView> {
     final state = controller.openFilterSheet();
     if (state['open'] != true) return;
 
+    _dismissKeyboard();
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -79,6 +80,7 @@ class _HomeViewState extends State<HomeView> {
   }
 
   Future<void> goAdd() async {
+    _dismissKeyboard();
     await controller.goAdd(context);
     if (mounted) {
       refreshGallery();
@@ -86,6 +88,7 @@ class _HomeViewState extends State<HomeView> {
   }
 
   Future<void> goSettings() async {
+    _dismissKeyboard();
     await controller.goSettings(context);
     if (mounted) {
       refreshGallery();
@@ -93,10 +96,15 @@ class _HomeViewState extends State<HomeView> {
   }
 
   Future<void> goDetail(int actressId) async {
+    _dismissKeyboard();
     await controller.goDetail(context, actressId);
     if (mounted) {
       refreshGallery();
     }
+  }
+
+  void _dismissKeyboard() {
+    FocusManager.instance.primaryFocus?.unfocus();
   }
 
   @override
@@ -281,13 +289,14 @@ class _HomeViewState extends State<HomeView> {
   }
 
   Widget _buildFilterSheet() {
-    final options = controller.getFilterOptions();
+    final filterOptions = controller.getFilterOptions();
+    final sortOptions = controller.getSortOptions();
 
     return StatefulBuilder(
       builder: (context, sheetSetState) {
         return SafeArea(
           child: Padding(
-            padding: const EdgeInsets.all(25),
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -295,17 +304,36 @@ class _HomeViewState extends State<HomeView> {
                 Text(
                   AppLocalizations.of(context).filterAndSort,
                   style: const TextStyle(
-                    fontSize: 20,
+                    fontSize: 18,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(height: 20),
-                _buildFilterOptions(
-                  options: options,
+                const SizedBox(height: 10),
+                Text(
+                  AppLocalizations.of(context).filterSection,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 4),
+                _buildOptions(
+                  options: filterOptions,
+                  selectedValue: controller.currentFilter,
+                  labelBuilder: _filterLabel,
+                  onSelected: controller.selectFilter,
                   sheetSetState: sheetSetState,
                 ),
-                const SizedBox(height: 20),
-                _buildApplyFilterButton(),
+                const SizedBox(height: 10),
+                Text(
+                  AppLocalizations.of(context).sortSection,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 4),
+                _buildOptions(
+                  options: sortOptions,
+                  selectedValue: controller.currentSort,
+                  labelBuilder: _sortLabel,
+                  onSelected: controller.changeSort,
+                  sheetSetState: sheetSetState,
+                ),
               ],
             ),
           ),
@@ -314,27 +342,59 @@ class _HomeViewState extends State<HomeView> {
     );
   }
 
-  Widget _buildFilterOptions({
+  Widget _buildOptions({
     required List<String> options,
+    required String selectedValue,
+    required String Function(String value) labelBuilder,
+    required void Function(String value) onSelected,
     required StateSetter sheetSetState,
   }) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+      spacing: 4,
+      runSpacing: 4,
       children: options.map((text) {
-        final selected = text == controller.currentFilter;
+        final selected = text == selectedValue;
 
         return ChoiceChip(
-          label: Text(_filterLabel(text)),
+          label: Text(labelBuilder(text)),
+          labelPadding: const EdgeInsets.symmetric(horizontal: 1),
+          padding: const EdgeInsets.symmetric(horizontal: 2),
+          visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          showCheckmark: false,
+          selectedColor: colorScheme.primary,
+          backgroundColor: colorScheme.surfaceContainerHighest,
+          side: BorderSide(
+            color: selected ? colorScheme.primary : colorScheme.outline,
+          ),
+          labelStyle: TextStyle(
+            fontSize: 12,
+            color: selected ? colorScheme.onPrimary : colorScheme.onSurface,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+          ),
           selected: selected,
           onSelected: (_) {
-            controller.selectFilter(text);
-            // 更新篩選選單內部畫面，讓目前選取的項目立即反映在畫面上。
+            onSelected(text);
             sheetSetState(() {});
+            refreshGallery();
           },
         );
       }).toList(),
     );
+  }
+
+  String _sortLabel(String key) {
+    final l10n = AppLocalizations.of(context);
+    return switch (key) {
+      'created_desc' => l10n.sortCreatedDesc,
+      'created_asc' => l10n.sortCreatedAsc,
+      'modified_desc' => l10n.sortModifiedDesc,
+      'modified_asc' => l10n.sortModifiedAsc,
+      'age_asc' => l10n.sortAgeAsc,
+      'age_desc' => l10n.sortAgeDesc,
+      _ => key,
+    };
   }
 
   String _filterLabel(String key) {
@@ -349,19 +409,5 @@ class _HomeViewState extends State<HomeView> {
       'domestic' => l10n.attrDomestic,
       _ => key,
     };
-  }
-
-  Widget _buildApplyFilterButton() {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton(
-        onPressed: () {
-          controller.applyFilterSheet();
-          Navigator.of(context).pop();
-          refreshGallery();
-        },
-        child: Text(AppLocalizations.of(context).applySettings),
-      ),
-    );
   }
 }

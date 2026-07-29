@@ -8,10 +8,7 @@ import '../components/image_cropper.dart';
 import '../core/database.dart';
 
 class DetailController extends ChangeNotifier {
-  DetailController({
-    required this.db,
-    required this.actressId,
-  });
+  DetailController({required this.db, required this.actressId});
 
   final AppDatabase db;
   final int actressId;
@@ -23,9 +20,7 @@ class DetailController extends ChangeNotifier {
   // 初始化頁面資料，並同步目前的分類屬性。
   Future<void> init() async {
     actressData = await _loadActressData();
-    currentAttrs = _parseAttrs(
-      actressData['main_type']?.toString() ?? '',
-    );
+    currentAttrs = _parseAttrs(actressData['main_type']?.toString() ?? '');
     notifyListeners();
   }
 
@@ -59,16 +54,12 @@ class DetailController extends ChangeNotifier {
 
   // 開啟刪除確認視窗的狀態資料。
   Map<String, bool> openDeleteDialog() {
-    return {
-      'open': true,
-    };
+    return {'open': true};
   }
 
   // 關閉刪除確認視窗的狀態資料。
   Map<String, bool> closeDeleteDialog() {
-    return {
-      'open': false,
-    };
+    return {'open': false};
   }
 
   // 刪除照片檔案與資料庫資料，成功後回到首頁。
@@ -87,17 +78,11 @@ class DetailController extends ChangeNotifier {
         AppLocalizations.of(context).dataDeleted,
       );
 
-      Navigator.of(context).pushNamedAndRemoveUntil(
-        '/',
-        (route) => false,
-      );
+      Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
       return;
     }
 
-    AppSnackBar.showError(
-      context,
-      AppLocalizations.of(context).deleteFailed,
-    );
+    AppSnackBar.showError(context, AppLocalizations.of(context).deleteFailed);
   }
 
   // 選擇新照片後交給裁切流程處理。
@@ -126,10 +111,7 @@ class DetailController extends ChangeNotifier {
       return;
     }
 
-    await processPickedImage(
-      context: context,
-      pickedPath: pickedPath,
-    );
+    await processPickedImage(context: context, pickedPath: pickedPath);
   }
 
   // 建立暫存輸出路徑，並開啟圖片裁切流程。
@@ -139,10 +121,7 @@ class DetailController extends ChangeNotifier {
   }) async {
     final tempFileName =
         'actress_${actressId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-    final tempPath = path.join(
-      db.imgDir,
-      tempFileName,
-    );
+    final tempPath = path.join(db.imgDir, tempFileName);
 
     final success = await ImageCropper.open(
       context: context,
@@ -172,10 +151,7 @@ class DetailController extends ChangeNotifier {
   }
 
   // 裁切完成後更新照片狀態，並提示使用者仍需儲存。
-  Map<String, Object> notifyCropDone(
-    BuildContext context,
-    String newImgPath,
-  ) {
+  Map<String, Object> notifyCropDone(BuildContext context, String newImgPath) {
     final state = onCropDone(newImgPath);
 
     AppSnackBar.showSuccess(
@@ -238,6 +214,7 @@ class DetailController extends ChangeNotifier {
       weight: formData['weight']?.toString() ?? '',
       bwh: formData['bwh']?.toString() ?? '',
       cup: formData['cup']?.toString() ?? '',
+      birthDate: formData['birth_date']?.toString(),
     );
 
     if (!context.mounted) {
@@ -302,10 +279,7 @@ class DetailController extends ChangeNotifier {
 
   // 產生圖片狀態資料。
   Map<String, Object> _buildImageState(String imgPath) {
-    return {
-      'img_path': imgPath,
-      'has_image': imgPath.isNotEmpty,
-    };
+    return {'img_path': imgPath, 'has_image': imgPath.isNotEmpty};
   }
 
   // 將表單資料同步回本地狀態。
@@ -318,6 +292,7 @@ class DetailController extends ChangeNotifier {
     actressData['weight'] = formData['weight']?.toString() ?? '';
     actressData['bwh'] = formData['bwh']?.toString() ?? '';
     actressData['cup'] = formData['cup']?.toString() ?? '';
+    actressData['birth_date'] = formData['birth_date']?.toString();
   }
 
   // 建立找不到資料時使用的預設詳細資料。
@@ -331,6 +306,7 @@ class DetailController extends ChangeNotifier {
       'weight': '',
       'bwh': '',
       'cup': '',
+      'birth_date': null,
     };
   }
 }

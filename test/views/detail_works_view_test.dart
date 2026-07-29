@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:avaca/core/config.dart';
 import 'package:avaca/core/database.dart';
 import 'package:avaca/l10n/app_localizations.dart';
 import 'package:avaca/main.dart';
@@ -90,6 +91,15 @@ void main() {
       },
     );
 
+    testWidgets('uses the localized detailed data section title', (
+      tester,
+    ) async {
+      await _pumpDetail(tester, size: const Size(390, 844));
+
+      expect(find.text('詳細資料'), findsOneWidget);
+      expect(find.text('身體資料'), findsNothing);
+    });
+
     testWidgets(
       'mirrors the profile layout in edit mode with compact title and chips',
       (tester) async {
@@ -115,16 +125,136 @@ void main() {
         final chip = tester.widget<FilterChip>(firstChip);
 
         expect(worksRect.left, greaterThan(imageRect.right));
-        expect(
-          worksRect.left - imageRect.right,
-          closeTo(390 - worksRect.right, 0.01),
-        );
+        expect(worksRect.left - imageRect.right, closeTo(12, 0.01));
         expect(attributesRect.left, greaterThan(imageRect.right));
         expect(attributesRect.top, greaterThan(worksRect.bottom));
         expect(nameField.style?.fontSize, 18);
         expect(nameFieldRect.height, lessThanOrEqualTo(40));
         expect(firstChipRect.height, lessThanOrEqualTo(32));
         expect((chip.label as Text).style?.fontSize, 14);
+        final colorScheme = Theme.of(tester.element(firstChip)).colorScheme;
+        final chips = tester.widgetList<FilterChip>(find.byType(FilterChip));
+        final selectedChip = chips.firstWhere((item) => item.selected);
+        final unselectedChip = chips.firstWhere((item) => !item.selected);
+        expect(selectedChip.showCheckmark, isFalse);
+        expect(
+          selectedChip.selectedColor,
+          colorScheme.primary.withValues(alpha: 0.28),
+        );
+        expect(
+          (selectedChip.label as Text).style?.color,
+          colorScheme.onSurface,
+        );
+        expect(
+          (unselectedChip.label as Text).style?.color,
+          colorScheme.onSurfaceVariant,
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets('uses one slightly rounded shape for detail edit controls', (
+      tester,
+    ) async {
+      await _pumpDetail(tester, size: const Size(390, 844));
+      await tester.tap(find.byIcon(Icons.edit));
+      await tester.pumpAndSettle();
+
+      final worksButton = find.byKey(const Key('detail-works-button'));
+      final birthDateButton = find.byKey(const Key('detail-birth-date-button'));
+      final worksRadius = _outlinedButtonRadius(tester, worksButton);
+      final birthDateRadius = _outlinedButtonRadius(tester, birthDateButton);
+      expect(worksRadius, BorderRadius.circular(6));
+      expect(birthDateRadius, worksRadius);
+
+      for (final key in const [
+        Key('detail-height-field'),
+        Key('detail-weight-field'),
+        Key('detail-cup-field'),
+        Key('detail-measurements-field'),
+      ]) {
+        final fieldFinder = find.byKey(key);
+        expect(fieldFinder, findsOneWidget);
+        final decoration = tester.widget<TextField>(fieldFinder).decoration!;
+        expect(_inputBorderRadius(decoration.border), worksRadius);
+        expect(_inputBorderRadius(decoration.enabledBorder), worksRadius);
+        expect(_inputBorderRadius(decoration.focusedBorder), worksRadius);
+      }
+    });
+
+    testWidgets(
+      'edit profile uses symmetric inset and compact right-column photo actions',
+      (tester) async {
+        await _pumpDetail(tester, size: const Size(390, 844));
+        await tester.tap(find.byIcon(Icons.edit));
+        await tester.pumpAndSettle();
+
+        final panel = find.byKey(const Key('detail-profile-panel'));
+        final image = find.byKey(const Key('detail-profile-image'));
+        final works = find.byKey(const Key('detail-works-button'));
+        final attributes = find.byKey(const Key('detail-attributes'));
+        final actions = find.byKey(const Key('detail-photo-actions'));
+        final changePhoto = find.byKey(const Key('detail-change-photo-button'));
+        final deletePhoto = find.byKey(const Key('detail-delete-photo-button'));
+        expect(panel, findsOneWidget);
+        expect(actions, findsOneWidget);
+        expect(changePhoto, findsOneWidget);
+        expect(deletePhoto, findsOneWidget);
+
+        final panelRect = tester.getRect(panel);
+        final imageRect = tester.getRect(image);
+        final worksRect = tester.getRect(works);
+        final attributesRect = tester.getRect(attributes);
+        final actionsRect = tester.getRect(actions);
+        final changeRect = tester.getRect(changePhoto);
+        final deleteRect = tester.getRect(deletePhoto);
+
+        expect(imageRect.left - panelRect.left, closeTo(12, 0.01));
+        expect(imageRect.top - panelRect.top, closeTo(12, 0.01));
+        expect(worksRect.top - panelRect.top, closeTo(12, 0.01));
+        expect(panelRect.right - worksRect.right, closeTo(12, 0.01));
+        expect(imageRect.top, closeTo(worksRect.top, 0.01));
+        expect(actionsRect.top, greaterThan(attributesRect.bottom));
+        expect(actionsRect.left, greaterThanOrEqualTo(worksRect.left));
+        expect(actionsRect.right, lessThanOrEqualTo(worksRect.right));
+        expect(changeRect.top, closeTo(deleteRect.top, 0.01));
+        expect(changeRect.height, closeTo(deleteRect.height, 0.01));
+        expect(changeRect.height, lessThanOrEqualTo(40));
+        expect(changeRect.right, lessThanOrEqualTo(deleteRect.left));
+        expect(
+          _outlinedButtonRadius(tester, changePhoto),
+          BorderRadius.circular(6),
+        );
+        expect(
+          _outlinedButtonRadius(tester, deletePhoto),
+          BorderRadius.circular(6),
+        );
+        final labelStyle = Theme.of(
+          tester.element(changePhoto),
+        ).textTheme.labelMedium;
+        expect(labelStyle?.fontFamilyFallback, isNotEmpty);
+        final changeTextStyle = tester
+            .widget<OutlinedButton>(changePhoto)
+            .style
+            ?.textStyle
+            ?.resolve(<WidgetState>{});
+        final deleteTextStyle = tester
+            .widget<OutlinedButton>(deletePhoto)
+            .style
+            ?.textStyle
+            ?.resolve(<WidgetState>{});
+        expect(changeTextStyle?.fontSize, 12);
+        expect(deleteTextStyle?.fontSize, 12);
+        expect(
+          changeTextStyle?.fontFamilyFallback,
+          labelStyle?.fontFamilyFallback,
+        );
+        expect(
+          deleteTextStyle?.fontFamilyFallback,
+          labelStyle?.fontFamilyFallback,
+        );
+        expect(find.text('更換照片'), findsOneWidget);
+        expect(find.text('刪除照片'), findsOneWidget);
         expect(tester.takeException(), isNull);
       },
     );
@@ -182,6 +312,23 @@ void main() {
         expect(find.byKey(const Key('detail-name-field')), findsOneWidget);
         expect(find.byType(FilterChip), findsWidgets);
         expect(find.byKey(const Key('detail-works-button')), findsOneWidget);
+        final panel = find.byKey(const Key('detail-profile-panel'));
+        final actions = find.byKey(const Key('detail-photo-actions'));
+        final changePhoto = find.byKey(const Key('detail-change-photo-button'));
+        final deletePhoto = find.byKey(const Key('detail-delete-photo-button'));
+        expect(panel, findsOneWidget);
+        expect(actions, findsOneWidget);
+        expect(changePhoto, findsOneWidget);
+        expect(deletePhoto, findsOneWidget);
+        final actionsRect = tester.getRect(actions);
+        final changeRect = tester.getRect(changePhoto);
+        final deleteRect = tester.getRect(deletePhoto);
+        expect(changeRect.top, closeTo(deleteRect.top, 0.01));
+        expect(changeRect.height, closeTo(deleteRect.height, 0.01));
+        expect(changeRect.left, greaterThanOrEqualTo(actionsRect.left));
+        expect(deleteRect.right, lessThanOrEqualTo(actionsRect.right));
+        expect(find.text('更換照片'), findsOneWidget);
+        expect(find.text('刪除照片'), findsOneWidget);
         expect(tester.takeException(), isNull);
       },
     );
@@ -303,6 +450,19 @@ Future<void> _pumpWorks(WidgetTester tester, {required AppDatabase db}) async {
   await tester.pump();
 }
 
+BorderRadiusGeometry _outlinedButtonRadius(WidgetTester tester, Finder finder) {
+  final button = tester.widget<OutlinedButton>(finder);
+  final shape = button.style?.shape?.resolve(<WidgetState>{});
+  expect(shape, isNotNull);
+  expect(shape, isA<RoundedRectangleBorder>());
+  return (shape! as RoundedRectangleBorder).borderRadius;
+}
+
+BorderRadiusGeometry _inputBorderRadius(InputBorder? border) {
+  expect(border, isA<OutlineInputBorder>());
+  return (border! as OutlineInputBorder).borderRadius;
+}
+
 Future<void> _pumpDetail(
   WidgetTester tester, {
   required Size size,
@@ -317,6 +477,7 @@ Future<void> _pumpDetail(
 
   await tester.pumpWidget(
     MaterialApp(
+      theme: AppTheme.fromPalette(AppPalettes.light),
       locale: const Locale('zh', 'TW'),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,

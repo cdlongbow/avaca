@@ -157,7 +157,7 @@ abstract class AppLocalizations {
   /// No description provided for @bodyInfo.
   ///
   /// In zh_TW, this message translates to:
-  /// **'身體資料'**
+  /// **'詳細資料'**
   String get bodyInfo;
 
   /// No description provided for @heightCm.
@@ -237,6 +237,84 @@ abstract class AppLocalizations {
   /// In zh_TW, this message translates to:
   /// **'篩選與排序'**
   String get filterAndSort;
+
+  /// No description provided for @filterSection.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'篩選'**
+  String get filterSection;
+
+  /// No description provided for @sortSection.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'排序'**
+  String get sortSection;
+
+  /// No description provided for @sortCreatedDesc.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'新增時間（新到舊）'**
+  String get sortCreatedDesc;
+
+  /// No description provided for @sortCreatedAsc.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'新增時間（舊到新）'**
+  String get sortCreatedAsc;
+
+  /// No description provided for @sortModifiedDesc.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'修改時間（新到舊）'**
+  String get sortModifiedDesc;
+
+  /// No description provided for @sortModifiedAsc.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'修改時間（舊到新）'**
+  String get sortModifiedAsc;
+
+  /// No description provided for @sortAgeAsc.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'年齡（低到高）'**
+  String get sortAgeAsc;
+
+  /// No description provided for @sortAgeDesc.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'年齡（高到低）'**
+  String get sortAgeDesc;
+
+  /// No description provided for @birthDate.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'生日'**
+  String get birthDate;
+
+  /// No description provided for @setBirthDate.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'設定生日'**
+  String get setBirthDate;
+
+  /// No description provided for @clear.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'清除'**
+  String get clear;
+
+  /// No description provided for @done.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'完成'**
+  String get done;
+
+  /// No description provided for @ageWithBirthDate.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'{age}歲  {date}'**
+  String ageWithBirthDate(int age, String date);
 
   /// No description provided for @add.
   ///

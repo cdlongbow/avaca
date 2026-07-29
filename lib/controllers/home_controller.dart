@@ -3,9 +3,7 @@ import '../core/database.dart';
 
 /// 管理首頁的搜尋、篩選、排序與頁面導向狀態。
 class HomeController {
-  HomeController({
-    required this.db,
-  });
+  HomeController({required this.db});
 
   final AppDatabase db;
 
@@ -16,13 +14,18 @@ class HomeController {
 
   /// 取得首頁可用的篩選選項。
   List<String> getFilterOptions() {
+    return ['all', 'censored', 'uncensored', 'western', 'fc2', 'domestic'];
+  }
+
+  /// 取得首頁可用的排序選項。
+  List<String> getSortOptions() {
     return [
-      'all',
-      'censored',
-      'uncensored',
-      'western',
-      'fc2',
-      'domestic',
+      'created_desc',
+      'created_asc',
+      'modified_desc',
+      'modified_asc',
+      'age_asc',
+      'age_desc',
     ];
   }
 
@@ -54,9 +57,7 @@ class HomeController {
   Map<String, Object> selectFilter(String filterValue) {
     currentFilter = filterValue;
 
-    return {
-      'current_filter': currentFilter,
-    };
+    return {'current_filter': currentFilter};
   }
 
   /// 更新目前排序條件。
@@ -66,16 +67,7 @@ class HomeController {
 
   /// 通知外部開啟篩選面板。
   Map<String, bool> openFilterSheet() {
-    return {
-      'open': true,
-    };
-  }
-
-  /// 通知外部關閉篩選面板。
-  Map<String, bool> applyFilterSheet() {
-    return {
-      'open': false,
-    };
+    return {'open': true};
   }
 
   /// 使用目前搜尋、篩選與排序狀態取得首頁列表資料。
@@ -107,6 +99,8 @@ class HomeController {
       'modified_asc' => '修改時間 (舊到新)',
       'name_asc' => '名稱 (A-Z)',
       'name_desc' => '名稱 (Z-A)',
+      'age_asc' => '年齡 (低到高)',
+      'age_desc' => '年齡 (高到低)',
       _ => sortValue,
     };
   }

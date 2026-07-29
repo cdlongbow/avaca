@@ -9,7 +9,7 @@
   "changePhoto": "Change Photo",
   "deletePhoto": "Delete Photo",
   "noAttributesSet": "No Attributes Set",
-  "bodyInfo": "Body Info",
+  "bodyInfo": "Details",
   "heightCm": "Height (cm)",
   "weightKg": "Weight (kg)",
   "cup": "Cup",
@@ -23,6 +23,29 @@
   "appTitle": "AVACA Collection Library",
   "search": "Search",
   "filterAndSort": "Filter & Sort",
+  "filterSection": "Filter",
+  "sortSection": "Sort",
+  "sortCreatedDesc": "Added (Newest)",
+  "sortCreatedAsc": "Added (Oldest)",
+  "sortModifiedDesc": "Modified (Newest)",
+  "sortModifiedAsc": "Modified (Oldest)",
+  "sortAgeAsc": "Age (Low to High)",
+  "sortAgeDesc": "Age (High to Low)",
+  "birthDate": "Birthday",
+  "setBirthDate": "Set birthday",
+  "clear": "Clear",
+  "done": "Done",
+  "ageWithBirthDate": "Age {age}  {date}",
+  "@ageWithBirthDate": {
+    "placeholders": {
+      "age": {
+        "type": "int"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "add": "Add",
   "settings": "Settings",
   "themeAndColors": "Theme & Colors",

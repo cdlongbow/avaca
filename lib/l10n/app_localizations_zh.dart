@@ -36,7 +36,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get noAttributesSet => '尚未設定屬性';
 
   @override
-  String get bodyInfo => '身體資料';
+  String get bodyInfo => '詳細資料';
 
   @override
   String get heightCm => '身高 (cm)';
@@ -76,6 +76,47 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get filterAndSort => '篩選與排序';
+
+  @override
+  String get filterSection => '篩選';
+
+  @override
+  String get sortSection => '排序';
+
+  @override
+  String get sortCreatedDesc => '新增時間（新到舊）';
+
+  @override
+  String get sortCreatedAsc => '新增時間（舊到新）';
+
+  @override
+  String get sortModifiedDesc => '修改時間（新到舊）';
+
+  @override
+  String get sortModifiedAsc => '修改時間（舊到新）';
+
+  @override
+  String get sortAgeAsc => '年齡（低到高）';
+
+  @override
+  String get sortAgeDesc => '年齡（高到低）';
+
+  @override
+  String get birthDate => '生日';
+
+  @override
+  String get setBirthDate => '設定生日';
+
+  @override
+  String get clear => '清除';
+
+  @override
+  String get done => '完成';
+
+  @override
+  String ageWithBirthDate(int age, String date) {
+    return '$age歲  $date';
+  }
 
   @override
   String get add => '新增';
@@ -278,7 +319,7 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get noAttributesSet => '尚未设置属性';
 
   @override
-  String get bodyInfo => '身体资料';
+  String get bodyInfo => '详细资料';
 
   @override
   String get heightCm => '身高 (cm)';
@@ -318,6 +359,47 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get filterAndSort => '筛选与排序';
+
+  @override
+  String get filterSection => '筛选';
+
+  @override
+  String get sortSection => '排序';
+
+  @override
+  String get sortCreatedDesc => '新增时间（新到旧）';
+
+  @override
+  String get sortCreatedAsc => '新增时间（旧到新）';
+
+  @override
+  String get sortModifiedDesc => '修改时间（新到旧）';
+
+  @override
+  String get sortModifiedAsc => '修改时间（旧到新）';
+
+  @override
+  String get sortAgeAsc => '年龄（低到高）';
+
+  @override
+  String get sortAgeDesc => '年龄（高到低）';
+
+  @override
+  String get birthDate => '生日';
+
+  @override
+  String get setBirthDate => '设置生日';
+
+  @override
+  String get clear => '清除';
+
+  @override
+  String get done => '完成';
+
+  @override
+  String ageWithBirthDate(int age, String date) {
+    return '$age岁  $date';
+  }
 
   @override
   String get add => '新增';
@@ -520,7 +602,7 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get noAttributesSet => '尚未設定屬性';
 
   @override
-  String get bodyInfo => '身體資料';
+  String get bodyInfo => '詳細資料';
 
   @override
   String get heightCm => '身高 (cm)';
@@ -560,6 +642,47 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get filterAndSort => '篩選與排序';
+
+  @override
+  String get filterSection => '篩選';
+
+  @override
+  String get sortSection => '排序';
+
+  @override
+  String get sortCreatedDesc => '新增時間（新到舊）';
+
+  @override
+  String get sortCreatedAsc => '新增時間（舊到新）';
+
+  @override
+  String get sortModifiedDesc => '修改時間（新到舊）';
+
+  @override
+  String get sortModifiedAsc => '修改時間（舊到新）';
+
+  @override
+  String get sortAgeAsc => '年齡（低到高）';
+
+  @override
+  String get sortAgeDesc => '年齡（高到低）';
+
+  @override
+  String get birthDate => '生日';
+
+  @override
+  String get setBirthDate => '設定生日';
+
+  @override
+  String get clear => '清除';
+
+  @override
+  String get done => '完成';
+
+  @override
+  String ageWithBirthDate(int age, String date) {
+    return '$age歲  $date';
+  }
 
   @override
   String get add => '新增';

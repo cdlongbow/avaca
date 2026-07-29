@@ -36,7 +36,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get noAttributesSet => 'No Attributes Set';
 
   @override
-  String get bodyInfo => 'Body Info';
+  String get bodyInfo => 'Details';
 
   @override
   String get heightCm => 'Height (cm)';
@@ -77,6 +77,47 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get filterAndSort => 'Filter & Sort';
+
+  @override
+  String get filterSection => 'Filter';
+
+  @override
+  String get sortSection => 'Sort';
+
+  @override
+  String get sortCreatedDesc => 'Added (Newest)';
+
+  @override
+  String get sortCreatedAsc => 'Added (Oldest)';
+
+  @override
+  String get sortModifiedDesc => 'Modified (Newest)';
+
+  @override
+  String get sortModifiedAsc => 'Modified (Oldest)';
+
+  @override
+  String get sortAgeAsc => 'Age (Low to High)';
+
+  @override
+  String get sortAgeDesc => 'Age (High to Low)';
+
+  @override
+  String get birthDate => 'Birthday';
+
+  @override
+  String get setBirthDate => 'Set birthday';
+
+  @override
+  String get clear => 'Clear';
+
+  @override
+  String get done => 'Done';
+
+  @override
+  String ageWithBirthDate(int age, String date) {
+    return 'Age $age  $date';
+  }
 
   @override
   String get add => 'Add';

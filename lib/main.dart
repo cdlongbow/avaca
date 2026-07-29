@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/config.dart';
 import 'core/database.dart';
+import 'core/keyboard_dismiss_navigator_observer.dart';
 import 'views/add_view.dart';
 import 'views/detail_view.dart';
 import 'views/home_view.dart';
@@ -30,6 +31,8 @@ class AvacaApp extends StatefulWidget {
 }
 
 class _AvacaAppState extends State<AvacaApp> {
+  final KeyboardDismissNavigatorObserver _keyboardObserver =
+      KeyboardDismissNavigatorObserver();
   ThemeMode _themeMode = ThemeMode.system;
   bool _isPureBlack = false;
   Map<String, Color>? _customColors;
@@ -100,6 +103,7 @@ class _AvacaAppState extends State<AvacaApp> {
       darkTheme: darkTheme,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
+      navigatorObservers: [_keyboardObserver],
       onGenerateRoute: _onGenerateRoute,
     );
   }
