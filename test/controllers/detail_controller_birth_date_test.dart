@@ -4,6 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 class _NotFoundDatabase extends AppDatabase {
   @override
+  Future<int> getWorkCountForActress(int actressId) async => 0;
+
+  @override
   Future<Map<String, Object?>?> getActressById(int actressId) async => null;
 }
 

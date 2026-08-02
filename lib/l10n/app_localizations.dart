@@ -6,6 +6,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart' as intl;
 
 import 'app_localizations_en.dart';
+import 'app_localizations_ja.dart';
 import 'app_localizations_zh.dart';
 
 // ignore_for_file: type=lint
@@ -96,7 +97,9 @@ abstract class AppLocalizations {
   static const List<Locale> supportedLocales = <Locale>[
     Locale('zh', 'TW'),
     Locale('zh', 'CN'),
+    Locale('ja', 'JP'),
     Locale('en'),
+    Locale('ja'),
     Locale('zh'),
   ];
 
@@ -223,7 +226,7 @@ abstract class AppLocalizations {
   /// No description provided for @appTitle.
   ///
   /// In zh_TW, this message translates to:
-  /// **'AVACA 收藏庫'**
+  /// **'AVACA'**
   String get appTitle;
 
   /// No description provided for @search.
@@ -622,6 +625,12 @@ abstract class AppLocalizations {
   /// **'簡體中文'**
   String get simplifiedChinese;
 
+  /// No description provided for @japanese.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'日文'**
+  String get japanese;
+
   /// No description provided for @works.
   ///
   /// In zh_TW, this message translates to:
@@ -639,6 +648,126 @@ abstract class AppLocalizations {
   /// In zh_TW, this message translates to:
   /// **'{actressName}演出的作品'**
   String actressWorksTitle(String actressName);
+
+  /// No description provided for @scrapeWorks.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'刮削作品'**
+  String get scrapeWorks;
+
+  /// No description provided for @scrapeSettings.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'刮削設定'**
+  String get scrapeSettings;
+
+  /// No description provided for @syncActressDetails.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'同步詳細資料'**
+  String get syncActressDetails;
+
+  /// No description provided for @replaceActressImage.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'更換女優頭像'**
+  String get replaceActressImage;
+
+  /// No description provided for @fillMissingOnly.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'二次刮削只補齊缺少的資訊'**
+  String get fillMissingOnly;
+
+  /// No description provided for @excludedCodePrefixes.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'不刮削的番號開頭'**
+  String get excludedCodePrefixes;
+
+  /// No description provided for @codePrefixHint.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'輸入番號前綴'**
+  String get codePrefixHint;
+
+  /// No description provided for @addPrefix.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'新增'**
+  String get addPrefix;
+
+  /// No description provided for @startScrape.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'開始刮削'**
+  String get startScrape;
+
+  /// No description provided for @noWorks.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'尚無作品'**
+  String get noWorks;
+
+  /// No description provided for @durationMinutes.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'{minutes} 分鐘'**
+  String durationMinutes(int minutes);
+
+  /// No description provided for @studio.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'製作商'**
+  String get studio;
+
+  /// No description provided for @publisher.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'發行商'**
+  String get publisher;
+
+  /// No description provided for @series.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'系列'**
+  String get series;
+
+  /// No description provided for @scrapeComplete.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'刮削完成：儲存 {saved}、排除 {excluded}、失敗 {failed}'**
+  String scrapeComplete(int saved, int excluded, int failed);
+
+  /// No description provided for @scrapeCancelled.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'已取消刮削：儲存 {saved}、排除 {excluded}、失敗 {failed}'**
+  String scrapeCancelled(int saved, int excluded, int failed);
+
+  /// No description provided for @scrapeFailed.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'刮削失敗，請稍後再試。'**
+  String get scrapeFailed;
+
+  /// No description provided for @javBusVerificationTitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'JavBus 驗證'**
+  String get javBusVerificationTitle;
+
+  /// No description provided for @javBusVerificationInstructions.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'JavBus 要求手動完成地區成年驗證。請回答所有題目，App 會在同一安全工作階段繼續刮削。'**
+  String get javBusVerificationInstructions;
+
+  /// No description provided for @javBusVerificationSubmit.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'送出驗證'**
+  String get javBusVerificationSubmit;
 }
 
 class _AppLocalizationsDelegate
@@ -652,7 +781,7 @@ class _AppLocalizationsDelegate
 
   @override
   bool isSupported(Locale locale) =>
-      <String>['en', 'zh'].contains(locale.languageCode);
+      <String>['en', 'ja', 'zh'].contains(locale.languageCode);
 
   @override
   bool shouldReload(_AppLocalizationsDelegate old) => false;
@@ -661,6 +790,14 @@ class _AppLocalizationsDelegate
 AppLocalizations lookupAppLocalizations(Locale locale) {
   // Lookup logic when language+country codes are specified.
   switch (locale.languageCode) {
+    case 'ja':
+      {
+        switch (locale.countryCode) {
+          case 'JP':
+            return AppLocalizationsJaJp();
+        }
+        break;
+      }
     case 'zh':
       {
         switch (locale.countryCode) {
@@ -677,6 +814,8 @@ AppLocalizations lookupAppLocalizations(Locale locale) {
   switch (locale.languageCode) {
     case 'en':
       return AppLocalizationsEn();
+    case 'ja':
+      return AppLocalizationsJa();
     case 'zh':
       return AppLocalizationsZh();
   }

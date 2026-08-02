@@ -122,6 +122,8 @@ class _AvacaAppState extends State<AvacaApp> {
   Locale? _localeFromString(String localeString) {
     return switch (localeString) {
       'zh_TW' => const Locale('zh', 'TW'),
+      'zh_CN' => const Locale('zh', 'CN'),
+      'ja_JP' => const Locale('ja', 'JP'),
       'en' => const Locale('en'),
       _ => null,
     };

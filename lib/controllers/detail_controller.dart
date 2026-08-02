@@ -1,4 +1,5 @@
 import 'dart:io';
+
 import 'package:file_picker/file_picker.dart' as file_picker;
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
@@ -14,6 +15,7 @@ class DetailController extends ChangeNotifier {
   final int actressId;
 
   bool isEditing = false;
+  int workCount = 0;
   Map<String, Object?> actressData = _buildFallbackActressData();
   List<String> currentAttrs = [];
 
@@ -21,7 +23,19 @@ class DetailController extends ChangeNotifier {
   Future<void> init() async {
     actressData = await _loadActressData();
     currentAttrs = _parseAttrs(actressData['main_type']?.toString() ?? '');
+    await refreshWorkCount(notify: false);
     notifyListeners();
+  }
+
+  Future<void> refreshWorkCount({bool notify = true}) async {
+    try {
+      workCount = await db.getWorkCountForActress(actressId);
+    } catch (_) {
+      workCount = 0;
+    }
+    if (notify) {
+      notifyListeners();
+    }
   }
 
   // 保留舊流程需要的入口，目前 Flutter 版本不需要保存 cropper 實例。
@@ -62,27 +76,42 @@ class DetailController extends ChangeNotifier {
     return {'open': false};
   }
 
-  // 刪除照片檔案與資料庫資料，成功後回到首頁。
+  // 刪除資料與相關圖片，成功後回到首頁。
   Future<void> executeDelete(BuildContext context) async {
-    _deleteImageFile();
+    final report = await db.deleteActressWithReport(actressId);
 
-    final success = await db.deleteActress(actressId);
+    if (report.databaseCommitted) {
+      for (final imagePath in report.cacheEvictionPaths) {
+        await FileImage(File(imagePath)).evict();
+      }
+      actressData = _buildFallbackActressData();
+      currentAttrs = [];
+      workCount = 0;
+      notifyListeners();
+    }
 
     if (!context.mounted) {
       return;
     }
 
-    if (success) {
-      AppSnackBar.showSuccess(
-        context,
-        AppLocalizations.of(context).dataDeleted,
-      );
+    if (report.databaseCommitted) {
+      AppSnackBar.showSuccess(context, _deletionSummary(report));
 
       Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
       return;
     }
 
     AppSnackBar.showError(context, AppLocalizations.of(context).deleteFailed);
+  }
+
+  String _deletionSummary(ActressDeletionReport report) {
+    final cleanup = report.fileCleanup;
+    if (cleanup.rejectedCount > 0 || cleanup.deferredCount > 0) {
+      return '資料已刪除；圖片：成功 ${cleanup.deletedCount}、拒絕 '
+          '${cleanup.rejectedCount}、待重試 ${cleanup.deferredCount}';
+    }
+    return '已刪除 ${cleanup.deletedCount} 個圖片檔，共釋放 '
+        '${(report.deletedBytes / (1024 * 1024)).toStringAsFixed(2)} MB';
   }
 
   // 選擇新照片後交給裁切流程處理。
@@ -254,27 +283,6 @@ class DetailController extends ChangeNotifier {
         .map((attr) => attr.trim())
         .where((attr) => attr.isNotEmpty)
         .toList();
-  }
-
-  // 嘗試刪除目前照片檔案；刪除失敗時只輸出除錯訊息。
-  void _deleteImageFile() {
-    final imgPath = actressData['img_path']?.toString();
-
-    if (imgPath == null || imgPath.isEmpty) {
-      return;
-    }
-
-    final imageFile = File(imgPath);
-
-    if (!imageFile.existsSync()) {
-      return;
-    }
-
-    try {
-      imageFile.deleteSync();
-    } catch (error) {
-      debugPrint('照片刪除失敗: $error');
-    }
   }
 
   // 產生圖片狀態資料。

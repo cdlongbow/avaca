@@ -453,6 +453,7 @@ class _SettingsViewState extends State<SettingsView> {
       'system' => AppLocalizations.of(context).followSystem,
       'zh_TW' => AppLocalizations.of(context).traditionalChineseTaiwan,
       'zh_CN' => AppLocalizations.of(context).simplifiedChinese,
+      'ja_JP' => AppLocalizations.of(context).japanese,
       'en' => AppLocalizations.of(context).english,
       _ => value,
     };

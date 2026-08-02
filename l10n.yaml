@@ -6,4 +6,5 @@ nullable-getter: false
 preferred-supported-locales:
   - zh_TW
   - zh_CN
+  - ja_JP
   - en

@@ -11,6 +11,7 @@ class WorksController extends ChangeNotifier {
   final int actressId;
 
   String actressName = '';
+  List<Map<String, Object?>> works = const [];
   WorksLoadStatus status = WorksLoadStatus.loading;
   Object? loadError;
 
@@ -22,6 +23,7 @@ class WorksController extends ChangeNotifier {
         status = WorksLoadStatus.notFound;
       } else {
         actressName = actress['name']?.toString() ?? '';
+        works = await db.getWorksForActress(actressId);
         status = WorksLoadStatus.loaded;
       }
     } catch (error) {
@@ -29,6 +31,11 @@ class WorksController extends ChangeNotifier {
       status = WorksLoadStatus.error;
     }
 
+    notifyListeners();
+  }
+
+  Future<void> reloadWorks() async {
+    works = await db.getWorksForActress(actressId);
     notifyListeners();
   }
 }

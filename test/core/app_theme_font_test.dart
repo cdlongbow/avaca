@@ -1,11 +1,12 @@
 import 'package:avaca/core/config.dart';
-import 'package:flutter/foundation.dart';
+import 'package:avaca/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  const expectedFontFamilyFallback = <String>['AvacaNotoSansTC'];
+  const expectedFontFamily = 'NotoSansCjkTcVariable';
+  const minimumFontWeight = FontWeight.w300;
 
   test('custom palette ignores OLED and keeps every custom color exact', () {
     const customPalette = AppPalette(
@@ -38,70 +39,48 @@ void main() {
     expect(identical(resolved, customPalette), isTrue);
   });
 
-  group('AppTheme bundled font family fallback', () {
-    test(
-      'uses the Traditional Chinese fallback order for the light palette',
-      () {
-        final theme = AppTheme.fromPalette(AppPalettes.light);
+  group('AppTheme bundled variable font', () {
+    for (final palette in [AppPalettes.light, AppPalettes.dark]) {
+      test('uses the single bundled family for ${palette.brightness.name}', () {
+        final theme = AppTheme.fromPalette(palette);
 
-        expect(
-          theme.textTheme.bodyMedium?.fontFamilyFallback,
-          expectedFontFamilyFallback,
-        );
+        expect(theme.textTheme.bodyMedium?.fontFamily, expectedFontFamily);
+      });
+    }
+
+    test(
+      'applies the family and minimum weight to every Material text style',
+      () {
+        final textTheme = AppTheme.fromPalette(AppPalettes.light).textTheme;
+        final styles = <TextStyle?>[
+          textTheme.displayLarge,
+          textTheme.displayMedium,
+          textTheme.displaySmall,
+          textTheme.headlineLarge,
+          textTheme.headlineMedium,
+          textTheme.headlineSmall,
+          textTheme.titleLarge,
+          textTheme.titleMedium,
+          textTheme.titleSmall,
+          textTheme.bodyLarge,
+          textTheme.bodyMedium,
+          textTheme.bodySmall,
+          textTheme.labelLarge,
+          textTheme.labelMedium,
+          textTheme.labelSmall,
+        ];
+
+        for (final style in styles) {
+          expect(style?.fontFamily, expectedFontFamily);
+          expect(
+            style?.fontWeight?.value,
+            greaterThanOrEqualTo(minimumFontWeight.value),
+          );
+        }
       },
     );
 
-    test(
-      'uses the Traditional Chinese fallback order for the dark palette',
-      () {
-        final theme = AppTheme.fromPalette(AppPalettes.dark);
-
-        expect(
-          theme.textTheme.bodyMedium?.fontFamilyFallback,
-          expectedFontFamilyFallback,
-        );
-      },
-    );
-
-    test('keeps Android Roboto as the primary font for Latin and digits', () {
-      debugDefaultTargetPlatformOverride = TargetPlatform.android;
-      addTearDown(() => debugDefaultTargetPlatformOverride = null);
-
-      final theme = AppTheme.fromPalette(AppPalettes.light);
-
-      expect(theme.textTheme.bodyMedium?.fontFamily, 'Roboto');
-      expect(
-        theme.textTheme.bodyMedium?.fontFamilyFallback,
-        expectedFontFamilyFallback,
-      );
-    });
-
-    test('applies the fallback order to every Material text style', () {
-      final textTheme = AppTheme.fromPalette(AppPalettes.light).textTheme;
-      final styles = <TextStyle?>[
-        textTheme.displayLarge,
-        textTheme.displayMedium,
-        textTheme.displaySmall,
-        textTheme.headlineLarge,
-        textTheme.headlineMedium,
-        textTheme.headlineSmall,
-        textTheme.titleLarge,
-        textTheme.titleMedium,
-        textTheme.titleSmall,
-        textTheme.bodyLarge,
-        textTheme.bodyMedium,
-        textTheme.bodySmall,
-        textTheme.labelLarge,
-        textTheme.labelMedium,
-        textTheme.labelSmall,
-      ];
-
-      for (final style in styles) {
-        expect(style?.fontFamilyFallback, expectedFontFamilyFallback);
-      }
-    });
-
-    test('applies the bundled font to every custom component text style', () {
+    test('applies the family and minimum weight to component text styles', () {
       final theme = AppTheme.fromPalette(AppPalettes.light);
       final styles = <TextStyle?>[
         theme.inputDecorationTheme.labelStyle,
@@ -118,24 +97,49 @@ void main() {
       ];
 
       for (final style in styles) {
-        expect(style?.fontFamilyFallback, expectedFontFamilyFallback);
+        expect(style?.fontFamily, expectedFontFamily);
+        expect(
+          style?.fontWeight?.value,
+          greaterThanOrEqualTo(minimumFontWeight.value),
+        );
       }
     });
 
-    testWidgets('loads the registered font and license from rootBundle', (
-      tester,
-    ) async {
-      final fontManifest = await rootBundle.loadString('FontManifest.json');
-      final fontData = await rootBundle.load('assets/fonts/NotoSansTC-VF.ttf');
-      final license = await rootBundle.loadString('assets/fonts/OFL.txt');
+    testWidgets(
+      'renders mixed-language names with the same family and locale',
+      (tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            locale: const Locale('ja', 'JP'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            theme: AppTheme.fromPalette(AppPalettes.light),
+            home: const Scaffold(body: Text('三上悠亜・八木奈々 / AVACA 简体中文')),
+          ),
+        );
 
-      expect(fontManifest, contains('"family":"AvacaNotoSansTC"'));
-      expect(
-        fontManifest,
-        contains('"asset":"assets/fonts/NotoSansTC-VF.ttf"'),
-      );
-      expect(fontData.lengthInBytes, 11942912);
-      expect(license, contains('SIL OPEN FONT LICENSE Version 1.1'));
-    });
+        final text = tester.widget<Text>(find.byType(Text));
+        final element = tester.element(find.byType(Text));
+        final effectiveStyle = DefaultTextStyle.of(
+          element,
+        ).style.merge(text.style);
+
+        expect(effectiveStyle.fontFamily, expectedFontFamily);
+        expect(effectiveStyle.fontWeight, minimumFontWeight);
+        expect(Localizations.localeOf(element), const Locale('ja', 'JP'));
+
+        final fontManifest = await rootBundle.loadString('FontManifest.json');
+        final fontData = await rootBundle.load(
+          'assets/fonts/NotoSansCJKtc-VF.ttf',
+        );
+
+        expect(fontManifest, contains('"family":"$expectedFontFamily"'));
+        expect(
+          fontManifest,
+          contains('"asset":"assets/fonts/NotoSansCJKtc-VF.ttf"'),
+        );
+        expect(fontData.lengthInBytes, 36143328);
+      },
+    );
   });
 }

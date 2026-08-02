@@ -14,6 +14,13 @@ class _FakeAppDatabase extends AppDatabase {
   final String persistedName = '已儲存名稱';
 
   @override
+  Future<int> getWorkCountForActress(int actressId) async => 0;
+
+  @override
+  Future<List<Map<String, Object?>>> getWorksForActress(int actressId) async =>
+      const [];
+
+  @override
   Future<Map<String, Object?>?> getActressById(int actressId) async {
     return {
       'id': actressId,
@@ -63,33 +70,32 @@ class _FailingAppDatabase extends _FakeAppDatabase {
 
 void main() {
   group('DetailView responsive profile layout', () {
-    testWidgets(
-      'places the image left and Works above attributes with symmetric gaps',
-      (tester) async {
-        await _pumpDetail(tester, size: const Size(390, 844));
+    testWidgets('places the image left and Works count above attributes', (
+      tester,
+    ) async {
+      await _pumpDetail(tester, size: const Size(390, 844));
 
-        final imageRect = tester.getRect(
-          find.byKey(const Key('detail-profile-image')),
-        );
-        final worksRect = tester.getRect(
-          find.byKey(const Key('detail-works-button')),
-        );
-        final attributesRect = tester.getRect(
-          find.byKey(const Key('detail-attributes')),
-        );
+      final imageRect = tester.getRect(
+        find.byKey(const Key('detail-profile-image')),
+      );
+      final worksRect = tester.getRect(
+        find.byKey(const Key('detail-works-button')),
+      );
+      final countRect = tester.getRect(
+        find.byKey(const Key('detail-works-count')),
+      );
+      final attributesRect = tester.getRect(
+        find.byKey(const Key('detail-attributes')),
+      );
 
-        expect(imageRect.left, closeTo(16, 0.01));
-        expect(worksRect.left, greaterThan(imageRect.right));
-        expect(
-          worksRect.left - imageRect.right,
-          closeTo(390 - worksRect.right, 0.01),
-        );
-        expect(worksRect.top, closeTo(imageRect.top, 0.01));
-        expect(attributesRect.left, greaterThan(imageRect.right));
-        expect(attributesRect.top, greaterThan(worksRect.bottom));
-        expect(tester.takeException(), isNull);
-      },
-    );
+      expect(imageRect.left, closeTo(16, 0.01));
+      expect(worksRect.left, greaterThan(imageRect.right));
+      expect(countRect.left, greaterThan(worksRect.right));
+      expect(worksRect.top, closeTo(imageRect.top, 0.01));
+      expect(attributesRect.left, greaterThan(imageRect.right));
+      expect(attributesRect.top, greaterThan(worksRect.bottom));
+      expect(tester.takeException(), isNull);
+    });
 
     testWidgets('uses the localized detailed data section title', (
       tester,
@@ -192,6 +198,7 @@ void main() {
         final panel = find.byKey(const Key('detail-profile-panel'));
         final image = find.byKey(const Key('detail-profile-image'));
         final works = find.byKey(const Key('detail-works-button'));
+        final count = find.byKey(const Key('detail-works-count'));
         final attributes = find.byKey(const Key('detail-attributes'));
         final actions = find.byKey(const Key('detail-photo-actions'));
         final changePhoto = find.byKey(const Key('detail-change-photo-button'));
@@ -204,6 +211,7 @@ void main() {
         final panelRect = tester.getRect(panel);
         final imageRect = tester.getRect(image);
         final worksRect = tester.getRect(works);
+        final countRect = tester.getRect(count);
         final attributesRect = tester.getRect(attributes);
         final actionsRect = tester.getRect(actions);
         final changeRect = tester.getRect(changePhoto);
@@ -212,11 +220,11 @@ void main() {
         expect(imageRect.left - panelRect.left, closeTo(12, 0.01));
         expect(imageRect.top - panelRect.top, closeTo(12, 0.01));
         expect(worksRect.top - panelRect.top, closeTo(12, 0.01));
-        expect(panelRect.right - worksRect.right, closeTo(12, 0.01));
+        expect(panelRect.right - countRect.right, closeTo(12, 0.01));
         expect(imageRect.top, closeTo(worksRect.top, 0.01));
         expect(actionsRect.top, greaterThan(attributesRect.bottom));
         expect(actionsRect.left, greaterThanOrEqualTo(worksRect.left));
-        expect(actionsRect.right, lessThanOrEqualTo(worksRect.right));
+        expect(actionsRect.right, lessThanOrEqualTo(countRect.right));
         expect(changeRect.top, closeTo(deleteRect.top, 0.01));
         expect(changeRect.height, closeTo(deleteRect.height, 0.01));
         expect(changeRect.height, lessThanOrEqualTo(40));
@@ -232,7 +240,7 @@ void main() {
         final labelStyle = Theme.of(
           tester.element(changePhoto),
         ).textTheme.labelMedium;
-        expect(labelStyle?.fontFamilyFallback, isNotEmpty);
+        expect(labelStyle?.fontFamily, AppTheme.fontFamily);
         final changeTextStyle = tester
             .widget<OutlinedButton>(changePhoto)
             .style
@@ -245,14 +253,8 @@ void main() {
             ?.resolve(<WidgetState>{});
         expect(changeTextStyle?.fontSize, 12);
         expect(deleteTextStyle?.fontSize, 12);
-        expect(
-          changeTextStyle?.fontFamilyFallback,
-          labelStyle?.fontFamilyFallback,
-        );
-        expect(
-          deleteTextStyle?.fontFamilyFallback,
-          labelStyle?.fontFamilyFallback,
-        );
+        expect(changeTextStyle?.fontFamily, labelStyle?.fontFamily);
+        expect(deleteTextStyle?.fontFamily, labelStyle?.fontFamily);
         expect(find.text('更換照片'), findsOneWidget);
         expect(find.text('刪除照片'), findsOneWidget);
         expect(tester.takeException(), isNull);
@@ -275,7 +277,7 @@ void main() {
     });
 
     testWidgets(
-      'uses full desktop content width for symmetric Works button gaps',
+      'keeps the compact Works button and count in the desktop right column',
       (tester) async {
         await _pumpDetail(tester, size: const Size(1280, 720));
 
@@ -285,11 +287,13 @@ void main() {
         final worksRect = tester.getRect(
           find.byKey(const Key('detail-works-button')),
         );
-
-        expect(
-          worksRect.left - imageRect.right,
-          closeTo(1280 - worksRect.right, 1),
+        final countRect = tester.getRect(
+          find.byKey(const Key('detail-works-count')),
         );
+
+        expect(worksRect.left, greaterThan(imageRect.right));
+        expect(worksRect.width, closeTo(96, 0.01));
+        expect(countRect.left, greaterThan(worksRect.right));
       },
     );
 

@@ -1,18 +1,281 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as path;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import '../models/scraped_actress_details.dart';
+import '../models/work.dart';
 import 'platform_adapter.dart';
 
+typedef ManagedFileDelete = Future<void> Function(File file);
+typedef DeleteTransactionCommittedCallback = Future<void> Function();
+typedef ManagedImageCanonicalPathResolver = String Function(String path);
+
+class ManagedImageStats {
+  const ManagedImageStats({required this.fileCount, required this.totalBytes});
+
+  final int fileCount;
+  final int totalBytes;
+
+  Map<String, int> toJson() => {
+    'file_count': fileCount,
+    'total_bytes': totalBytes,
+  };
+}
+
+class ManagedFileCleanupReport {
+  const ManagedFileCleanupReport({
+    this.deleted = const [],
+    this.missing = const [],
+    this.deferred = const [],
+    this.rejected = const [],
+    this.emptyDirectoriesRemoved = const [],
+    this.records = const [],
+    this.deletedCount = 0,
+    this.deletedBytes = 0,
+    this.missingCount = 0,
+    this.deferredCount = 0,
+    this.rejectedCount = 0,
+  });
+
+  final List<String> deleted;
+  final List<String> missing;
+  final List<String> deferred;
+  final List<String> rejected;
+  final List<String> emptyDirectoriesRemoved;
+  final List<ManagedFileCleanupRecord> records;
+  final int deletedCount;
+  final int deletedBytes;
+  final int missingCount;
+  final int deferredCount;
+  final int rejectedCount;
+
+  Map<String, Object?> toJson() => {
+    'deleted': deleted,
+    'missing': missing,
+    'deferred': deferred,
+    'rejected': rejected,
+    'empty_directories_removed': emptyDirectoriesRemoved,
+    'deleted_count': deletedCount,
+    'deleted_bytes': deletedBytes,
+    'missing_count': missingCount,
+    'deferred_count': deferredCount,
+    'rejected_count': rejectedCount,
+    'records': records.map((record) => record.toJson()).toList(),
+  };
+}
+
+class ManagedFileCleanupRecord {
+  const ManagedFileCleanupRecord({
+    required this.kind,
+    required this.databaseStoredPath,
+    required this.normalizedPath,
+    required this.resolvedAbsolutePath,
+    required this.managedRoot,
+    required this.existsBefore,
+    required this.databaseReferenceCount,
+    required this.classifyResult,
+    required this.deleteResult,
+    required this.rejectionReason,
+    required this.existsAfter,
+    required this.bytesBefore,
+  });
+
+  final String kind;
+  final String databaseStoredPath;
+  final String? normalizedPath;
+  final String? resolvedAbsolutePath;
+  final String managedRoot;
+  final bool existsBefore;
+  final int databaseReferenceCount;
+  final String classifyResult;
+  final String deleteResult;
+  final String? rejectionReason;
+  final bool existsAfter;
+  final int bytesBefore;
+
+  Map<String, Object?> toJson() => {
+    'kind': kind,
+    'database_stored_path': databaseStoredPath,
+    'normalized_path': normalizedPath,
+    'resolved_absolute_path': resolvedAbsolutePath,
+    'managed_root': managedRoot,
+    'exists_before': existsBefore,
+    'database_reference_count': databaseReferenceCount,
+    'classify_result': classifyResult,
+    'delete_result': deleteResult,
+    'rejection_reason': rejectionReason,
+    'exists_after': existsAfter,
+    'bytes_before': bytesBefore,
+  };
+}
+
+class ActressDeletionSnapshotWork {
+  const ActressDeletionSnapshotWork({
+    required this.workId,
+    required this.cardImagePath,
+    required this.detailImagePath,
+    required this.actressReferenceCount,
+  });
+
+  final int workId;
+  final String? cardImagePath;
+  final String? detailImagePath;
+  final int actressReferenceCount;
+
+  Map<String, Object?> toJson() => {
+    'work_id': workId,
+    'card_image_path': cardImagePath,
+    'detail_image_path': detailImagePath,
+    'actress_reference_count': actressReferenceCount,
+  };
+}
+
+class DatabaseMaintenanceReport {
+  const DatabaseMaintenanceReport({
+    required this.walCheckpointAttempted,
+    required this.vacuumAttempted,
+    required this.vacuumCompleted,
+  });
+
+  final bool walCheckpointAttempted;
+  final bool vacuumAttempted;
+  final bool vacuumCompleted;
+
+  Map<String, bool> toJson() => {
+    'wal_checkpoint_attempted': walCheckpointAttempted,
+    'vacuum_attempted': vacuumAttempted,
+    'vacuum_completed': vacuumCompleted,
+  };
+}
+
+class ActressDeletionReport {
+  const ActressDeletionReport({
+    required this.databaseCommitted,
+    required this.beforeTableCounts,
+    required this.afterTableCounts,
+    required this.beforeManagedImageStats,
+    required this.afterManagedImageStats,
+    required this.fileCleanup,
+    required this.maintenance,
+    required this.cacheEvictionPaths,
+    this.actressId,
+    this.actressImagePath,
+    this.managedRoot = '',
+    this.targetActressWorkCount = 0,
+    this.snapshotWorks = const [],
+    this.uiWorkIds = const [],
+    this.deletedActressRows = 0,
+    this.deletedActressWorkRows = 0,
+    this.orphanWorkIds = const [],
+    this.deletedWorkRows = 0,
+    this.remainingActressCount = 0,
+    this.remainingWorkCount = 0,
+    this.remainingActressWorkCount = 0,
+    this.pendingFileDeletionsBefore = const [],
+    this.pendingFileDeletionsAfter = const [],
+  });
+
+  final bool databaseCommitted;
+  final Map<String, int> beforeTableCounts;
+  final Map<String, int> afterTableCounts;
+  final ManagedImageStats beforeManagedImageStats;
+  final ManagedImageStats afterManagedImageStats;
+  final ManagedFileCleanupReport fileCleanup;
+  final DatabaseMaintenanceReport maintenance;
+  final List<String> cacheEvictionPaths;
+  final int? actressId;
+  final String? actressImagePath;
+  final String managedRoot;
+  final int targetActressWorkCount;
+  final List<ActressDeletionSnapshotWork> snapshotWorks;
+  final List<int> uiWorkIds;
+  final int deletedActressRows;
+  final int deletedActressWorkRows;
+  final List<int> orphanWorkIds;
+  final int deletedWorkRows;
+  final int remainingActressCount;
+  final int remainingWorkCount;
+  final int remainingActressWorkCount;
+  final List<String> pendingFileDeletionsBefore;
+  final List<String> pendingFileDeletionsAfter;
+
+  int get snapshotWorkCount => snapshotWorks.length;
+  List<ManagedFileCleanupRecord> get fileRecords => fileCleanup.records;
+
+  int get deletedBytes => fileCleanup.deletedBytes;
+
+  Map<String, Object?> toJson() => {
+    'database_committed': databaseCommitted,
+    'actress_id': actressId,
+    'actress_img_path': actressImagePath,
+    'tables': {'before': beforeTableCounts, 'after': afterTableCounts},
+    'database_before': {
+      'actress_count': beforeTableCounts['actresses'] ?? 0,
+      'work_count': beforeTableCounts['works'] ?? 0,
+      'actress_work_count': beforeTableCounts['actress_works'] ?? 0,
+      'target_actress_work_count': targetActressWorkCount,
+    },
+    'snapshot_work_count': snapshotWorkCount,
+    'snapshot_works': snapshotWorks.map((work) => work.toJson()).toList(),
+    'ui_work_ids': uiWorkIds,
+    'transaction': {
+      'deleted_actress_rows': deletedActressRows,
+      'deleted_actress_work_rows': deletedActressWorkRows,
+      'orphan_work_ids': orphanWorkIds,
+      'deleted_work_rows': deletedWorkRows,
+      'remaining_actress_count': remainingActressCount,
+      'remaining_work_count': remainingWorkCount,
+      'remaining_actress_work_count': remainingActressWorkCount,
+      'database_committed': databaseCommitted,
+    },
+    'managed_images': {
+      'managed_root': managedRoot,
+      'before': beforeManagedImageStats.toJson(),
+      'after': afterManagedImageStats.toJson(),
+      'files_before': beforeManagedImageStats.fileCount,
+      'bytes_before': beforeManagedImageStats.totalBytes,
+      'deleted_count': fileCleanup.deletedCount,
+      'deleted_bytes': deletedBytes,
+      'missing_count': fileCleanup.missingCount,
+      'deferred_count': fileCleanup.deferredCount,
+      'rejected_count': fileCleanup.rejectedCount,
+      'files_after': afterManagedImageStats.fileCount,
+      'bytes_after': afterManagedImageStats.totalBytes,
+    },
+    'files': fileRecords.map((record) => record.toJson()).toList(),
+    'pending_file_deletions': {
+      'before': pendingFileDeletionsBefore,
+      'after': pendingFileDeletionsAfter,
+    },
+    'file_cleanup': fileCleanup.toJson(),
+    'maintenance': maintenance.toJson(),
+  };
+
+}
+
 class AppDatabase {
-  AppDatabase() : _baseDirOverride = null, _databaseFactoryOverride = null;
+  AppDatabase()
+    : _baseDirOverride = null,
+      _databaseFactoryOverride = null,
+      _deleteFileOverride = null,
+      _afterDeleteTransactionCommitted = null,
+      _managedImageCanonicalPathResolver = null;
 
   AppDatabase.forTesting({
     required String baseDir,
     required DatabaseFactory databaseFactory,
+    ManagedFileDelete? deleteFile,
+    DeleteTransactionCommittedCallback? afterDeleteTransactionCommitted,
+    ManagedImageCanonicalPathResolver? managedImageCanonicalPathResolver,
   }) : _baseDirOverride = baseDir,
-       _databaseFactoryOverride = databaseFactory;
+       _databaseFactoryOverride = databaseFactory,
+       _deleteFileOverride = deleteFile,
+       _afterDeleteTransactionCommitted = afterDeleteTransactionCommitted,
+       _managedImageCanonicalPathResolver =
+           managedImageCanonicalPathResolver;
 
   static const String appName = 'AVACA';
   static const String databaseFileName = 'avaca.db';
@@ -23,8 +286,38 @@ class AppDatabase {
 
   final String? _baseDirOverride;
   final DatabaseFactory? _databaseFactoryOverride;
+  final ManagedFileDelete? _deleteFileOverride;
+  final DeleteTransactionCommittedCallback? _afterDeleteTransactionCommitted;
+  final ManagedImageCanonicalPathResolver?
+  _managedImageCanonicalPathResolver;
   Database? _database;
   bool _initialized = false;
+  Future<void> _managedImageLifecycleTail = Future.value();
+  static final Object _managedImageLifecycleZoneKey = Object();
+
+  // 讓圖片檔寫入與資料庫參照成為一個不可交錯的生命週期。
+  Future<T> runManagedImageLifecycle<T>(Future<T> Function() operation) async {
+    final owner = Zone.current[_managedImageLifecycleZoneKey];
+    if (owner is _ManagedImageLifecycleOwner &&
+        identical(owner.database, this) &&
+        owner.acceptingNestedOperations) {
+      return owner.runNested(operation);
+    }
+    final previous = _managedImageLifecycleTail;
+    final completed = Completer<void>();
+    _managedImageLifecycleTail = completed.future;
+    await previous;
+    final lifecycleOwner = _ManagedImageLifecycleOwner(this);
+    try {
+      return await runZoned(
+        operation,
+        zoneValues: {_managedImageLifecycleZoneKey: lifecycleOwner},
+      );
+    } finally {
+      await lifecycleOwner.close();
+      completed.complete();
+    }
+  }
 
   // 初始化資料庫路徑、圖片資料夾與 SQLite 連線。
   Future<void> init() async {
@@ -47,13 +340,18 @@ class AppDatabase {
 
     final options = OpenDatabaseOptions(
       version: 1,
+      onConfigure: (db) async {
+        await db.execute('PRAGMA foreign_keys = ON');
+      },
       onCreate: (db, version) async {
         await _createBaseTable(db);
         await _createSettingsTable(db);
+        await _createWorksTables(db);
       },
       onOpen: (db) async {
         await _migrateActressesTable(db);
         await _createSettingsTable(db);
+        await _createWorksTables(db);
       },
     );
     final factory = _databaseFactoryOverride;
@@ -61,12 +359,17 @@ class AppDatabase {
         ? await openDatabase(
             dbPath,
             version: options.version,
+            onConfigure: options.onConfigure,
             onCreate: options.onCreate,
             onOpen: options.onOpen,
           )
         : await factory.openDatabase(dbPath, options: options);
 
     _initialized = true;
+    final startupCleanup = await _flushPendingFileDeletions(_database!);
+    _writeStructuredResult('pending_file_deletions_startup_retry', () => {
+      'file_cleanup': startupCleanup.toJson(),
+    });
   }
 
   // 取得目前可用的資料庫連線，尚未初始化時會先完成初始化。
@@ -169,6 +472,44 @@ class AppDatabase {
         .toSet();
   }
 
+  // 建立作品資料與女優、作品多對多關聯。
+  Future<void> _createWorksTables(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS works (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        code TEXT NOT NULL COLLATE NOCASE UNIQUE,
+        title TEXT NOT NULL,
+        release_date TEXT,
+        duration_minutes INTEGER,
+        studio TEXT,
+        publisher TEXT,
+        series TEXT,
+        card_image_path TEXT,
+        detail_image_path TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        modified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS actress_works (
+        actress_id INTEGER NOT NULL,
+        work_id INTEGER NOT NULL,
+        PRIMARY KEY (actress_id, work_id),
+        FOREIGN KEY (actress_id) REFERENCES actresses(id) ON DELETE CASCADE,
+        FOREIGN KEY (work_id) REFERENCES works(id) ON DELETE CASCADE
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_actress_works_work '
+      'ON actress_works(work_id)',
+    );
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS pending_file_deletions (
+        path TEXT PRIMARY KEY
+      )
+    ''');
+  }
+
   // 依搜尋、分類與排序條件取得收藏列表。
   Future<List<Map<String, Object?>>> getAllActresses({
     String searchKeyword = '',
@@ -253,6 +594,223 @@ class AppDatabase {
     };
   }
 
+  static const _workColumns = <String>[
+    'id',
+    'code',
+    'title',
+    'release_date',
+    'duration_minutes',
+    'studio',
+    'publisher',
+    'series',
+    'card_image_path',
+    'detail_image_path',
+  ];
+
+  // 取得指定女優的本機作品，最新發行日期優先。
+  Future<List<Map<String, Object?>>> getWorksForActress(int actressId) async {
+    final db = await database;
+    return db.rawQuery(
+      '''
+      SELECT ${_workColumns.map((column) => 'w.$column').join(', ')}
+      FROM works w
+      INNER JOIN actress_works aw ON aw.work_id = w.id
+      WHERE aw.actress_id = ?
+      ORDER BY w.release_date IS NULL, w.release_date DESC, w.id DESC
+      ''',
+      [actressId],
+    );
+  }
+
+  // 依作品 id 取得詳細資料。
+  Future<Map<String, Object?>?> getWorkById(int workId) async {
+    final db = await database;
+    final rows = await db.query(
+      'works',
+      columns: _workColumns,
+      where: 'id = ?',
+      whereArgs: [workId],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : rows.first;
+  }
+
+  // 計算指定女優目前在本機建立關聯的作品數。
+  Future<int> getWorkCountForActress(int actressId) async {
+    final db = await database;
+    final rows = await db.rawQuery(
+      'SELECT COUNT(*) AS count FROM actress_works WHERE actress_id = ?',
+      [actressId],
+    );
+    return (rows.single['count'] as num?)?.toInt() ?? 0;
+  }
+
+  // 新增或更新作品；missingOnly 模式僅補齊尚未儲存的欄位。
+  Future<int> upsertWork(Work work, {bool missingOnly = false}) async {
+    return runManagedImageLifecycle(() async {
+      final db = await database;
+      return db.transaction(
+        (transaction) =>
+            _upsertWork(transaction, work, missingOnly: missingOnly),
+      );
+    });
+  }
+
+  // 寫入作品並以不可重複的關聯連結至女優。
+  Future<int> upsertActressWork({
+    required int actressId,
+    required Work work,
+    bool missingOnly = false,
+  }) async {
+    return runManagedImageLifecycle(() async {
+      final db = await database;
+      return db.transaction((transaction) async {
+        final workId = await _upsertWork(
+          transaction,
+          work,
+          missingOnly: missingOnly,
+        );
+        await transaction.insert('actress_works', {
+          'actress_id': actressId,
+          'work_id': workId,
+        }, conflictAlgorithm: ConflictAlgorithm.ignore);
+        return workId;
+      });
+    });
+  }
+
+  Future<int> _upsertWork(
+    DatabaseExecutor executor,
+    Work work, {
+    required bool missingOnly,
+  }) async {
+    final values = work.toDatabaseMap();
+    final code = values['code'] as String;
+    final title = values['title'] as String;
+    if (code.isEmpty || title.isEmpty) {
+      throw ArgumentError('Work code and title must not be empty.');
+    }
+
+    final existing = await executor.query(
+      'works',
+      columns: ['id'],
+      where: 'code = ? COLLATE NOCASE',
+      whereArgs: [code],
+      limit: 1,
+    );
+    if (existing.isEmpty) {
+      return executor.insert('works', values);
+    }
+
+    final workId = existing.single['id'] as int;
+    const updatable = <String>[
+      'title',
+      'release_date',
+      'duration_minutes',
+      'studio',
+      'publisher',
+      'series',
+      'card_image_path',
+      'detail_image_path',
+    ];
+    final assignments = updatable
+        .map((column) {
+          if (missingOnly) {
+            return '$column = CASE '
+                "WHEN $column IS NULL OR TRIM(CAST($column AS TEXT)) = '' "
+                'THEN COALESCE(?, $column) ELSE $column END';
+          }
+          return '$column = COALESCE(?, $column)';
+        })
+        .join(', ');
+    await executor.rawUpdate(
+      '''
+      UPDATE works
+      SET $assignments, modified_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+      ''',
+      [...updatable.map((column) => values[column]), workId],
+    );
+    return workId;
+  }
+
+  // 合併刮削到的女優詳細資料，體重永遠不由刮削流程修改。
+  Future<bool> syncActressDetails({
+    required int actressId,
+    required ScrapedActressDetails details,
+    bool missingOnly = false,
+    bool replaceImage = false,
+  }) {
+    return runManagedImageLifecycle(
+      () => _syncActressDetails(
+        actressId: actressId,
+        details: details,
+        missingOnly: missingOnly,
+        replaceImage: replaceImage,
+      ),
+    );
+  }
+
+  Future<bool> _syncActressDetails({
+    required int actressId,
+    required ScrapedActressDetails details,
+    required bool missingOnly,
+    required bool replaceImage,
+  }) async {
+    final normalizedBirthDate = _normalizeBirthDate(details.birthDate);
+    final db = await database;
+    final rows = await db.query(
+      'actresses',
+      columns: ['name', 'img_path', 'height', 'bwh', 'cup', 'birth_date'],
+      where: 'id = ?',
+      whereArgs: [actressId],
+      limit: 1,
+    );
+    if (rows.isEmpty) {
+      return false;
+    }
+    final current = rows.single;
+
+    Object? merged(String column, String? incoming) {
+      final value = incoming?.trim();
+      if (value == null || value.isEmpty) {
+        return current[column];
+      }
+      if (!missingOnly) {
+        return value;
+      }
+      final existing = current[column]?.toString().trim() ?? '';
+      return existing.isEmpty ? value : current[column];
+    }
+
+    final imageValue = details.imagePath?.trim();
+    try {
+      await db.update(
+        'actresses',
+        {
+          'name': merged('name', details.name),
+          'img_path':
+              replaceImage && imageValue != null && imageValue.isNotEmpty
+              ? imageValue
+              : current['img_path'],
+          'height': merged('height', details.height),
+          'bwh': merged('bwh', details.bwh),
+          'cup': merged('cup', details.cup),
+          'birth_date': merged(
+            'birth_date',
+            normalizedBirthDate.valid ? normalizedBirthDate.value : null,
+          ),
+          'modified_at': DateTime.now().toIso8601String(),
+        },
+        where: 'id = ?',
+        whereArgs: [actressId],
+      );
+      return true;
+    } on DatabaseException {
+      return false;
+    }
+  }
+
   // 新增一筆收藏資料，若資料庫拒絕寫入則回傳失敗。
   Future<bool> addActress({
     required String name,
@@ -267,6 +825,26 @@ class AppDatabase {
       return false;
     }
 
+    return runManagedImageLifecycle(
+      () => _addActress(
+        name: name,
+        imgPath: imgPath,
+        mainType: mainType,
+        tags: tags,
+        memo: memo,
+        birthDate: normalizedBirthDate.value,
+      ),
+    );
+  }
+
+  Future<bool> _addActress({
+    required String name,
+    required String? imgPath,
+    required String mainType,
+    required String tags,
+    required String memo,
+    required String? birthDate,
+  }) async {
     try {
       final db = await database;
 
@@ -277,7 +855,7 @@ class AppDatabase {
         )
         VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         ''',
-        [name, imgPath, mainType, tags, memo, normalizedBirthDate.value],
+        [name, imgPath, mainType, tags, memo, birthDate],
       );
 
       return true;
@@ -298,6 +876,34 @@ class AppDatabase {
     String bwh = '',
     String cup = '',
     String? birthDate,
+  }) {
+    return runManagedImageLifecycle(
+      () => _updateActress(
+        actressId: actressId,
+        name: name,
+        imgPath: imgPath,
+        mainType: mainType,
+        memo: memo,
+        height: height,
+        weight: weight,
+        bwh: bwh,
+        cup: cup,
+        birthDate: birthDate,
+      ),
+    );
+  }
+
+  Future<bool> _updateActress({
+    required int actressId,
+    required String name,
+    required String imgPath,
+    required String mainType,
+    required String memo,
+    required String height,
+    required String weight,
+    required String bwh,
+    required String cup,
+    required String? birthDate,
   }) async {
     final normalizedBirthDate = _normalizeBirthDate(birthDate);
     if (!normalizedBirthDate.valid) {
@@ -375,18 +981,965 @@ class AppDatabase {
         '${date.day.toString().padLeft(2, '0')}';
   }
 
-  // 刪除指定收藏資料，失敗時保留原本的錯誤輸出行為。
+  // 刪除指定收藏資料。保留布林入口供既有呼叫端使用。
   Future<bool> deleteActress(int actressId) async {
+    return (await deleteActressWithReport(actressId)).databaseCommitted;
+  }
+
+  // 回傳資料庫與實體圖片清理的可稽核結果，供 UI 清快取與驗收使用。
+  Future<ActressDeletionReport> deleteActressWithReport(int actressId) {
+    return runManagedImageLifecycle(() => _deleteActressWithReport(actressId));
+  }
+
+  Future<ActressDeletionReport> _deleteActressWithReport(int actressId) async {
+    final db = await database;
+    final beforeTableCounts = await _tableCounts(db);
+    final beforeManagedImageStats = await _managedImageStats();
+    final managedRoot = await _canonicalManagedImageRoot();
+    final pendingFileDeletionsBefore = await _pendingFileDeletionPaths(db);
+    const noMaintenance = DatabaseMaintenanceReport(
+      walCheckpointAttempted: false,
+      vacuumAttempted: false,
+      vacuumCompleted: false,
+    );
+    _ActressDeletionSnapshot? snapshot;
+
     try {
-      final db = await database;
+      snapshot = await _loadActressDeletionSnapshot(db, actressId);
+      final deletionSnapshot = snapshot;
+      if (deletionSnapshot == null) {
+        return ActressDeletionReport(
+          databaseCommitted: false,
+          beforeTableCounts: beforeTableCounts,
+          afterTableCounts: beforeTableCounts,
+          beforeManagedImageStats: beforeManagedImageStats,
+          afterManagedImageStats: beforeManagedImageStats,
+          fileCleanup: const ManagedFileCleanupReport(),
+          maintenance: noMaintenance,
+          cacheEvictionPaths: const [],
+          actressId: actressId,
+          managedRoot: managedRoot,
+          remainingActressCount: beforeTableCounts['actresses'] ?? 0,
+          remainingWorkCount: beforeTableCounts['works'] ?? 0,
+          remainingActressWorkCount: beforeTableCounts['actress_works'] ?? 0,
+          pendingFileDeletionsBefore: pendingFileDeletionsBefore,
+          pendingFileDeletionsAfter: pendingFileDeletionsBefore,
+        );
+      }
+      final outcome = await db.transaction<_DeleteTransactionOutcome?>((
+        transaction,
+      ) async {
+        final current = await transaction.query(
+          'actresses',
+          columns: ['id'],
+          where: 'id = ?',
+          whereArgs: [actressId],
+          limit: 1,
+        );
+        if (current.isEmpty) {
+          return null;
+        }
 
-      await db.rawDelete('DELETE FROM actresses WHERE id = ?', [actressId]);
+        final actressWorkRowsDeleted = await transaction.delete(
+          'actress_works',
+          where: 'actress_id = ?',
+          whereArgs: [actressId],
+        );
 
-      return true;
+        final orphanWorkIds = await _findOrphanWorkIds(
+          transaction,
+          deletionSnapshot.workIds,
+        );
+        final selectedCandidates = deletionSnapshot.selectCandidates(
+          orphanWorkIds,
+        );
+        for (final pendingPath
+            in selectedCandidates
+                .map((candidate) => candidate.pendingPath)
+                .toSet()) {
+          await transaction.insert('pending_file_deletions', {
+            'path': pendingPath,
+          }, conflictAlgorithm: ConflictAlgorithm.ignore);
+        }
+
+        var deletedWorkRows = 0;
+        if (orphanWorkIds.isNotEmpty) {
+          final placeholders = List.filled(
+            orphanWorkIds.length,
+            '?',
+          ).join(', ');
+          deletedWorkRows = await transaction.rawDelete(
+            'DELETE FROM works WHERE id IN ($placeholders)',
+            orphanWorkIds,
+          );
+        }
+
+        final actressRowsDeleted = await transaction.delete(
+          'actresses',
+          where: 'id = ?',
+          whereArgs: [actressId],
+        );
+        if (actressRowsDeleted != 1) {
+          throw StateError('Actress $actressId disappeared during deletion.');
+        }
+
+        return _DeleteTransactionOutcome(
+          orphanWorkIds: orphanWorkIds,
+          actressRowsDeleted: actressRowsDeleted,
+          actressWorkRowsDeleted: actressWorkRowsDeleted,
+          deletedWorkRows: deletedWorkRows,
+          fileCandidates: selectedCandidates,
+          cacheEvictionPaths: selectedCandidates
+              .map((candidate) => candidate.databaseStoredPath)
+              .toSet()
+              .toList(growable: false),
+        );
+      });
+      if (outcome == null) {
+        final afterTableCounts = await _tableCounts(db);
+        return ActressDeletionReport(
+          databaseCommitted: false,
+          beforeTableCounts: beforeTableCounts,
+          afterTableCounts: afterTableCounts,
+          beforeManagedImageStats: beforeManagedImageStats,
+          afterManagedImageStats: await _managedImageStats(),
+          fileCleanup: const ManagedFileCleanupReport(),
+          maintenance: noMaintenance,
+          cacheEvictionPaths: const [],
+          actressId: deletionSnapshot.actressId,
+          actressImagePath: deletionSnapshot.actressImagePath,
+          managedRoot: managedRoot,
+          targetActressWorkCount: deletionSnapshot.targetActressWorkCount,
+          snapshotWorks: deletionSnapshot.reportWorks,
+          uiWorkIds: deletionSnapshot.uiWorkIds,
+          remainingActressCount: afterTableCounts['actresses'] ?? 0,
+          remainingWorkCount: afterTableCounts['works'] ?? 0,
+          remainingActressWorkCount: afterTableCounts['actress_works'] ?? 0,
+          pendingFileDeletionsBefore: pendingFileDeletionsBefore,
+          pendingFileDeletionsAfter: await _pendingFileDeletionPaths(db),
+        );
+      }
+
+      // 此測試鉤子位於 commit 之後、任何實體檔案處理之前，驗證重啟復原。
+      await _afterDeleteTransactionCommitted?.call();
+
+      final fileCleanup = await _flushPendingFileDeletions(
+        db,
+        validatedCandidates: outcome.fileCandidates,
+      );
+      final maintenance = await _compactDatabaseIfNeeded(db);
+      final afterTableCounts = await _tableCounts(db);
+      final report = ActressDeletionReport(
+        databaseCommitted: true,
+        beforeTableCounts: beforeTableCounts,
+        afterTableCounts: afterTableCounts,
+        beforeManagedImageStats: beforeManagedImageStats,
+        afterManagedImageStats: await _managedImageStats(),
+        fileCleanup: fileCleanup,
+        maintenance: maintenance,
+        cacheEvictionPaths: outcome.cacheEvictionPaths,
+        actressId: deletionSnapshot.actressId,
+        actressImagePath: deletionSnapshot.actressImagePath,
+        managedRoot: managedRoot,
+        targetActressWorkCount: deletionSnapshot.targetActressWorkCount,
+        snapshotWorks: deletionSnapshot.reportWorks,
+        uiWorkIds: deletionSnapshot.uiWorkIds,
+        deletedActressRows: outcome.actressRowsDeleted,
+        deletedActressWorkRows: outcome.actressWorkRowsDeleted,
+        orphanWorkIds: outcome.orphanWorkIds,
+        deletedWorkRows: outcome.deletedWorkRows,
+        remainingActressCount: afterTableCounts['actresses'] ?? 0,
+        remainingWorkCount: afterTableCounts['works'] ?? 0,
+        remainingActressWorkCount: afterTableCounts['actress_works'] ?? 0,
+        pendingFileDeletionsBefore: pendingFileDeletionsBefore,
+        pendingFileDeletionsAfter: await _pendingFileDeletionPaths(db),
+      );
+      _writeStructuredResult('actress_delete', report.toJson);
+      return report;
     } on DatabaseException catch (error) {
       stderr.writeln('刪除失敗: $error');
-      return false;
+      final report = ActressDeletionReport(
+        databaseCommitted: false,
+        beforeTableCounts: beforeTableCounts,
+        afterTableCounts: beforeTableCounts,
+        beforeManagedImageStats: beforeManagedImageStats,
+        afterManagedImageStats: beforeManagedImageStats,
+        fileCleanup: const ManagedFileCleanupReport(),
+        maintenance: noMaintenance,
+        cacheEvictionPaths: const [],
+        actressId: snapshot?.actressId ?? actressId,
+        actressImagePath: snapshot?.actressImagePath,
+        managedRoot: managedRoot,
+        targetActressWorkCount: snapshot?.targetActressWorkCount ?? 0,
+        snapshotWorks: snapshot?.reportWorks ?? const [],
+        uiWorkIds: snapshot?.uiWorkIds ?? const [],
+        remainingActressCount: beforeTableCounts['actresses'] ?? 0,
+        remainingWorkCount: beforeTableCounts['works'] ?? 0,
+        remainingActressWorkCount: beforeTableCounts['actress_works'] ?? 0,
+        pendingFileDeletionsBefore: pendingFileDeletionsBefore,
+        pendingFileDeletionsAfter: await _pendingFileDeletionPaths(db),
+      );
+      _writeStructuredResult('actress_delete', report.toJson);
+      return report;
     }
+  }
+
+  Future<_ActressDeletionSnapshot?> _loadActressDeletionSnapshot(
+    Database db,
+    int actressId,
+  ) async {
+    final actressRows = await db.query(
+      'actresses',
+      columns: ['id', 'img_path'],
+      where: 'id = ?',
+      whereArgs: [actressId],
+      limit: 1,
+    );
+    if (actressRows.isEmpty) {
+      return null;
+    }
+
+    final targetCountRows = await db.rawQuery(
+      'SELECT COUNT(*) AS count FROM actress_works WHERE actress_id = ?',
+      [actressId],
+    );
+    final targetActressWorkCount =
+        (targetCountRows.single['count'] as num?)?.toInt() ?? 0;
+    final uiWorkIds = (await getWorksForActress(
+      actressId,
+    )).map((work) => work['id'] as int).toList(growable: false);
+
+    final workRows = await db.rawQuery(
+      '''
+      SELECT w.id, w.card_image_path, w.detail_image_path,
+             COUNT(aw_count.actress_id) AS actress_reference_count
+      FROM works w
+      INNER JOIN actress_works aw ON aw.work_id = w.id
+      LEFT JOIN actress_works aw_count ON aw_count.work_id = w.id
+      WHERE aw.actress_id = ?
+      GROUP BY w.id, w.card_image_path, w.detail_image_path
+      ''',
+      [actressId],
+    );
+    final works = workRows
+        .map(
+          (row) => _WorkDeletionSnapshot(
+            id: row['id'] as int,
+            cardImagePath: row['card_image_path']?.toString(),
+            detailImagePath: row['detail_image_path']?.toString(),
+            actressReferenceCount:
+                (row['actress_reference_count'] as num?)?.toInt() ?? 0,
+          ),
+        )
+        .toList(growable: false);
+    final validatedByStoredPath = <String, _ValidatedManagedImage>{};
+    Future<_ValidatedManagedImage> validateStoredPath(String storedPath) async {
+      final existing = validatedByStoredPath[storedPath];
+      if (existing != null) {
+        return existing;
+      }
+      final validated = await _validateManagedImage(storedPath);
+      validatedByStoredPath[storedPath] = validated;
+      return validated;
+    }
+    final fileCandidates = <_FileDeletionCandidate>[];
+    final actressImagePath = actressRows.single['img_path']?.toString();
+    if (actressImagePath != null && actressImagePath.trim().isNotEmpty) {
+      fileCandidates.add(
+        _FileDeletionCandidate(
+          kind: 'avatar',
+          databaseStoredPath: actressImagePath,
+          validated: await validateStoredPath(actressImagePath),
+        ),
+      );
+    }
+    for (final work in works) {
+      for (final image in [
+        (kind: 'card', storedPath: work.cardImagePath),
+        (kind: 'detail', storedPath: work.detailImagePath),
+      ]) {
+        final storedPath = image.storedPath;
+        if (storedPath == null || storedPath.trim().isEmpty) {
+          continue;
+        }
+        fileCandidates.add(
+          _FileDeletionCandidate(
+            kind: image.kind,
+            databaseStoredPath: storedPath,
+            validated: await validateStoredPath(storedPath),
+            workId: work.id,
+          ),
+        );
+      }
+    }
+
+    return _ActressDeletionSnapshot(
+      actressId: actressRows.single['id'] as int,
+      actressImagePath: actressImagePath,
+      works: works,
+      targetActressWorkCount: targetActressWorkCount,
+      uiWorkIds: uiWorkIds,
+      fileCandidates: fileCandidates,
+    );
+  }
+
+  Future<List<int>> _findOrphanWorkIds(
+    Transaction transaction,
+    List<int> relatedWorkIds,
+  ) async {
+    if (relatedWorkIds.isEmpty) {
+      return const [];
+    }
+    final placeholders = List.filled(relatedWorkIds.length, '?').join(', ');
+    final rows = await transaction.rawQuery('''
+      SELECT w.id
+      FROM works w
+      WHERE w.id IN ($placeholders)
+        AND NOT EXISTS (
+          SELECT 1 FROM actress_works aw WHERE aw.work_id = w.id
+        )
+      ''', relatedWorkIds);
+    return rows.map((row) => row['id'] as int).toList(growable: false);
+  }
+
+  // 僅清理由應用程式圖片目錄管理、且已不再被資料庫引用的檔案。
+  Future<ManagedFileCleanupReport> _flushPendingFileDeletions(
+    Database db, {
+    List<_FileDeletionCandidate> validatedCandidates = const [],
+  }) async {
+    final deleted = <String>[];
+    final missing = <String>[];
+    final deferred = <String>[];
+    final rejected = <String>[];
+    final emptyDirectoriesRemoved = <String>[];
+    final records = <ManagedFileCleanupRecord>[];
+    final captureDiagnostics = _shouldCaptureDeletionDiagnostics;
+    var deletedCount = 0;
+    var deletedBytes = 0;
+    var missingCount = 0;
+    var deferredCount = 0;
+    var rejectedCount = 0;
+    final deletedFileKeys = <String>{};
+    void recordDeleted(String pendingPath, _ValidatedManagedImage validated) {
+      deletedCount++;
+      if (captureDiagnostics) {
+        deleted.add(pendingPath);
+      }
+      final canonicalFilePath = validated.canonicalFilePath;
+      if (canonicalFilePath != null && deletedFileKeys.add(canonicalFilePath)) {
+        deletedBytes += validated.bytes;
+      }
+    }
+
+    void recordMissing(String pendingPath) {
+      missingCount++;
+      if (captureDiagnostics) {
+        missing.add(pendingPath);
+      }
+    }
+
+    void recordDeferred(String pendingPath) {
+      deferredCount++;
+      if (captureDiagnostics) {
+        deferred.add(pendingPath);
+      }
+    }
+
+    void recordRejected(String pendingPath) {
+      rejectedCount++;
+      if (captureDiagnostics) {
+        rejected.add(pendingPath);
+      }
+    }
+    final candidatesByPendingPath = <String, List<_FileDeletionCandidate>>{};
+    for (final candidate in validatedCandidates) {
+      candidatesByPendingPath
+          .putIfAbsent(candidate.pendingPath, () => [])
+          .add(candidate);
+    }
+
+    Future<void> appendRecords({
+      required String pendingPath,
+      required List<_FileDeletionCandidate> candidates,
+      required String deleteResult,
+      required int databaseReferenceCount,
+      String? rejectionReason,
+      required bool existsAfter,
+    }) async {
+      if (!captureDiagnostics) {
+        return;
+      }
+      for (final candidate in candidates) {
+        final before = candidate.validated;
+        final existsBefore =
+            before.exists || await _diagnosticPathExists(before);
+        final bytesBefore = before.bytes == 0
+            ? await _diagnosticPathBytes(before)
+            : before.bytes;
+        records.add(
+          ManagedFileCleanupRecord(
+            kind: candidate.kind,
+            databaseStoredPath: candidate.databaseStoredPath,
+            normalizedPath: before.normalizedPath,
+            resolvedAbsolutePath: before.canonicalFilePath,
+            managedRoot: before.canonicalRootPath,
+            existsBefore: existsBefore,
+            databaseReferenceCount: databaseReferenceCount,
+            classifyResult: before.status.name,
+            deleteResult: deleteResult,
+            rejectionReason: rejectionReason ?? before.reason,
+            existsAfter: existsAfter,
+            bytesBefore: bytesBefore,
+          ),
+        );
+      }
+    }
+
+    try {
+      final pending = await db.query('pending_file_deletions');
+      final referencedCounts = await _referencedManagedImageCounts(db);
+      final processedKeys = <String>{};
+
+      for (final row in pending) {
+        final pendingPath = row['path']?.toString();
+        if (pendingPath == null) {
+          await _removePendingFileDeletion(db, null);
+          recordRejected('<null>');
+          _writeSecurityWarning('<null>', 'pending path is null');
+          continue;
+        }
+
+        final candidates = candidatesByPendingPath[pendingPath] ??
+            [
+              _FileDeletionCandidate(
+                kind: 'pending',
+                databaseStoredPath: pendingPath,
+                validated: await _validateManagedImage(pendingPath),
+              ),
+            ];
+        final validated = candidates.first.validated;
+        switch (validated.status) {
+          case _ManagedImageStatus.missing:
+            await _removePendingFileDeletion(db, pendingPath);
+            recordMissing(pendingPath);
+            await appendRecords(
+              pendingPath: pendingPath,
+              candidates: candidates,
+              deleteResult: 'missing',
+              databaseReferenceCount: 0,
+              existsAfter: false,
+            );
+            continue;
+          case _ManagedImageStatus.rejected:
+            await _removePendingFileDeletion(db, pendingPath);
+            recordRejected(pendingPath);
+            _writeSecurityWarning(pendingPath, validated.reason);
+            await appendRecords(
+              pendingPath: pendingPath,
+              candidates: candidates,
+              deleteResult: 'rejected',
+              databaseReferenceCount: 0,
+              rejectionReason: validated.reason,
+              existsAfter: await _diagnosticPathExists(validated),
+            );
+            continue;
+          case _ManagedImageStatus.valid:
+            final imageFile = validated.resolvedFile!;
+            final fileKey = _fileKey(imageFile.path);
+            final databaseReferenceCount = referencedCounts[fileKey] ?? 0;
+            if (!processedKeys.add(fileKey)) {
+              await _removePendingFileDeletion(db, pendingPath);
+              recordRejected(pendingPath);
+              await appendRecords(
+                pendingPath: pendingPath,
+                candidates: candidates,
+                deleteResult: 'rejected',
+                databaseReferenceCount: databaseReferenceCount,
+                rejectionReason: 'duplicate canonical pending path',
+                existsAfter: await imageFile.exists(),
+              );
+              continue;
+            }
+            if (databaseReferenceCount > 0) {
+              await _removePendingFileDeletion(db, pendingPath);
+              recordRejected(pendingPath);
+              _writeSecurityWarning(
+                pendingPath,
+                'path remains referenced by another database row',
+              );
+              await appendRecords(
+                pendingPath: pendingPath,
+                candidates: candidates,
+                deleteResult: 'rejected',
+                databaseReferenceCount: databaseReferenceCount,
+                rejectionReason:
+                    'path remains referenced by another database row',
+                existsAfter: await imageFile.exists(),
+              );
+              continue;
+            }
+
+            try {
+              await _deleteManagedFile(validated);
+              if (await imageFile.exists()) {
+                recordDeferred(pendingPath);
+                await appendRecords(
+                  pendingPath: pendingPath,
+                  candidates: candidates,
+                  deleteResult: 'deferred',
+                  databaseReferenceCount: databaseReferenceCount,
+                  rejectionReason: 'delete completed without removing file',
+                  existsAfter: true,
+                );
+                continue;
+              }
+              await _removePendingFileDeletion(db, pendingPath);
+              recordDeleted(pendingPath, validated);
+              await appendRecords(
+                pendingPath: pendingPath,
+                candidates: candidates,
+                deleteResult: 'deleted',
+                databaseReferenceCount: databaseReferenceCount,
+                existsAfter: false,
+              );
+            } on FileSystemException catch (error) {
+              if (!await imageFile.exists()) {
+                await _removePendingFileDeletion(db, pendingPath);
+                recordMissing(pendingPath);
+                await appendRecords(
+                  pendingPath: pendingPath,
+                  candidates: candidates,
+                  deleteResult: 'missing',
+                  databaseReferenceCount: databaseReferenceCount,
+                  existsAfter: false,
+                );
+              } else {
+                recordDeferred(pendingPath);
+                stderr.writeln('圖片刪除失敗，將於下次啟動重試: $error');
+                await appendRecords(
+                  pendingPath: pendingPath,
+                  candidates: candidates,
+                  deleteResult: 'deferred',
+                  databaseReferenceCount: databaseReferenceCount,
+                  rejectionReason: error.message,
+                  existsAfter: true,
+                );
+              }
+            }
+        }
+      }
+      emptyDirectoriesRemoved.addAll(
+        await _pruneEmptyManagedImageDirectories(),
+      );
+    } on DatabaseException catch (error) {
+      stderr.writeln('待刪圖片清理資料庫操作失敗: $error');
+    } on FileSystemException catch (error) {
+      stderr.writeln('待刪圖片暫時無法驗證，將於下次啟動重試: $error');
+    }
+
+    return ManagedFileCleanupReport(
+      deleted: deleted,
+      missing: missing,
+      deferred: deferred,
+      rejected: rejected,
+      emptyDirectoriesRemoved: emptyDirectoriesRemoved,
+      records: records,
+      deletedCount: deletedCount,
+      deletedBytes: deletedBytes,
+      missingCount: missingCount,
+      deferredCount: deferredCount,
+      rejectedCount: rejectedCount,
+    );
+  }
+
+  Future<Map<String, int>> _referencedManagedImageCounts(Database db) async {
+    final referencedPaths = <String>{
+      ...(await db.query(
+        'actresses',
+        columns: ['img_path'],
+      )).map((row) => row['img_path']?.toString()).whereType<String>(),
+      ...(await db.query(
+            'works',
+            columns: ['card_image_path', 'detail_image_path'],
+          ))
+          .expand(
+            (work) => [
+              work['card_image_path']?.toString(),
+              work['detail_image_path']?.toString(),
+            ],
+          )
+          .whereType<String>(),
+    }..removeWhere((value) => value.trim().isEmpty);
+    final counts = <String, int>{};
+    for (final referencedPath in referencedPaths) {
+      final validated = await _validateManagedImage(referencedPath);
+      if (validated.status == _ManagedImageStatus.valid) {
+        final key = _fileKey(validated.resolvedFile!.path);
+        counts[key] = (counts[key] ?? 0) + 1;
+      }
+    }
+    return counts;
+  }
+
+  Future<bool> _diagnosticPathExists(
+    _ValidatedManagedImage validation,
+  ) async {
+    final candidatePath =
+        validation.canonicalFilePath ?? validation.normalizedPath;
+    return candidatePath != null && await File(candidatePath).exists();
+  }
+
+  Future<int> _diagnosticPathBytes(
+    _ValidatedManagedImage validation,
+  ) async {
+    final candidatePath =
+        validation.canonicalFilePath ?? validation.normalizedPath;
+    if (candidatePath == null) {
+      return 0;
+    }
+    try {
+      return await File(candidatePath).length();
+    } on FileSystemException {
+      return 0;
+    }
+  }
+
+  Future<void> _removePendingFileDeletion(Database db, String? pendingPath) {
+    if (pendingPath == null) {
+      return db.delete('pending_file_deletions', where: 'path IS NULL');
+    }
+    return db.delete(
+      'pending_file_deletions',
+      where: 'path = ?',
+      whereArgs: [pendingPath],
+    );
+  }
+
+  Future<void> _deleteManagedFile(_ValidatedManagedImage validated) {
+    final file = validated.resolvedFile;
+    if (file == null) {
+      throw StateError('Only a validated managed image may be deleted.');
+    }
+    return _deleteFileOverride?.call(file) ?? file.delete();
+  }
+
+  Future<_ValidatedManagedImage> _validateManagedImage(
+    String imagePath,
+  ) async {
+    final trimmed = imagePath.trim();
+    final lexicalRoot = path.normalize(
+      path.absolute(_normalizeAndroidPrivateDataAlias(imgDir)),
+    );
+    final managedRoot = await _canonicalManagedImageRoot();
+    if (trimmed.isEmpty) {
+      return _ValidatedManagedImage.rejected(
+        originalPath: imagePath,
+        reason: 'path is empty',
+        normalizedPath: null,
+        managedRoot: managedRoot,
+      );
+    }
+    final candidates = _managedImagePathCandidates(trimmed);
+    String? safeMissingPath;
+    String? rejectedPath;
+    String? rejectedReason;
+
+    for (final candidate in candidates) {
+      final lexicalPath = path.normalize(path.absolute(candidate));
+      if (!_isWithinPath(lexicalRoot, lexicalPath)) {
+        rejectedPath ??= lexicalPath;
+        rejectedReason ??= 'path is outside image root';
+        continue;
+      }
+      safeMissingPath ??= lexicalPath;
+
+      final entityType = await FileSystemEntity.type(
+        lexicalPath,
+        followLinks: false,
+      );
+      if (entityType == FileSystemEntityType.notFound) {
+        continue;
+      }
+      if (entityType != FileSystemEntityType.file) {
+        rejectedPath = lexicalPath;
+        rejectedReason = 'path is not a regular image file';
+        continue;
+      }
+      if (!_isManagedImageFile(lexicalPath)) {
+        rejectedPath = lexicalPath;
+        rejectedReason = 'path is not a supported image file';
+        continue;
+      }
+
+      final resolvedPath = path.normalize(
+        _normalizeAndroidPrivateDataAlias(
+          await File(lexicalPath).resolveSymbolicLinks(),
+        ),
+      );
+      if (!_isWithinPath(managedRoot, resolvedPath)) {
+        rejectedPath = lexicalPath;
+        rejectedReason = 'canonical path resolves outside image root';
+        continue;
+      }
+      final imageFile = File(resolvedPath);
+      return _ValidatedManagedImage.valid(
+        originalPath: imagePath,
+        resolvedFile: imageFile,
+        normalizedPath: lexicalPath,
+        canonicalFilePath: resolvedPath,
+        canonicalRootPath: managedRoot,
+        exists: true,
+        bytes: await imageFile.length(),
+      );
+    }
+
+    if (safeMissingPath != null) {
+      return _ValidatedManagedImage.missing(
+        originalPath: imagePath,
+        normalizedPath: safeMissingPath,
+        managedRoot: managedRoot,
+      );
+    }
+    return _ValidatedManagedImage.rejected(
+      originalPath: imagePath,
+      reason: rejectedReason ?? 'path cannot be resolved under image root',
+      normalizedPath: rejectedPath,
+      managedRoot: managedRoot,
+    );
+  }
+
+  List<String> _managedImagePathCandidates(String storedPath) {
+    final mappedStoredPath =
+        _managedImageCanonicalPathResolver?.call(storedPath) ?? storedPath;
+    final fileUri = Uri.tryParse(mappedStoredPath);
+    if (fileUri != null && fileUri.scheme.toLowerCase() == 'file') {
+      try {
+        return [
+          path.normalize(
+            path.absolute(
+              _normalizeAndroidPrivateDataAlias(
+                fileUri.toFilePath(windows: Platform.isWindows),
+              ),
+            ),
+          ),
+        ];
+      } on ArgumentError {
+        return const [];
+      } on UnsupportedError {
+        return const [];
+      }
+    }
+
+    final resolvedStoredPath = _normalizeAndroidPrivateDataAlias(
+      mappedStoredPath,
+    );
+    final slashPath = resolvedStoredPath.replaceAll('\\', '/');
+    if (slashPath == '/works' || slashPath.startsWith('/works/')) {
+      final suffix = slashPath == '/works'
+          ? ''
+          : slashPath.substring('/works/'.length);
+      return [path.normalize(path.join(imgDir, 'works', suffix))];
+    }
+    if (path.isAbsolute(resolvedStoredPath)) {
+      return [path.normalize(path.absolute(resolvedStoredPath))];
+    }
+
+    final documentsDirectory = path.dirname(baseDir);
+    final candidates = <String>[];
+    void addCandidate(String candidate) {
+      final normalized = path.normalize(path.absolute(candidate));
+      if (!candidates.contains(normalized)) {
+        candidates.add(normalized);
+      }
+    }
+
+    if (slashPath == 'works' || slashPath.startsWith('works/')) {
+      addCandidate(path.join(imgDir, 'scraped', resolvedStoredPath));
+    }
+    addCandidate(path.join(imgDir, resolvedStoredPath));
+    addCandidate(path.join(baseDir, resolvedStoredPath));
+    addCandidate(path.join(documentsDirectory, resolvedStoredPath));
+    if (!slashPath.contains('/')) {
+      addCandidate(path.join(imgDir, 'scraped', 'works', resolvedStoredPath));
+    }
+    return candidates;
+  }
+
+  String _normalizeAndroidPrivateDataAlias(String candidatePath) {
+    const userDataPrefix = '/data/user/0/';
+    if (candidatePath.replaceAll('\\', '/').startsWith(userDataPrefix)) {
+      return '/data/data/${candidatePath.substring(userDataPrefix.length)}';
+    }
+    return candidatePath;
+  }
+
+  bool _isWithinPath(String root, String candidate) {
+    final comparableRoot = Platform.isWindows ? root.toLowerCase() : root;
+    final comparableCandidate = Platform.isWindows
+        ? candidate.toLowerCase()
+        : candidate;
+    return path.equals(comparableRoot, comparableCandidate) ||
+        path.isWithin(comparableRoot, comparableCandidate);
+  }
+
+  bool _isManagedImageFile(String filePath) {
+    const supportedExtensions = {'.jpg', '.jpeg', '.png', '.webp', '.gif'};
+    return supportedExtensions.contains(path.extension(filePath).toLowerCase());
+  }
+
+  Future<String> _canonicalManagedImageRoot() async {
+    return path.normalize(
+      _normalizeAndroidPrivateDataAlias(
+        await Directory(imgDir).resolveSymbolicLinks(),
+      ),
+    );
+  }
+
+  Future<List<String>> _pruneEmptyManagedImageDirectories() async {
+    final root = Directory(imgDir);
+    if (!await root.exists()) {
+      return const [];
+    }
+    final managedRoot = await _canonicalManagedImageRoot();
+    final directories = <Directory>[];
+    await for (final entity in root.list(recursive: true, followLinks: false)) {
+      if (entity is Directory) {
+        directories.add(entity);
+      }
+    }
+    directories.sort((a, b) => b.path.length.compareTo(a.path.length));
+
+    final removed = <String>[];
+    for (final directory in directories) {
+      final resolvedPath = path.normalize(
+        _normalizeAndroidPrivateDataAlias(
+          await directory.resolveSymbolicLinks(),
+        ),
+      );
+      if (!_isWithinPath(managedRoot, resolvedPath)) {
+        _writeSecurityWarning(
+          directory.path,
+          'directory resolves outside image root',
+        );
+        continue;
+      }
+      try {
+        if (await directory.list(followLinks: false).isEmpty) {
+          await directory.delete();
+          removed.add(directory.path);
+        }
+      } on FileSystemException catch (error) {
+        stderr.writeln('空圖片目錄清理失敗: $error');
+      }
+    }
+    return removed;
+  }
+
+  // checkpoint 每次在 transaction 外執行；只有足夠多空頁時才進行 VACUUM。
+  Future<DatabaseMaintenanceReport> _compactDatabaseIfNeeded(
+    Database db,
+  ) async {
+    var walCheckpointAttempted = false;
+    var vacuumAttempted = false;
+    var vacuumCompleted = false;
+    try {
+      walCheckpointAttempted = true;
+      await db.execute('PRAGMA wal_checkpoint(TRUNCATE)');
+    } on DatabaseException catch (error) {
+      stderr.writeln('SQLite WAL checkpoint 失敗: $error');
+    }
+
+    try {
+      final rows = await db.rawQuery('PRAGMA freelist_count');
+      final freePages = (rows.single.values.single as num?)?.toInt() ?? 0;
+      if (freePages >= 32) {
+        vacuumAttempted = true;
+        await db.execute('VACUUM');
+        vacuumCompleted = true;
+      }
+    } on DatabaseException catch (error) {
+      stderr.writeln('SQLite 壓縮失敗: $error');
+    }
+
+    return DatabaseMaintenanceReport(
+      walCheckpointAttempted: walCheckpointAttempted,
+      vacuumAttempted: vacuumAttempted,
+      vacuumCompleted: vacuumCompleted,
+    );
+  }
+
+  Future<Map<String, int>> _tableCounts(Database db) async {
+    const tables = [
+      'actresses',
+      'works',
+      'actress_works',
+      'pending_file_deletions',
+    ];
+    final counts = <String, int>{};
+    for (final table in tables) {
+      final rows = await db.rawQuery('SELECT COUNT(*) AS count FROM $table');
+      counts[table] = (rows.single['count'] as num).toInt();
+    }
+    return counts;
+  }
+
+  Future<ManagedImageStats> _managedImageStats() async {
+    final root = Directory(imgDir);
+    if (!await root.exists()) {
+      return const ManagedImageStats(fileCount: 0, totalBytes: 0);
+    }
+    var fileCount = 0;
+    var totalBytes = 0;
+    await for (final entity in root.list(recursive: true, followLinks: false)) {
+      if (entity is File) {
+        fileCount++;
+        totalBytes += await entity.length();
+      }
+    }
+    return ManagedImageStats(fileCount: fileCount, totalBytes: totalBytes);
+  }
+
+  Future<List<String>> _pendingFileDeletionPaths(Database db) async {
+    final rows = await db.query(
+      'pending_file_deletions',
+      columns: ['path'],
+      orderBy: 'path ASC',
+    );
+    return rows
+        .map((row) => row['path']?.toString())
+        .whereType<String>()
+        .toList(growable: false);
+  }
+
+  bool get _shouldCaptureDeletionDiagnostics {
+    var isDebugBuild = false;
+    assert(() {
+      isDebugBuild = true;
+      return true;
+    }());
+    return isDebugBuild;
+  }
+
+  void _writeStructuredResult(
+    String event,
+    Map<String, Object?> Function() buildResult,
+  ) {
+    assert(() {
+      stderr.writeln(jsonEncode({'event': event, ...buildResult()}));
+      return true;
+    }());
+  }
+
+  void _writeSecurityWarning(String path, String? reason) {
+    _writeStructuredResult('managed_image_rejected', () => {
+      'path': path,
+      'reason': reason ?? 'managed image validation failed',
+    });
+  }
+
+  String _fileKey(String filePath) {
+    final normalized = path.normalize(path.absolute(filePath));
+    return Platform.isWindows ? normalized.toLowerCase() : normalized;
   }
 
   // 建立設定資料表。
@@ -433,4 +1986,205 @@ class AppDatabase {
 
     await db.delete('settings', where: 'key = ?', whereArgs: [key]);
   }
+}
+
+class _ManagedImageLifecycleOwner {
+  _ManagedImageLifecycleOwner(this.database);
+
+  final AppDatabase database;
+  bool acceptingNestedOperations = true;
+  var _nestedOperationCount = 0;
+  Completer<void>? _nestedOperationsFinished;
+
+  Future<T> runNested<T>(Future<T> Function() operation) async {
+    _nestedOperationCount++;
+    try {
+      return await operation();
+    } finally {
+      _nestedOperationCount--;
+      if (_nestedOperationCount == 0) {
+        _nestedOperationsFinished?.complete();
+      }
+    }
+  }
+
+  Future<void> close() async {
+    acceptingNestedOperations = false;
+    if (_nestedOperationCount > 0) {
+      await (_nestedOperationsFinished ??= Completer<void>()).future;
+    }
+  }
+}
+
+class _ActressDeletionSnapshot {
+  const _ActressDeletionSnapshot({
+    required this.actressId,
+    required this.actressImagePath,
+    required this.works,
+    required this.targetActressWorkCount,
+    required this.uiWorkIds,
+    required this.fileCandidates,
+  });
+
+  final int actressId;
+  final String? actressImagePath;
+  final List<_WorkDeletionSnapshot> works;
+  final int targetActressWorkCount;
+  final List<int> uiWorkIds;
+  final List<_FileDeletionCandidate> fileCandidates;
+
+  List<int> get workIds => works.map((work) => work.id).toList(growable: false);
+
+  List<ActressDeletionSnapshotWork> get reportWorks => works
+      .map(
+        (work) => ActressDeletionSnapshotWork(
+          workId: work.id,
+          cardImagePath: work.cardImagePath,
+          detailImagePath: work.detailImagePath,
+          actressReferenceCount: work.actressReferenceCount,
+        ),
+      )
+      .toList(growable: false);
+
+  List<_FileDeletionCandidate> selectCandidates(
+    List<int> orphanWorkIds,
+  ) {
+    final orphanIds = orphanWorkIds.toSet();
+    return fileCandidates
+        .where(
+          (candidate) =>
+              candidate.workId == null || orphanIds.contains(candidate.workId),
+        )
+        .toList(growable: false);
+  }
+}
+
+class _WorkDeletionSnapshot {
+  const _WorkDeletionSnapshot({
+    required this.id,
+    required this.cardImagePath,
+    required this.detailImagePath,
+    required this.actressReferenceCount,
+  });
+
+  final int id;
+  final String? cardImagePath;
+  final String? detailImagePath;
+  final int actressReferenceCount;
+}
+
+class _DeleteTransactionOutcome {
+  const _DeleteTransactionOutcome({
+    required this.orphanWorkIds,
+    required this.actressRowsDeleted,
+    required this.actressWorkRowsDeleted,
+    required this.deletedWorkRows,
+    required this.fileCandidates,
+    required this.cacheEvictionPaths,
+  });
+
+  final List<int> orphanWorkIds;
+  final int actressRowsDeleted;
+  final int actressWorkRowsDeleted;
+  final int deletedWorkRows;
+  final List<_FileDeletionCandidate> fileCandidates;
+  final List<String> cacheEvictionPaths;
+}
+
+class _FileDeletionCandidate {
+  const _FileDeletionCandidate({
+    required this.kind,
+    required this.databaseStoredPath,
+    required this.validated,
+    this.workId,
+  });
+
+  final String kind;
+  final String databaseStoredPath;
+  final _ValidatedManagedImage validated;
+  final int? workId;
+
+  String get pendingPath => validated.pendingPath;
+}
+
+enum _ManagedImageStatus { valid, missing, rejected }
+
+class _ValidatedManagedImage {
+  const _ValidatedManagedImage._({
+    required this.originalPath,
+    required this.status,
+    required this.resolvedFile,
+    required this.reason,
+    required this.normalizedPath,
+    required this.canonicalFilePath,
+    required this.canonicalRootPath,
+    required this.exists,
+    required this.bytes,
+  });
+
+  const _ValidatedManagedImage.valid({
+    required String originalPath,
+    required File resolvedFile,
+    required String normalizedPath,
+    required String canonicalFilePath,
+    required String canonicalRootPath,
+    required bool exists,
+    required int bytes,
+  }) : this._(
+         originalPath: originalPath,
+         status: _ManagedImageStatus.valid,
+         resolvedFile: resolvedFile,
+         reason: null,
+         normalizedPath: normalizedPath,
+         canonicalFilePath: canonicalFilePath,
+         canonicalRootPath: canonicalRootPath,
+         exists: exists,
+         bytes: bytes,
+       );
+
+  const _ValidatedManagedImage.missing({
+    required String originalPath,
+    required String normalizedPath,
+    required String managedRoot,
+  }) : this._(
+         originalPath: originalPath,
+         status: _ManagedImageStatus.missing,
+         resolvedFile: null,
+         reason: null,
+         normalizedPath: normalizedPath,
+         canonicalFilePath: normalizedPath,
+         canonicalRootPath: managedRoot,
+         exists: false,
+         bytes: 0,
+       );
+
+  const _ValidatedManagedImage.rejected({
+    required String originalPath,
+    required String reason,
+    required String? normalizedPath,
+    required String managedRoot,
+  }) : this._(
+         originalPath: originalPath,
+         status: _ManagedImageStatus.rejected,
+         resolvedFile: null,
+         reason: reason,
+         normalizedPath: normalizedPath,
+         canonicalFilePath: null,
+         canonicalRootPath: managedRoot,
+         exists: false,
+         bytes: 0,
+       );
+
+  final String originalPath;
+  final _ManagedImageStatus status;
+  final File? resolvedFile;
+  final String? reason;
+  final String? normalizedPath;
+  final String? canonicalFilePath;
+  final String canonicalRootPath;
+  final bool exists;
+  final int bytes;
+
+  String get pendingPath =>
+      canonicalFilePath ?? normalizedPath ?? originalPath;
 }
