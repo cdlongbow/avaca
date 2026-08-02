@@ -445,11 +445,27 @@ class _DetailViewState extends State<DetailView> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    OutlinedButton(
-                      key: const Key('detail-works-button'),
-                      onPressed: _openWorks,
-                      style: _detailOutlinedButtonStyle(),
-                      child: Text(AppLocalizations.of(context).works),
+                    Row(
+                      children: [
+                        SizedBox(
+                          width: 96,
+                          child: OutlinedButton(
+                            key: const Key('detail-works-button'),
+                            onPressed: _openWorks,
+                            style: _detailOutlinedButtonStyle(),
+                            child: Text(AppLocalizations.of(context).works),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            '${controller.workCount}',
+                            key: const Key('detail-works-count'),
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 12),
                     KeyedSubtree(
@@ -632,9 +648,12 @@ class _DetailViewState extends State<DetailView> {
     );
   }
 
-  void _openWorks() {
+  Future<void> _openWorks() async {
     _dismissKeyboard();
-    Navigator.of(context).pushNamed('/works/${widget.actressId}');
+    await Navigator.of(context).pushNamed('/works/${widget.actressId}');
+    if (mounted) {
+      await controller.refreshWorkCount();
+    }
   }
 
   void _dismissKeyboard() {

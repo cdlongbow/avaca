@@ -180,7 +180,8 @@ class AppThemeResolver {
 class AppTheme {
   AppTheme._();
 
-  static const _fontFamilyFallback = <String>['AvacaNotoSansTC'];
+  static const fontFamily = 'NotoSansCjkTcVariable';
+  static const minimumFontWeight = FontWeight.w400;
 
   static ThemeData fromOptions({
     required AppThemeOptions options,
@@ -200,7 +201,7 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: palette.brightness,
-      fontFamilyFallback: _fontFamilyFallback,
+      fontFamily: fontFamily,
       colorScheme: scheme,
       scaffoldBackgroundColor: palette.surface,
       appBarTheme: _appBarTheme(palette),
@@ -229,6 +230,11 @@ class AppTheme {
       foregroundColor: palette.onSurface,
       elevation: 0,
       surfaceTintColor: Colors.transparent,
+      titleTextStyle: _appTextStyle(
+        color: palette.onSurface,
+        fontSize: 20,
+        fontWeight: FontWeight.w600,
+      ),
     );
   }
 
@@ -243,6 +249,12 @@ class AppTheme {
 
   static TextTheme _textTheme(AppPalette palette) {
     return TextTheme(
+      displayLarge: _appTextStyle(color: palette.onSurface),
+      displayMedium: _appTextStyle(color: palette.onSurface),
+      displaySmall: _appTextStyle(color: palette.onSurface),
+      headlineLarge: _appTextStyle(color: palette.onSurface),
+      headlineMedium: _appTextStyle(color: palette.onSurface),
+      headlineSmall: _appTextStyle(color: palette.onSurface),
       bodyLarge: _appTextStyle(color: palette.onSurface),
       bodyMedium: _appTextStyle(color: palette.onSurface),
       bodySmall: _appTextStyle(color: palette.onSurfaceVariant),
@@ -277,6 +289,7 @@ class AppTheme {
     return TextButtonThemeData(
       style: ButtonStyle(
         foregroundColor: WidgetStatePropertyAll(palette.primary),
+        textStyle: WidgetStatePropertyAll(_appTextStyle()),
       ),
     );
   }
@@ -286,6 +299,7 @@ class AppTheme {
       style: ButtonStyle(
         backgroundColor: WidgetStatePropertyAll(palette.primary),
         foregroundColor: WidgetStatePropertyAll(palette.onPrimary),
+        textStyle: WidgetStatePropertyAll(_appTextStyle()),
       ),
     );
   }
@@ -296,6 +310,7 @@ class AppTheme {
         backgroundColor: WidgetStatePropertyAll(palette.primary),
         foregroundColor: WidgetStatePropertyAll(palette.onPrimary),
         elevation: const WidgetStatePropertyAll(0),
+        textStyle: WidgetStatePropertyAll(_appTextStyle()),
       ),
     );
   }
@@ -305,6 +320,7 @@ class AppTheme {
       style: ButtonStyle(
         foregroundColor: WidgetStatePropertyAll(palette.primary),
         side: WidgetStatePropertyAll(BorderSide(color: palette.outline)),
+        textStyle: WidgetStatePropertyAll(_appTextStyle()),
       ),
     );
   }
@@ -378,7 +394,7 @@ class AppTheme {
       titleTextStyle: _appTextStyle(
         color: palette.onSurface,
         fontSize: 20,
-        fontWeight: FontWeight.w600,
+        fontWeight: FontWeight.w500,
       ),
       contentTextStyle: _appTextStyle(color: palette.onSurface, fontSize: 16),
     );
@@ -414,15 +430,15 @@ class AppTheme {
   }
 
   static TextStyle _appTextStyle({
-    required Color color,
+    Color? color,
     double? fontSize,
     FontWeight? fontWeight,
   }) {
     return TextStyle(
       color: color,
       fontSize: fontSize,
-      fontWeight: fontWeight,
-      fontFamilyFallback: _fontFamilyFallback,
+      fontWeight: fontWeight ?? minimumFontWeight,
+      fontFamily: fontFamily,
     );
   }
 

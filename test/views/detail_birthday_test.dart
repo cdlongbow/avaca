@@ -12,6 +12,9 @@ class _BirthdayDatabase extends AppDatabase {
   String? birthDate;
 
   @override
+  Future<int> getWorkCountForActress(int actressId) async => 0;
+
+  @override
   Future<Map<String, Object?>?> getActressById(int actressId) async {
     return {
       'id': actressId,

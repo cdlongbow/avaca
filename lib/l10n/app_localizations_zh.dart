@@ -276,6 +276,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get simplifiedChinese => '簡體中文';
 
   @override
+  String get japanese => '日文';
+
+  @override
   String get works => '作品';
 
   @override
@@ -285,6 +288,73 @@ class AppLocalizationsZh extends AppLocalizations {
   String actressWorksTitle(String actressName) {
     return '$actressName演出的作品';
   }
+
+  @override
+  String get scrapeWorks => '刮削作品';
+
+  @override
+  String get scrapeSettings => '刮削設定';
+
+  @override
+  String get syncActressDetails => '同步詳細資料';
+
+  @override
+  String get replaceActressImage => '更換女優頭像';
+
+  @override
+  String get fillMissingOnly => '二次刮削只補齊缺少的資訊';
+
+  @override
+  String get excludedCodePrefixes => '不刮削的番號開頭';
+
+  @override
+  String get codePrefixHint => '輸入番號前綴';
+
+  @override
+  String get addPrefix => '新增';
+
+  @override
+  String get startScrape => '開始刮削';
+
+  @override
+  String get noWorks => '尚無作品';
+
+  @override
+  String durationMinutes(int minutes) {
+    return '$minutes 分鐘';
+  }
+
+  @override
+  String get studio => '製作商';
+
+  @override
+  String get publisher => '發行商';
+
+  @override
+  String get series => '系列';
+
+  @override
+  String scrapeComplete(int saved, int excluded, int failed) {
+    return '刮削完成：儲存 $saved、排除 $excluded、失敗 $failed';
+  }
+
+  @override
+  String scrapeCancelled(int saved, int excluded, int failed) {
+    return '已取消刮削：儲存 $saved、排除 $excluded、失敗 $failed';
+  }
+
+  @override
+  String get scrapeFailed => '刮削失敗，請稍後再試。';
+
+  @override
+  String get javBusVerificationTitle => 'JavBus 驗證';
+
+  @override
+  String get javBusVerificationInstructions =>
+      'JavBus 要求手動完成地區成年驗證。請回答所有題目，App 會在同一安全工作階段繼續刮削。';
+
+  @override
+  String get javBusVerificationSubmit => '送出驗證';
 }
 
 /// The translations for Chinese, as used in China (`zh_CN`).
@@ -352,7 +422,7 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get confirmDelete => '确定删除';
 
   @override
-  String get appTitle => 'AVACA 收藏库';
+  String get appTitle => 'AVACA';
 
   @override
   String get search => '搜索';
@@ -559,6 +629,9 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get simplifiedChinese => '简体中文';
 
   @override
+  String get japanese => '日语';
+
+  @override
   String get works => '作品';
 
   @override
@@ -568,6 +641,73 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String actressWorksTitle(String actressName) {
     return '$actressName出演的作品';
   }
+
+  @override
+  String get scrapeWorks => '刮削作品';
+
+  @override
+  String get scrapeSettings => '刮削设置';
+
+  @override
+  String get syncActressDetails => '同步详细资料';
+
+  @override
+  String get replaceActressImage => '更换女优头像';
+
+  @override
+  String get fillMissingOnly => '二次刮削只补齐缺少的信息';
+
+  @override
+  String get excludedCodePrefixes => '不刮削的番号开头';
+
+  @override
+  String get codePrefixHint => '输入番号前缀';
+
+  @override
+  String get addPrefix => '新增';
+
+  @override
+  String get startScrape => '开始刮削';
+
+  @override
+  String get noWorks => '暂无作品';
+
+  @override
+  String durationMinutes(int minutes) {
+    return '$minutes 分钟';
+  }
+
+  @override
+  String get studio => '制作商';
+
+  @override
+  String get publisher => '发行商';
+
+  @override
+  String get series => '系列';
+
+  @override
+  String scrapeComplete(int saved, int excluded, int failed) {
+    return '刮削完成：保存 $saved、排除 $excluded、失败 $failed';
+  }
+
+  @override
+  String scrapeCancelled(int saved, int excluded, int failed) {
+    return '已取消刮削：保存 $saved、排除 $excluded、失败 $failed';
+  }
+
+  @override
+  String get scrapeFailed => '刮削失败，请稍后再试。';
+
+  @override
+  String get javBusVerificationTitle => 'JavBus 验证';
+
+  @override
+  String get javBusVerificationInstructions =>
+      'JavBus 要求手动完成地区成年验证。请回答所有题目，App 会在同一安全会话继续刮削。';
+
+  @override
+  String get javBusVerificationSubmit => '提交验证';
 }
 
 /// The translations for Chinese, as used in Taiwan (`zh_TW`).
@@ -635,7 +775,7 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get confirmDelete => '確定刪除';
 
   @override
-  String get appTitle => 'AVACA 收藏庫';
+  String get appTitle => 'AVACA';
 
   @override
   String get search => '搜尋';
@@ -842,6 +982,9 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get simplifiedChinese => '簡體中文';
 
   @override
+  String get japanese => '日文';
+
+  @override
   String get works => '作品';
 
   @override
@@ -851,4 +994,71 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String actressWorksTitle(String actressName) {
     return '$actressName演出的作品';
   }
+
+  @override
+  String get scrapeWorks => '刮削作品';
+
+  @override
+  String get scrapeSettings => '刮削設定';
+
+  @override
+  String get syncActressDetails => '同步詳細資料';
+
+  @override
+  String get replaceActressImage => '更換女優頭像';
+
+  @override
+  String get fillMissingOnly => '二次刮削只補齊缺少的資訊';
+
+  @override
+  String get excludedCodePrefixes => '不刮削的番號開頭';
+
+  @override
+  String get codePrefixHint => '輸入番號前綴';
+
+  @override
+  String get addPrefix => '新增';
+
+  @override
+  String get startScrape => '開始刮削';
+
+  @override
+  String get noWorks => '尚無作品';
+
+  @override
+  String durationMinutes(int minutes) {
+    return '$minutes 分鐘';
+  }
+
+  @override
+  String get studio => '製作商';
+
+  @override
+  String get publisher => '發行商';
+
+  @override
+  String get series => '系列';
+
+  @override
+  String scrapeComplete(int saved, int excluded, int failed) {
+    return '刮削完成：儲存 $saved、排除 $excluded、失敗 $failed';
+  }
+
+  @override
+  String scrapeCancelled(int saved, int excluded, int failed) {
+    return '已取消刮削：儲存 $saved、排除 $excluded、失敗 $failed';
+  }
+
+  @override
+  String get scrapeFailed => '刮削失敗，請稍後再試。';
+
+  @override
+  String get javBusVerificationTitle => 'JavBus 驗證';
+
+  @override
+  String get javBusVerificationInstructions =>
+      'JavBus 要求手動完成地區成年驗證。請回答所有題目，App 會在同一安全工作階段繼續刮削。';
+
+  @override
+  String get javBusVerificationSubmit => '送出驗證';
 }

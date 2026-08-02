@@ -35,7 +35,7 @@ void main() {
     expect(find.text('Pure Black AMOLED'), findsNothing);
   });
 
-  testWidgets('all visible settings text inherits the bundled font', (
+  testWidgets('all visible settings text uses the bundled variable font', (
     tester,
   ) async {
     await _pumpSettings(tester);
@@ -46,9 +46,14 @@ void main() {
       final effectiveStyle = inheritedStyle.merge(text.style);
 
       expect(
-        effectiveStyle.fontFamilyFallback,
-        contains('AvacaNotoSansTC'),
+        effectiveStyle.fontFamily,
+        'NotoSansCjkTcVariable',
         reason: 'Missing bundled font on "${text.data}"',
+      );
+      expect(
+        effectiveStyle.fontWeight?.value,
+        greaterThanOrEqualTo(FontWeight.w300.value),
+        reason: 'Text is lighter than w300 on "${text.data}"',
       );
     }
   });
@@ -258,6 +263,7 @@ void main() {
     expect(find.text('Follow System'), findsNothing);
     expect(find.text('Traditional Chinese (Taiwan)'), findsNothing);
     expect(find.text('Simplified Chinese'), findsNothing);
+    expect(find.text('Japanese'), findsNothing);
     expect(find.text('English'), findsNothing);
 
     await tester.tap(find.text('Language'));
@@ -266,6 +272,7 @@ void main() {
     expect(find.text('Follow System'), findsOneWidget);
     expect(find.text('Traditional Chinese (Taiwan)'), findsOneWidget);
     expect(find.text('Simplified Chinese'), findsOneWidget);
+    expect(find.text('Japanese'), findsOneWidget);
     expect(find.text('English'), findsOneWidget);
 
     await tester.tap(find.text('Traditional Chinese (Taiwan)'));

@@ -1,0 +1,69 @@
+import '../../models/scraped_actress_details.dart';
+import '../../models/work.dart';
+
+class JavBusActressPage {
+  const JavBusActressPage({
+    required this.details,
+    required this.works,
+    required this.pageCount,
+  });
+
+  final ScrapedActressDetails details;
+  final List<JavBusWorkSummary> works;
+  final int pageCount;
+}
+
+class JavBusActressSearchResult {
+  const JavBusActressSearchResult({required this.name, required this.uri});
+
+  final String name;
+  final Uri uri;
+}
+
+class JavBusWorkSummary {
+  const JavBusWorkSummary({
+    required this.code,
+    required this.title,
+    required this.detailUri,
+    this.releaseDate,
+  });
+
+  final String code;
+  final String title;
+  final String? releaseDate;
+  final Uri detailUri;
+}
+
+class JavBusWorkDetails {
+  const JavBusWorkDetails({
+    required this.code,
+    required this.title,
+    this.releaseDate,
+    this.durationMinutes,
+    this.studio,
+    this.publisher,
+    this.series,
+  });
+
+  final String code;
+  final String title;
+  final String? releaseDate;
+  final int? durationMinutes;
+  final String? studio;
+  final String? publisher;
+  final String? series;
+
+  Work toWork({String? cardImagePath, String? detailImagePath}) {
+    return Work(
+      code: code,
+      title: title,
+      releaseDate: releaseDate,
+      durationMinutes: durationMinutes,
+      studio: studio,
+      publisher: publisher,
+      series: series,
+      cardImagePath: cardImagePath,
+      detailImagePath: detailImagePath,
+    );
+  }
+}

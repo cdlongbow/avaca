@@ -70,7 +70,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get confirmDelete => 'Delete';
 
   @override
-  String get appTitle => 'AVACA Collection Library';
+  String get appTitle => 'AVACA';
 
   @override
   String get search => 'Search';
@@ -279,6 +279,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get simplifiedChinese => 'Simplified Chinese';
 
   @override
+  String get japanese => 'Japanese';
+
+  @override
   String get works => 'Works';
 
   @override
@@ -288,4 +291,71 @@ class AppLocalizationsEn extends AppLocalizations {
   String actressWorksTitle(String actressName) {
     return 'Works featuring $actressName';
   }
+
+  @override
+  String get scrapeWorks => 'Scrape works';
+
+  @override
+  String get scrapeSettings => 'Scrape settings';
+
+  @override
+  String get syncActressDetails => 'Sync profile details';
+
+  @override
+  String get replaceActressImage => 'Replace actress image';
+
+  @override
+  String get fillMissingOnly => 'Only fill missing information on rescrape';
+
+  @override
+  String get excludedCodePrefixes => 'Excluded code prefixes';
+
+  @override
+  String get codePrefixHint => 'Enter a code prefix';
+
+  @override
+  String get addPrefix => 'Add';
+
+  @override
+  String get startScrape => 'Start scraping';
+
+  @override
+  String get noWorks => 'No works yet';
+
+  @override
+  String durationMinutes(int minutes) {
+    return '$minutes min';
+  }
+
+  @override
+  String get studio => 'Studio';
+
+  @override
+  String get publisher => 'Publisher';
+
+  @override
+  String get series => 'Series';
+
+  @override
+  String scrapeComplete(int saved, int excluded, int failed) {
+    return 'Scrape complete: saved $saved, excluded $excluded, failed $failed';
+  }
+
+  @override
+  String scrapeCancelled(int saved, int excluded, int failed) {
+    return 'Scrape cancelled: saved $saved, excluded $excluded, failed $failed';
+  }
+
+  @override
+  String get scrapeFailed => 'Scrape failed. Please try again.';
+
+  @override
+  String get javBusVerificationTitle => 'JavBus verification';
+
+  @override
+  String get javBusVerificationInstructions =>
+      'JavBus requires a manual regional age check. Answer every question to continue scraping in the same secure session.';
+
+  @override
+  String get javBusVerificationSubmit => 'Submit verification';
 }

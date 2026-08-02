@@ -9,6 +9,13 @@ import 'package:flutter_test/flutter_test.dart';
 
 class _FocusDatabase extends AppDatabase {
   @override
+  Future<int> getWorkCountForActress(int actressId) async => 0;
+
+  @override
+  Future<List<Map<String, Object?>>> getWorksForActress(int actressId) async =>
+      const [];
+
+  @override
   Future<List<Map<String, Object?>>> getAllActresses({
     String searchKeyword = '',
     String filterType = '全部',

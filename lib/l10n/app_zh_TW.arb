@@ -20,7 +20,7 @@
   "deleteWarningWithPhoto": "刪除後將無法復原，連同照片檔案也會被清除。",
   "cancel": "取消",
   "confirmDelete": "確定刪除",
-  "appTitle": "AVACA 收藏庫",
+  "appTitle": "AVACA",
   "search": "搜尋",
   "filterAndSort": "篩選與排序",
   "filterSection": "篩選",
@@ -111,9 +111,52 @@
   "traditionalChineseTaiwan": "繁體中文（台灣）",
   "english": "英文",
   "simplifiedChinese": "簡體中文",
+  "japanese": "日文",
   "works": "作品",
   "loadFailedGeneric": "載入失敗",
   "actressWorksTitle": "{actressName}演出的作品",
+  "scrapeWorks": "刮削作品",
+  "scrapeSettings": "刮削設定",
+  "syncActressDetails": "同步詳細資料",
+  "replaceActressImage": "更換女優頭像",
+  "fillMissingOnly": "二次刮削只補齊缺少的資訊",
+  "excludedCodePrefixes": "不刮削的番號開頭",
+  "codePrefixHint": "輸入番號前綴",
+  "addPrefix": "新增",
+  "startScrape": "開始刮削",
+  "cancel": "取消",
+  "noWorks": "尚無作品",
+  "durationMinutes": "{minutes} 分鐘",
+  "@durationMinutes": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "studio": "製作商",
+  "publisher": "發行商",
+  "series": "系列",
+  "scrapeComplete": "刮削完成：儲存 {saved}、排除 {excluded}、失敗 {failed}",
+  "@scrapeComplete": {
+    "placeholders": {
+      "saved": {"type": "int"},
+      "excluded": {"type": "int"},
+      "failed": {"type": "int"}
+    }
+  },
+  "scrapeCancelled": "已取消刮削：儲存 {saved}、排除 {excluded}、失敗 {failed}",
+  "@scrapeCancelled": {
+    "placeholders": {
+      "saved": {"type": "int"},
+      "excluded": {"type": "int"},
+      "failed": {"type": "int"}
+    }
+  },
+  "scrapeFailed": "刮削失敗，請稍後再試。",
+  "javBusVerificationTitle": "JavBus 驗證",
+  "javBusVerificationInstructions": "JavBus 要求手動完成地區成年驗證。請回答所有題目，App 會在同一安全工作階段繼續刮削。",
+  "javBusVerificationSubmit": "送出驗證",
   "@actressWorksTitle": {
     "placeholders": {
       "actressName": {

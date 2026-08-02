@@ -4,9 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/database.dart';
 
 class SettingsController extends ChangeNotifier {
-  SettingsController({
-    required this.db,
-  });
+  SettingsController({required this.db});
 
   final AppDatabase db;
 
@@ -35,7 +33,7 @@ class SettingsController extends ChangeNotifier {
 
   /// 提供 UI 使用的語言選項（分層用）
   List<String> getLocaleOptions() {
-    return ['system', 'zh_TW', 'zh_CN', 'en'];
+    return ['system', 'zh_TW', 'zh_CN', 'ja_JP', 'en'];
   }
 
   Map<String, Color> customColors = {
@@ -151,6 +149,7 @@ class SettingsController extends ChangeNotifier {
     return switch (value) {
       'zh_TW' => const Locale('zh', 'TW'),
       'zh_CN' => const Locale('zh', 'CN'),
+      'ja_JP' => const Locale('ja', 'JP'),
       'en' => const Locale('en'),
       _ => null,
     };
