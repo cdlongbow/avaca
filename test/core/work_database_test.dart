@@ -143,6 +143,214 @@ void main() {
       },
     );
 
+    test('stores normalized actress aliases per actress', () async {
+      await database.addActress(name: '另一位女優');
+      final sqlite = await database.database;
+      final otherActressId =
+          (await sqlite.query(
+                'actresses',
+                columns: ['id'],
+                where: 'name = ?',
+                whereArgs: ['另一位女優'],
+              )).single['id']
+              as int;
+
+      await database.replaceActressAliases(
+        actressId: actressId,
+        aliases: const ['  Remu  ', 'Remu', '涼森れむ', ''],
+      );
+      await database.replaceActressAliases(
+        actressId: otherActressId,
+        aliases: const ['Remu'],
+      );
+
+      expect(
+        (await sqlite.rawQuery(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'actress_aliases'",
+        )),
+        hasLength(1),
+      );
+      expect(await database.getActressAliases(actressId), ['Remu']);
+      expect(await database.getActressAliases(otherActressId), ['Remu']);
+
+      await database.replaceActressAliases(
+        actressId: actressId,
+        aliases: const ['新別名'],
+      );
+      expect(await database.getActressAliases(actressId), ['新別名']);
+      expect(await database.getActressAliases(otherActressId), ['Remu']);
+    });
+
+    test(
+      'canonical rename removes the matching alias and actress delete cascades',
+      () async {
+        await database.replaceActressAliases(
+          actressId: actressId,
+          aliases: const ['舊別名', '新主藝名'],
+        );
+
+        expect(
+          await database.updateActress(actressId: actressId, name: '新主藝名'),
+          isTrue,
+        );
+        expect(await database.getActressAliases(actressId), ['舊別名']);
+
+        expect(await database.deleteActress(actressId), isTrue);
+        final sqlite = await database.database;
+        expect(
+          await sqlite.query(
+            'actress_aliases',
+            where: 'actress_id = ?',
+            whereArgs: [actressId],
+          ),
+          isEmpty,
+        );
+      },
+    );
+
+    test('empty or unknown work deletion is a non-committed no-op', () async {
+      final empty = await database.deleteWorksWithReport(const []);
+      final unknown = await database.deleteWorksWithReport(const [999999]);
+
+      expect(empty.databaseCommitted, isFalse);
+      expect(empty.deletedWorkRows, 0);
+      expect(unknown.databaseCommitted, isFalse);
+      expect(unknown.deletedWorkIds, isEmpty);
+      expect(await database.getActressById(actressId), isNotNull);
+    });
+
+    test('deletes selections larger than one SQLite bind batch', () async {
+      final sqlite = await database.database;
+      final batch = sqlite.batch();
+      for (var index = 0; index < 501; index++) {
+        batch.insert('works', {
+          'code': 'BATCH-$index',
+          'title': 'Batch work $index',
+        });
+      }
+      await batch.commit(noResult: true);
+      final workIds = (await sqlite.query(
+        'works',
+        columns: ['id'],
+      )).map((row) => row['id'] as int).toList(growable: false);
+      final relationBatch = sqlite.batch();
+      for (final workId in workIds) {
+        relationBatch.insert('actress_works', {
+          'actress_id': actressId,
+          'work_id': workId,
+        });
+      }
+      await relationBatch.commit(noResult: true);
+
+      final report = await database.deleteWorksWithReport(workIds);
+
+      expect(report.databaseCommitted, isTrue);
+      expect(report.deletedWorkRows, 501);
+      expect(report.deletedActressWorkRows, 501);
+      expect(await sqlite.query('works'), isEmpty);
+      expect(await sqlite.query('actress_works'), isEmpty);
+    });
+
+    test(
+      'deletes selected works globally and preserves files still referenced by another work',
+      () async {
+        await database.addActress(name: '共同演出女優');
+        final sqlite = await database.database;
+        final otherActressId =
+            (await sqlite.query(
+                  'actresses',
+                  columns: ['id'],
+                  where: 'name = ?',
+                  whereArgs: ['共同演出女優'],
+                )).single['id']
+                as int;
+        final sharedCard = File(
+          path.join(database.imgDir, 'works', 'shared-card.jpg'),
+        );
+        final sharedDetail = File(
+          path.join(database.imgDir, 'works', 'shared-detail.jpg'),
+        );
+        final onlyCard = File(
+          path.join(database.imgDir, 'works', 'only-card.jpg'),
+        );
+        final onlyDetail = File(
+          path.join(database.imgDir, 'works', 'only-detail.jpg'),
+        );
+        await sharedCard.parent.create(recursive: true);
+        await sharedCard.writeAsString('shared card');
+        await sharedDetail.writeAsString('shared detail');
+        await onlyCard.writeAsString('only card');
+        await onlyDetail.writeAsString('only detail');
+
+        final selectedShared = await database.upsertActressWork(
+          actressId: actressId,
+          work: Work(
+            code: 'GLOBAL-SHARED',
+            title: '共同作品',
+            cardImagePath: sharedCard.path,
+            detailImagePath: sharedDetail.path,
+          ),
+        );
+        await database.upsertActressWork(
+          actressId: otherActressId,
+          work: Work(
+            code: 'GLOBAL-SHARED',
+            title: '共同作品',
+            cardImagePath: sharedCard.path,
+            detailImagePath: sharedDetail.path,
+          ),
+        );
+        final selectedOnly = await database.upsertActressWork(
+          actressId: actressId,
+          work: Work(
+            code: 'GLOBAL-ONLY',
+            title: '單一作品',
+            cardImagePath: onlyCard.path,
+            detailImagePath: onlyDetail.path,
+          ),
+        );
+        final retained = await database.upsertActressWork(
+          actressId: otherActressId,
+          work: Work(
+            code: 'GLOBAL-RETAINED',
+            title: '保留作品',
+            cardImagePath: sharedCard.path,
+            detailImagePath: sharedDetail.path,
+          ),
+        );
+
+        final report = await database.deleteWorksWithReport([
+          selectedShared,
+          selectedOnly,
+        ]);
+
+        expect(report.databaseCommitted, isTrue);
+        expect(report.requestedWorkIds, [selectedShared, selectedOnly]);
+        expect(
+          report.deletedWorkIds,
+          containsAll([selectedShared, selectedOnly]),
+        );
+        expect(report.deletedWorkRows, 2);
+        expect(report.deletedActressWorkRows, 3);
+        expect(await database.getWorkById(selectedShared), isNull);
+        expect(await database.getWorkById(selectedOnly), isNull);
+        expect(await database.getWorkById(retained), isNotNull);
+        expect(await database.getWorksForActress(actressId), isEmpty);
+        expect(
+          (await database.getWorksForActress(otherActressId)).single['code'],
+          'GLOBAL-RETAINED',
+        );
+        expect(onlyCard.existsSync(), isFalse);
+        expect(onlyDetail.existsSync(), isFalse);
+        expect(sharedCard.existsSync(), isTrue);
+        expect(sharedDetail.existsSync(), isTrue);
+        expect(report.fileCleanup.deleted, contains(onlyCard.path));
+        expect(report.fileCleanup.deleted, contains(onlyDetail.path));
+        expect(report.fileCleanup.deleted, isNot(contains(sharedCard.path)));
+        expect(report.fileCleanup.deleted, isNot(contains(sharedDetail.path)));
+      },
+    );
+
     test(
       'scraped actress sync never changes weight and gates image replacement',
       () async {
@@ -646,28 +854,31 @@ void main() {
       },
     );
 
-    test('rejects a managed-root prefix collision without deleting the file', () async {
-      final collisionRoot = Directory('${database.imgDir}2');
-      final collisionImage = File(
-        path.join(collisionRoot.path, 'scraped', 'works', 'collision.jpg'),
-      );
-      await collisionImage.parent.create(recursive: true);
-      await collisionImage.writeAsString('outside managed root');
-      final sqlite = await database.database;
-      await sqlite.update(
-        'actresses',
-        {'img_path': collisionImage.path},
-        where: 'id = ?',
-        whereArgs: [actressId],
-      );
+    test(
+      'rejects a managed-root prefix collision without deleting the file',
+      () async {
+        final collisionRoot = Directory('${database.imgDir}2');
+        final collisionImage = File(
+          path.join(collisionRoot.path, 'scraped', 'works', 'collision.jpg'),
+        );
+        await collisionImage.parent.create(recursive: true);
+        await collisionImage.writeAsString('outside managed root');
+        final sqlite = await database.database;
+        await sqlite.update(
+          'actresses',
+          {'img_path': collisionImage.path},
+          where: 'id = ?',
+          whereArgs: [actressId],
+        );
 
-      final report = await database.deleteActressWithReport(actressId);
+        final report = await database.deleteActressWithReport(actressId);
 
-      expect(report.databaseCommitted, isTrue);
-      expect(report.fileCleanup.rejected, contains(collisionImage.path));
-      expect(collisionImage.existsSync(), isTrue);
-      expect(await _pendingPaths(sqlite), isEmpty);
-    });
+        expect(report.databaseCommitted, isTrue);
+        expect(report.fileCleanup.rejected, contains(collisionImage.path));
+        expect(collisionImage.existsSync(), isTrue);
+        expect(await _pendingPaths(sqlite), isEmpty);
+      },
+    );
 
     test('deleting an actress preserves shared work data and images', () async {
       final actressImage = File(

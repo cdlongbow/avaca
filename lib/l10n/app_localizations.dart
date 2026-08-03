@@ -637,6 +637,66 @@ abstract class AppLocalizations {
   /// **'作品'**
   String get works;
 
+  /// No description provided for @aliases.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'別名'**
+  String get aliases;
+
+  /// No description provided for @manageAliases.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'管理別名'**
+  String get manageAliases;
+
+  /// No description provided for @aliasInputHint.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'輸入其他名稱'**
+  String get aliasInputHint;
+
+  /// No description provided for @addAlias.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'新增別名'**
+  String get addAlias;
+
+  /// No description provided for @saveAliases.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'儲存別名'**
+  String get saveAliases;
+
+  /// No description provided for @noAliases.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'尚無別名'**
+  String get noAliases;
+
+  /// No description provided for @deleteWorks.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'刪除作品'**
+  String get deleteWorks;
+
+  /// No description provided for @deleteWorksTitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'刪除選取的作品？'**
+  String get deleteWorksTitle;
+
+  /// No description provided for @deleteWorksWarning.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'選取的作品會從資料庫中全域移除，也會移除其他女優的作品連結。'**
+  String get deleteWorksWarning;
+
+  /// No description provided for @worksDeleted.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'已刪除 {count} 部作品'**
+  String worksDeleted(int count);
+
   /// No description provided for @loadFailedGeneric.
   ///
   /// In zh_TW, this message translates to:

@@ -24,6 +24,15 @@ void main() {
         await database.getActressById(1),
         containsPair('birth_date', null),
       );
+      final aliasTable = await sqlite.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'actress_aliases'",
+      );
+      expect(aliasTable, hasLength(1));
+      await database.replaceActressAliases(
+        actressId: 1,
+        aliases: const ['舊藝名'],
+      );
+      expect(await database.getActressAliases(1), ['舊藝名']);
     });
 
     test('round-trips a nullable ISO birth date through Detail CRUD', () async {

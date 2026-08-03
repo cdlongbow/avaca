@@ -18,13 +18,42 @@ class DetailController extends ChangeNotifier {
   int workCount = 0;
   Map<String, Object?> actressData = _buildFallbackActressData();
   List<String> currentAttrs = [];
+  List<String> actressAliases = const [];
 
   // 初始化頁面資料，並同步目前的分類屬性。
   Future<void> init() async {
     actressData = await _loadActressData();
     currentAttrs = _parseAttrs(actressData['main_type']?.toString() ?? '');
     await refreshWorkCount(notify: false);
+    actressAliases = _parseAliases(actressData['aliases']);
     notifyListeners();
+  }
+
+  List<String> getCurrentAliases() => List.unmodifiable(actressAliases);
+
+  List<String> get aliases => getCurrentAliases();
+
+  List<String> _parseAliases(Object? value) {
+    if (value is! Iterable) {
+      return const [];
+    }
+    return value
+        .map((alias) => alias.toString())
+        .where((alias) => alias.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  Future<bool> saveAliases(Iterable<String> aliases) async {
+    try {
+      await db.replaceActressAliases(actressId: actressId, aliases: aliases);
+      actressAliases = (await db.getActressAliases(
+        actressId,
+      )).toList(growable: false);
+      notifyListeners();
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> refreshWorkCount({bool notify = true}) async {

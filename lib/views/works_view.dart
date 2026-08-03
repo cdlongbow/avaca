@@ -38,6 +38,8 @@ class WorksView extends StatefulWidget {
 class _WorksViewState extends State<WorksView> {
   late final WorksController controller;
   late final Future<void> initFuture;
+  final selectedWorkIds = <int>{};
+  var deletionBusy = false;
 
   @override
   void initState() {
@@ -60,31 +62,148 @@ class _WorksViewState extends State<WorksView> {
     }
   }
 
+  bool get isSelecting => selectedWorkIds.isNotEmpty;
+
+  void _clearSelection() {
+    if (selectedWorkIds.isEmpty || !mounted) {
+      return;
+    }
+    setState(selectedWorkIds.clear);
+  }
+
+  void _handleBack() {
+    if (isSelecting) {
+      _clearSelection();
+      return;
+    }
+    Navigator.of(context).pop();
+  }
+
+  void _toggleSelection(Map<String, Object?> work) {
+    if (deletionBusy) {
+      return;
+    }
+    final workId = work['id'];
+    if (workId is! int) {
+      return;
+    }
+    setState(() {
+      if (!selectedWorkIds.add(workId)) {
+        selectedWorkIds.remove(workId);
+      }
+    });
+  }
+
+  Future<void> _openDeleteConfirmation() async {
+    if (deletionBusy || selectedWorkIds.isEmpty) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        key: const Key('works-delete-confirm'),
+        title: Text(l10n.deleteWorksTitle),
+        content: Text(l10n.deleteWorksWarning),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: FilledButton.styleFrom(
+              foregroundColor: Theme.of(dialogContext).colorScheme.onError,
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+            ),
+            child: Text(l10n.confirmDelete),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      await _deleteSelectedWorks();
+    }
+  }
+
+  Future<void> _deleteSelectedWorks() async {
+    if (deletionBusy || selectedWorkIds.isEmpty) {
+      return;
+    }
+    final requested = selectedWorkIds.toList(growable: false);
+    setState(() => deletionBusy = true);
+    WorkDeletionReport? report;
+    Object? error;
+    try {
+      report = await widget.db.deleteWorksWithReport(requested);
+      if (report.databaseCommitted) {
+        for (final imagePath in report.cacheEvictionPaths) {
+          await FileImage(File(imagePath)).evict();
+        }
+        await controller.reloadWorks();
+      }
+    } catch (caught) {
+      error = caught;
+    }
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      deletionBusy = false;
+      if (report?.databaseCommitted == true) {
+        selectedWorkIds.clear();
+      }
+    });
+    final message = error != null || report?.databaseCommitted != true
+        ? AppLocalizations.of(context).deleteFailed
+        : AppLocalizations.of(context).worksDeleted(report!.deletedWorkRows);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<void>(
       future: initFuture,
       builder: (context, snapshot) {
-        return Scaffold(
-          appBar: AppBar(
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back),
-              tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-            title: Text(_buildTitle(context)),
-            actions: [
-              IconButton(
-                key: const Key('works-scrape-action'),
-                tooltip: AppLocalizations.of(context).scrapeWorks,
-                onPressed: controller.status == WorksLoadStatus.loaded
-                    ? _openScrapeSettings
-                    : null,
-                icon: const Icon(Icons.manage_search),
+        return PopScope(
+          canPop: !isSelecting && !deletionBusy,
+          onPopInvokedWithResult: (didPop, result) {
+            if (!didPop && isSelecting) {
+              _clearSelection();
+            }
+          },
+          child: Scaffold(
+            appBar: AppBar(
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                onPressed: _handleBack,
               ),
-            ],
+              title: Text(_buildTitle(context)),
+              actions: [
+                if (isSelecting)
+                  IconButton(
+                    key: const Key('works-delete-action'),
+                    tooltip: AppLocalizations.of(context).deleteWorks,
+                    onPressed: deletionBusy ? null : _openDeleteConfirmation,
+                    icon: const Icon(Icons.delete_outline),
+                  )
+                else
+                  IconButton(
+                    key: const Key('works-scrape-action'),
+                    tooltip: AppLocalizations.of(context).scrapeWorks,
+                    onPressed: controller.status == WorksLoadStatus.loaded
+                        ? _openScrapeSettings
+                        : null,
+                    icon: const Icon(Icons.manage_search),
+                  ),
+              ],
+            ),
+            body: _buildBody(context),
           ),
-          body: _buildBody(context),
         );
       },
     );
@@ -139,10 +258,23 @@ class _WorksViewState extends State<WorksView> {
           itemCount: controller.works.length,
           itemBuilder: (context, index) {
             final work = controller.works[index];
-            return _WorkCard(
-              key: Key('work-card-${work['id']}'),
-              work: work,
-              onTap: () => _openWorkDetail(work),
+            final workId = work['id'];
+            final selected = workId is int && selectedWorkIds.contains(workId);
+            return KeyedSubtree(
+              key: selected ? Key('work-card-selected-$workId') : null,
+              child: _WorkCard(
+                key: Key('work-card-$workId'),
+                work: work,
+                selected: selected,
+                onTap: () {
+                  if (isSelecting) {
+                    _toggleSelection(work);
+                  } else {
+                    _openWorkDetail(work);
+                  }
+                },
+                onLongPress: () => _toggleSelection(work),
+              ),
             );
           },
         );
@@ -287,6 +419,7 @@ class _WorksViewState extends State<WorksView> {
       return await service.scrape(
         actressId: widget.actressId,
         actressName: controller.actressName,
+        aliases: controller.actressAliases,
         options: options,
         cancellationToken: token,
         onProgress: onProgress,
@@ -318,10 +451,18 @@ class _WorksViewState extends State<WorksView> {
 }
 
 class _WorkCard extends StatelessWidget {
-  const _WorkCard({super.key, required this.work, required this.onTap});
+  const _WorkCard({
+    super.key,
+    required this.work,
+    required this.selected,
+    required this.onTap,
+    required this.onLongPress,
+  });
 
   final Map<String, Object?> work;
+  final bool selected;
   final VoidCallback onTap;
+  final VoidCallback onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -331,50 +472,83 @@ class _WorkCard extends StatelessWidget {
     final imagePath = work['card_image_path']?.toString() ?? '';
     final colorScheme = Theme.of(context).colorScheme;
 
-    return InkWell(
-      borderRadius: BorderRadius.circular(10),
-      onTap: onTap,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: SizedBox.expand(
-                child: _LocalWorkImage(
-                  path: imagePath,
-                  icon: Icons.movie_outlined,
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: onTap,
+          onLongPress: onLongPress,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: SizedBox.expand(
+                    child: _LocalWorkImage(
+                      path: imagePath,
+                      icon: Icons.movie_outlined,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                code,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: colorScheme.primary),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                releaseDate,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (selected)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: colorScheme.primary.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: colorScheme.primary, width: 2),
+                ),
+                child: Align(
+                  alignment: Alignment.topRight,
+                  child: Padding(
+                    padding: const EdgeInsets.all(6),
+                    child: CircleAvatar(
+                      radius: 11,
+                      backgroundColor: colorScheme.primary,
+                      child: Icon(
+                        Icons.check,
+                        size: 15,
+                        color: colorScheme.onPrimary,
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            code,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: colorScheme.primary),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            releaseDate,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
+      ],
     );
   }
 }

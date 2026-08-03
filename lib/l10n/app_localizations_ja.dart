@@ -283,6 +283,38 @@ class AppLocalizationsJa extends AppLocalizations {
   String get works => '作品';
 
   @override
+  String get aliases => '別名';
+
+  @override
+  String get manageAliases => '別名を管理';
+
+  @override
+  String get aliasInputHint => '別名を入力';
+
+  @override
+  String get addAlias => '別名を追加';
+
+  @override
+  String get saveAliases => '別名を保存';
+
+  @override
+  String get noAliases => '別名はありません';
+
+  @override
+  String get deleteWorks => '作品を削除';
+
+  @override
+  String get deleteWorksTitle => '選択した作品を削除しますか？';
+
+  @override
+  String get deleteWorksWarning => '選択した作品を全体から削除し、他の女優からの作品リンクも削除します。';
+
+  @override
+  String worksDeleted(int count) {
+    return '$count 件の作品を削除しました';
+  }
+
+  @override
   String get loadFailedGeneric => '読み込みに失敗しました';
 
   @override
@@ -650,6 +682,38 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
 
   @override
   String get works => '作品';
+
+  @override
+  String get aliases => '別名';
+
+  @override
+  String get manageAliases => '別名を管理';
+
+  @override
+  String get aliasInputHint => '別名を入力';
+
+  @override
+  String get addAlias => '別名を追加';
+
+  @override
+  String get saveAliases => '別名を保存';
+
+  @override
+  String get noAliases => '別名はありません';
+
+  @override
+  String get deleteWorks => '作品を削除';
+
+  @override
+  String get deleteWorksTitle => '選択した作品を削除しますか？';
+
+  @override
+  String get deleteWorksWarning => '選択した作品を全体から削除し、他の女優からの作品リンクも削除します。';
+
+  @override
+  String worksDeleted(int count) {
+    return '$count 件の作品を削除しました';
+  }
 
   @override
   String get loadFailedGeneric => '読み込みに失敗しました';

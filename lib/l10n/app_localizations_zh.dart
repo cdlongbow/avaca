@@ -282,6 +282,38 @@ class AppLocalizationsZh extends AppLocalizations {
   String get works => '作品';
 
   @override
+  String get aliases => '別名';
+
+  @override
+  String get manageAliases => '管理別名';
+
+  @override
+  String get aliasInputHint => '輸入其他名稱';
+
+  @override
+  String get addAlias => '新增別名';
+
+  @override
+  String get saveAliases => '儲存別名';
+
+  @override
+  String get noAliases => '尚無別名';
+
+  @override
+  String get deleteWorks => '刪除作品';
+
+  @override
+  String get deleteWorksTitle => '刪除選取的作品？';
+
+  @override
+  String get deleteWorksWarning => '選取的作品會從資料庫中全域移除，也會移除其他女優的作品連結。';
+
+  @override
+  String worksDeleted(int count) {
+    return '已刪除 $count 部作品';
+  }
+
+  @override
   String get loadFailedGeneric => '載入失敗';
 
   @override
@@ -650,6 +682,38 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get works => '作品';
 
   @override
+  String get aliases => '别名';
+
+  @override
+  String get manageAliases => '管理别名';
+
+  @override
+  String get aliasInputHint => '输入其他名称';
+
+  @override
+  String get addAlias => '新增别名';
+
+  @override
+  String get saveAliases => '保存别名';
+
+  @override
+  String get noAliases => '暂无别名';
+
+  @override
+  String get deleteWorks => '删除作品';
+
+  @override
+  String get deleteWorksTitle => '删除选中的作品？';
+
+  @override
+  String get deleteWorksWarning => '选中的作品会从数据库中全局移除，也会移除其他女优的作品关联。';
+
+  @override
+  String worksDeleted(int count) {
+    return '已删除 $count 部作品';
+  }
+
+  @override
   String get loadFailedGeneric => '加载失败';
 
   @override
@@ -1016,6 +1080,38 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get works => '作品';
+
+  @override
+  String get aliases => '別名';
+
+  @override
+  String get manageAliases => '管理別名';
+
+  @override
+  String get aliasInputHint => '輸入其他名稱';
+
+  @override
+  String get addAlias => '新增別名';
+
+  @override
+  String get saveAliases => '儲存別名';
+
+  @override
+  String get noAliases => '尚無別名';
+
+  @override
+  String get deleteWorks => '刪除作品';
+
+  @override
+  String get deleteWorksTitle => '刪除選取的作品？';
+
+  @override
+  String get deleteWorksWarning => '選取的作品會從資料庫中全域移除，也會移除其他女優的作品連結。';
+
+  @override
+  String worksDeleted(int count) {
+    return '已刪除 $count 部作品';
+  }
 
   @override
   String get loadFailedGeneric => '載入失敗';

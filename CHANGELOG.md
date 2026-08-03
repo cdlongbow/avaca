@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.0 - 2026-08-03
+
+- Added actress alias management with multiple aliases per actress and
+  case-insensitive alias normalization.
+- Scraping now checks the canonical actress name and every saved alias,
+  retries shared sources after transient failures, and deduplicates works by
+  source and normalized work code.
+- Added long-press multi-selection on the Works page and global work deletion
+  with transactional actress-link removal and managed-image cleanup that
+  preserves shared files.
+
 ## 0.6.10 - 2026-08-03
 
 - Added JavBus scraping for actress profiles and works, including localized

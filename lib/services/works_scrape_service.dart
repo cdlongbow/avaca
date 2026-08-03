@@ -149,6 +149,7 @@ class WorksScrapeService {
   Future<WorksScrapeResult> scrape({
     required int actressId,
     required String actressName,
+    List<String> aliases = const [],
     required WorkScrapeOptions options,
     WorksScrapeCancellationToken? cancellationToken,
     void Function(WorksScrapeProgress progress)? onProgress,
@@ -158,54 +159,72 @@ class WorksScrapeService {
       throw const WorksScrapeException('Actress name is empty.');
     }
 
-    final searchResults = await client.searchActresses(name);
-    if (cancellationToken?.isCancelled ?? false) {
-      return const WorksScrapeResult(
-        saved: 0,
-        excluded: 0,
-        failed: 0,
-        cancelled: true,
-      );
-    }
-    if (searchResults.isEmpty) {
-      throw WorksScrapeException('Actress was not found: $name');
-    }
-    final exactMatches = searchResults
-        .where((result) => result.name.trim() == name)
-        .toList(growable: false);
-    if (exactMatches.isEmpty) {
-      throw WorksScrapeException('Exact actress was not found: $name');
+    final queries = <String>[name];
+    final queryKeys = <String>{name.toLowerCase()};
+    for (final alias in aliases) {
+      final normalizedAlias = alias.trim();
+      final key = normalizedAlias.toLowerCase();
+      if (normalizedAlias.isEmpty || key == name.toLowerCase()) {
+        continue;
+      }
+      if (queryKeys.add(key)) {
+        queries.add(normalizedAlias);
+      }
     }
     final matchesByUri = <String, JavBusActressSearchResult>{};
-    for (final match in exactMatches) {
-      matchesByUri.putIfAbsent(match.uri.toString(), () => match);
-    }
-    final actressPages = <JavBusActressPage>[];
+    final actressPagesByUri = <String, JavBusActressPage>{};
+    final completedUris = <String>{};
     final summariesByCode = <String, JavBusWorkSummary>{};
     Object? lastSourceError;
-    for (final actress in matchesByUri.values) {
+    var successfulWorkSources = 0;
+    for (final query in queries) {
       if (cancellationToken?.isCancelled ?? false) {
         break;
       }
+      List<JavBusActressSearchResult> searchResults;
       try {
-        final page = await client.fetchActressPage(actress.uri);
-        final sourceWorks = await client.fetchAllActressWorks(
-          actress.uri,
-          firstPage: page,
-          isCancelled: () => cancellationToken?.isCancelled ?? false,
-        );
-        actressPages.add(page);
-        for (final work in sourceWorks) {
-          final code = work.code.trim().toUpperCase();
-          if (code.isNotEmpty) {
-            summariesByCode.putIfAbsent(code, () => work);
-          }
-        }
+        searchResults = await client.searchActresses(query);
       } catch (error) {
         lastSourceError = error;
+        continue;
+      }
+      final queryKey = query.toLowerCase();
+      final exactMatches = searchResults
+          .where((result) => result.name.trim().toLowerCase() == queryKey)
+          .toList(growable: false);
+      for (final actress in exactMatches) {
+        final uriKey = actress.uri.toString();
+        if (completedUris.contains(uriKey)) {
+          continue;
+        }
+        matchesByUri.putIfAbsent(uriKey, () => actress);
+        try {
+          final page = await client.fetchActressPage(actress.uri);
+          actressPagesByUri[uriKey] = page;
+          try {
+            final sourceWorks = await client.fetchAllActressWorks(
+              actress.uri,
+              firstPage: page,
+              isCancelled: () => cancellationToken?.isCancelled ?? false,
+            );
+            successfulWorkSources++;
+            completedUris.add(uriKey);
+            for (final work in sourceWorks) {
+              final code = work.code.trim().toUpperCase();
+              if (code.isNotEmpty) {
+                summariesByCode.putIfAbsent(code, () => work);
+              }
+            }
+          } catch (error) {
+            // One source's work traversal must not discard another source.
+            lastSourceError = error;
+          }
+        } catch (error) {
+          lastSourceError = error;
+        }
       }
     }
-    if (actressPages.isEmpty) {
+    if (actressPagesByUri.isEmpty) {
       if (cancellationToken?.isCancelled ?? false) {
         return const WorksScrapeResult(
           saved: 0,
@@ -215,13 +234,22 @@ class WorksScrapeService {
         );
       }
       throw WorksScrapeException(
-        'Actress pages could not be fetched: $name'
-        '${lastSourceError == null ? '' : ' ($lastSourceError)'}',
+        matchesByUri.isEmpty
+            ? 'Exact actress was not found: $name'
+            : 'Actress pages could not be fetched: $name'
+                  '${lastSourceError == null ? '' : ' ($lastSourceError)'}',
+      );
+    }
+    if (successfulWorkSources == 0 && lastSourceError != null) {
+      throw WorksScrapeException(
+        'Actress works could not be fetched: $name ($lastSourceError)',
       );
     }
     final actressImageStatus = await _syncActress(
       actressId: actressId,
-      page: _mergeActressPages(actressPages),
+      page: _mergeActressPages(
+        actressPagesByUri.values.toList(growable: false),
+      ),
       options: options,
     );
     final exclusions = PrefixExclusion(options.excludedPrefixes);
@@ -396,7 +424,9 @@ class WorksScrapeService {
 
     final source = page.details;
     final details = ScrapedActressDetails(
-      name: options.syncDetails ? source.name : null,
+      // The local canonical name is authoritative; scraped alias pages must
+      // never rename the actress record.
+      name: null,
       imagePath: imagePath,
       birthDate: options.syncDetails ? source.birthDate : null,
       height: options.syncDetails ? source.height : null,
