@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   const expectedFontFamily = 'NotoSansCjkTcVariable';
-  const minimumFontWeight = FontWeight.w300;
+  const minimumFontWeight = FontWeight.w400;
 
   test('custom palette ignores OLED and keeps every custom color exact', () {
     const customPalette = AppPalette(

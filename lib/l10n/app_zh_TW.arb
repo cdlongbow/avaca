@@ -20,6 +20,8 @@
   "deleteWarningWithPhoto": "刪除後將無法復原，連同照片檔案也會被清除。",
   "cancel": "取消",
   "confirmDelete": "確定刪除",
+  "edit": "編輯",
+  "delete": "刪除",
   "appTitle": "AVACA",
   "search": "搜尋",
   "filterAndSort": "篩選與排序",
@@ -75,6 +77,7 @@
   "colorPrimary": "互動主色",
   "colorOnPrimary": "主色文字",
   "colorOutline": "邊框 / 分隔線",
+  "colorSnackbarBackground": "提示訊息背景",
   "adjustColorTitle": "調整 {colorLabel}",
   "@adjustColorTitle": {
     "placeholders": {

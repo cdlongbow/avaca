@@ -69,6 +69,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get confirmDelete => '削除';
 
   @override
+  String get edit => '編集';
+
+  @override
+  String get delete => '削除';
+
+  @override
   String get appTitle => 'AVACA コレクションライブラリ';
 
   @override
@@ -185,6 +191,9 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get colorOutline => '境界線 / 区切り線';
+
+  @override
+  String get colorSnackbarBackground => 'スナックバーの背景';
 
   @override
   String adjustColorTitle(String colorLabel) {
@@ -470,6 +479,12 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
   String get confirmDelete => '削除';
 
   @override
+  String get edit => '編集';
+
+  @override
+  String get delete => '削除';
+
+  @override
   String get appTitle => 'AVACA';
 
   @override
@@ -586,6 +601,9 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
 
   @override
   String get colorOutline => '境界線 / 区切り線';
+
+  @override
+  String get colorSnackbarBackground => 'スナックバーの背景';
 
   @override
   String adjustColorTitle(String colorLabel) {

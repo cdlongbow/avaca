@@ -74,8 +74,7 @@ void main() {
   ) async {
     await tester.pumpWidget(_detailApp(_BirthdayDatabase()));
     await tester.pumpAndSettle();
-    await tester.tap(find.byIcon(Icons.edit));
-    await tester.pumpAndSettle();
+    await _enterDetailEditMode(tester);
 
     final birthDateButton = find.byKey(const Key('detail-birth-date-button'));
     expect(birthDateButton, findsOneWidget);
@@ -119,8 +118,7 @@ void main() {
       _detailApp(_BirthdayDatabase(birthDate: '2024-01-31')),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byIcon(Icons.edit));
-    await tester.pumpAndSettle();
+    await _enterDetailEditMode(tester);
     await tester.tap(find.byKey(const Key('detail-birth-date-button')));
     await tester.pumpAndSettle();
 
@@ -225,9 +223,15 @@ void main() {
 }
 
 Future<void> _openBirthdayEditor(WidgetTester tester) async {
-  await tester.tap(find.byIcon(Icons.edit));
-  await tester.pumpAndSettle();
+  await _enterDetailEditMode(tester);
   await tester.tap(find.byKey(const Key('detail-birth-date-button')));
+  await tester.pumpAndSettle();
+}
+
+Future<void> _enterDetailEditMode(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('detail-overflow-menu')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const Key('detail-edit-menu-item')));
   await tester.pumpAndSettle();
 }
 

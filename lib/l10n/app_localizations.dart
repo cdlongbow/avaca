@@ -223,6 +223,18 @@ abstract class AppLocalizations {
   /// **'確定刪除'**
   String get confirmDelete;
 
+  /// No description provided for @edit.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'編輯'**
+  String get edit;
+
+  /// No description provided for @delete.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'刪除'**
+  String get delete;
+
   /// No description provided for @appTitle.
   ///
   /// In zh_TW, this message translates to:
@@ -450,6 +462,12 @@ abstract class AppLocalizations {
   /// In zh_TW, this message translates to:
   /// **'邊框 / 分隔線'**
   String get colorOutline;
+
+  /// No description provided for @colorSnackbarBackground.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'提示訊息背景'**
+  String get colorSnackbarBackground;
 
   /// No description provided for @adjustColorTitle.
   ///

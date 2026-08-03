@@ -19,6 +19,7 @@ class AppPalette {
     required this.primary,
     required this.onPrimary,
     required this.outline,
+    this.snackbarBackground = Colors.black,
   });
 
   /// 色票偏向淺色或深色。
@@ -45,6 +46,12 @@ class AppPalette {
   /// 邊框與分隔線顏色。
   final Color outline;
 
+  /// 暫時性通知（SnackBar）的背景色。
+  ///
+  /// 預設值保留給舊版自訂色票資料；內建淺色與深色色票會明確設定為
+  /// 白色與黑色。
+  final Color snackbarBackground;
+
   AppPalette copyWith({
     Brightness? brightness,
     Color? surface,
@@ -54,6 +61,7 @@ class AppPalette {
     Color? primary,
     Color? onPrimary,
     Color? outline,
+    Color? snackbarBackground,
   }) {
     return AppPalette(
       brightness: brightness ?? this.brightness,
@@ -64,6 +72,7 @@ class AppPalette {
       primary: primary ?? this.primary,
       onPrimary: onPrimary ?? this.onPrimary,
       outline: outline ?? this.outline,
+      snackbarBackground: snackbarBackground ?? this.snackbarBackground,
     );
   }
 }
@@ -83,6 +92,7 @@ class AppPalettes {
     primary: Color(0xFF4A4A4A),
     onPrimary: Color(0xFFFFFFFF),
     outline: Color(0xFFBDBDBD),
+    snackbarBackground: Color(0xFFFFFFFF),
   );
 
   static const AppPalette dark = AppPalette(
@@ -94,6 +104,7 @@ class AppPalettes {
     primary: Color(0xFFB0B0B0),
     onPrimary: Color(0xFF121212),
     outline: Color(0xFF4A4A4A),
+    snackbarBackground: Color(0xFF000000),
   );
 }
 
@@ -221,6 +232,17 @@ class AppTheme {
       dialogTheme: _dialogTheme(palette),
       bottomSheetTheme: _bottomSheetTheme(palette),
       navigationBarTheme: _navigationBarTheme(palette),
+      snackBarTheme: _snackBarTheme(palette),
+    );
+  }
+
+  static SnackBarThemeData _snackBarTheme(AppPalette palette) {
+    return SnackBarThemeData(
+      backgroundColor: palette.snackbarBackground,
+      contentTextStyle: _appTextStyle(color: palette.onSurface),
+      behavior: SnackBarBehavior.floating,
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
     );
   }
 

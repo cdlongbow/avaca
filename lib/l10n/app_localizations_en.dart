@@ -70,6 +70,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get confirmDelete => 'Delete';
 
   @override
+  String get edit => 'Edit';
+
+  @override
+  String get delete => 'Delete';
+
+  @override
   String get appTitle => 'AVACA';
 
   @override
@@ -186,6 +192,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get colorOutline => 'Border / Divider';
+
+  @override
+  String get colorSnackbarBackground => 'Snackbar Background';
 
   @override
   String adjustColorTitle(String colorLabel) {

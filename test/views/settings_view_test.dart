@@ -368,6 +368,7 @@ void main() {
     expect(find.text('Primary Accent'), findsOneWidget);
     expect(find.text('Text on Primary'), findsOneWidget);
     expect(find.text('Border / Divider'), findsOneWidget);
+    expect(find.text('Snackbar Background'), findsOneWidget);
     expect(find.byType(Divider), findsNothing);
   });
 

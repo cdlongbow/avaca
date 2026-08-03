@@ -57,11 +57,19 @@ class _AvacaAppState extends State<AvacaApp> {
     Map<String, Color>? customColors;
 
     if (rawCustom != null) {
-      final decoded = jsonDecode(rawCustom) as Map<String, dynamic>;
-
-      customColors = decoded.map(
-        (key, value) => MapEntry(key, Color(value as int)),
-      );
+      try {
+        final decoded = jsonDecode(rawCustom);
+        if (decoded is Map) {
+          customColors = <String, Color>{};
+          for (final entry in decoded.entries) {
+            if (entry.key is String && entry.value is int) {
+              customColors[entry.key as String] = Color(entry.value as int);
+            }
+          }
+        }
+      } on FormatException {
+        customColors = null;
+      }
     }
 
     setState(() {
@@ -171,6 +179,8 @@ class _AvacaAppState extends State<AvacaApp> {
       primary: customColors['primary'] ?? fallback.primary,
       onPrimary: customColors['onPrimary'] ?? fallback.onPrimary,
       outline: customColors['outline'] ?? fallback.outline,
+      snackbarBackground:
+          customColors['snackbarBackground'] ?? fallback.snackbarBackground,
     );
   }
 

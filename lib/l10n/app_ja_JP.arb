@@ -20,6 +20,8 @@
   "deleteWarningWithPhoto": "この操作は元に戻せません。写真ファイルも削除されます。",
   "cancel": "キャンセル",
   "confirmDelete": "削除",
+  "edit": "編集",
+  "delete": "削除",
   "appTitle": "AVACA",
   "search": "検索",
   "filterAndSort": "絞り込み・並べ替え",
@@ -75,6 +77,7 @@
   "colorPrimary": "メインアクセント",
   "colorOnPrimary": "アクセント上のテキスト",
   "colorOutline": "境界線 / 区切り線",
+  "colorSnackbarBackground": "スナックバーの背景",
   "adjustColorTitle": "{colorLabel}を調整",
   "@adjustColorTitle": {
     "placeholders": {

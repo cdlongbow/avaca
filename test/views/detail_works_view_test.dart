@@ -107,12 +107,72 @@ void main() {
     });
 
     testWidgets(
+      'shows localized edit and destructive delete actions in overflow',
+      (tester) async {
+        await _pumpDetail(tester, size: const Size(390, 844));
+
+        expect(find.byKey(const Key('detail-overflow-menu')), findsOneWidget);
+        expect(find.byIcon(Icons.edit), findsNothing);
+        expect(find.byIcon(Icons.delete_forever), findsNothing);
+
+        await tester.tap(find.byKey(const Key('detail-overflow-menu')));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('detail-edit-menu-item')), findsOneWidget);
+        expect(
+          find.byKey(const Key('detail-delete-menu-item')),
+          findsOneWidget,
+        );
+        expect(find.text('編輯'), findsOneWidget);
+        expect(find.text('刪除'), findsOneWidget);
+
+        final deleteLabel = tester.widget<Text>(
+          find.byKey(const Key('detail-delete-menu-label')),
+        );
+        expect(
+          deleteLabel.style?.color,
+          Theme.of(
+            tester.element(find.byKey(const Key('detail-delete-menu-label'))),
+          ).colorScheme.error,
+        );
+      },
+    );
+
+    testWidgets(
+      'selecting overflow delete opens the existing confirmation dialog',
+      (tester) async {
+        await _pumpDetail(tester, size: const Size(390, 844));
+
+        await tester.tap(find.byKey(const Key('detail-overflow-menu')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('detail-delete-menu-item')));
+        await tester.pumpAndSettle();
+
+        expect(find.text('確認刪除？'), findsOneWidget);
+        expect(find.text('刪除後將無法復原，連同照片檔案也會被清除。'), findsOneWidget);
+        await tester.tap(find.text('取消'));
+        await tester.pumpAndSettle();
+      },
+    );
+
+    testWidgets('edit mode app bar exposes save without overflow or delete', (
+      tester,
+    ) async {
+      await _pumpDetail(tester, size: const Size(390, 844));
+
+      await _enterDetailEditMode(tester);
+
+      expect(find.byKey(const Key('detail-save-button')), findsOneWidget);
+      expect(find.byKey(const Key('detail-overflow-menu')), findsNothing);
+      expect(find.byIcon(Icons.delete_forever), findsNothing);
+    });
+
+    testWidgets(
       'mirrors the profile layout in edit mode with compact title and chips',
       (tester) async {
         await _pumpDetail(tester, size: const Size(390, 844));
 
-        await tester.tap(find.byIcon(Icons.edit));
-        await tester.pumpAndSettle();
+        await _enterDetailEditMode(tester);
 
         final imageRect = tester.getRect(
           find.byKey(const Key('detail-profile-image')),
@@ -163,8 +223,7 @@ void main() {
       tester,
     ) async {
       await _pumpDetail(tester, size: const Size(390, 844));
-      await tester.tap(find.byIcon(Icons.edit));
-      await tester.pumpAndSettle();
+      await _enterDetailEditMode(tester);
 
       final worksButton = find.byKey(const Key('detail-works-button'));
       final birthDateButton = find.byKey(const Key('detail-birth-date-button'));
@@ -192,8 +251,7 @@ void main() {
       'edit profile uses symmetric inset and compact right-column photo actions',
       (tester) async {
         await _pumpDetail(tester, size: const Size(390, 844));
-        await tester.tap(find.byIcon(Icons.edit));
-        await tester.pumpAndSettle();
+        await _enterDetailEditMode(tester);
 
         final panel = find.byKey(const Key('detail-profile-panel'));
         final image = find.byKey(const Key('detail-profile-image'));
@@ -269,8 +327,7 @@ void main() {
         expect(find.text('作品'), findsOneWidget);
         expect(tester.takeException(), isNull);
 
-        await tester.tap(find.byIcon(Icons.edit));
-        await tester.pumpAndSettle();
+        await _enterDetailEditMode(tester);
         expect(find.text('作品'), findsOneWidget);
         expect(tester.takeException(), isNull);
       }
@@ -310,8 +367,7 @@ void main() {
         expect(find.byKey(const Key('detail-works-button')), findsOneWidget);
         expect(tester.takeException(), isNull);
 
-        await tester.tap(find.byIcon(Icons.edit));
-        await tester.pumpAndSettle();
+        await _enterDetailEditMode(tester);
 
         expect(find.byKey(const Key('detail-name-field')), findsOneWidget);
         expect(find.byType(FilterChip), findsWidgets);
@@ -336,6 +392,55 @@ void main() {
         expect(tester.takeException(), isNull);
       },
     );
+  });
+
+  testWidgets(
+    'app-bar back cancels unsaved detail edits and retains the route',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({'app_locale': 'zh_TW'});
+      final db = _FakeAppDatabase();
+
+      await tester.pumpWidget(AvacaApp(db: db));
+      await tester.pumpAndSettle();
+
+      final context = tester.element(find.byType(Navigator));
+      Navigator.of(context).pushNamed('/detail/7');
+      await tester.pumpAndSettle();
+
+      await _enterDetailEditMode(tester);
+      await tester.enterText(
+        find.byKey(const Key('detail-name-field')),
+        '尚未儲存名稱',
+      );
+
+      await tester.tap(find.byTooltip('返回'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(DetailView), findsOneWidget);
+      expect(find.byKey(const Key('detail-name-field')), findsNothing);
+      expect(find.text('已儲存名稱'), findsOneWidget);
+      expect(find.byKey(const Key('detail-overflow-menu')), findsOneWidget);
+    },
+  );
+
+  testWidgets('app-bar back leaves detail normally outside edit mode', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({'app_locale': 'zh_TW'});
+    final db = _FakeAppDatabase();
+
+    await tester.pumpWidget(AvacaApp(db: db));
+    await tester.pumpAndSettle();
+
+    final context = tester.element(find.byType(Navigator));
+    Navigator.of(context).pushNamed('/detail/7');
+    await tester.pumpAndSettle();
+
+    expect(find.byType(DetailView), findsOneWidget);
+    await tester.tap(find.byTooltip('返回'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(DetailView), findsNothing);
   });
 
   group('Works page navigation', () {
@@ -413,8 +518,7 @@ void main() {
         Navigator.of(context).pushNamed('/detail/7');
         await tester.pumpAndSettle();
 
-        await tester.tap(find.byIcon(Icons.edit));
-        await tester.pumpAndSettle();
+        await _enterDetailEditMode(tester);
         await tester.enterText(
           find.byKey(const Key('detail-name-field')),
           '尚未儲存名稱',
@@ -452,6 +556,13 @@ Future<void> _pumpWorks(WidgetTester tester, {required AppDatabase db}) async {
     ),
   );
   await tester.pump();
+}
+
+Future<void> _enterDetailEditMode(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('detail-overflow-menu')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const Key('detail-edit-menu-item')));
+  await tester.pumpAndSettle();
 }
 
 BorderRadiusGeometry _outlinedButtonRadius(WidgetTester tester, Finder finder) {

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.7.2 - 2026-08-03
+
+- Unified detail-page Edit and Delete actions under a localized overflow menu;
+  edit mode now keeps only Save in the app bar, and Back cancels unsaved edits
+  while restoring the persisted detail and photo state.
+- Added theme-aware, content-sized Snackbar styling with configurable light,
+  dark, and custom-palette backgrounds, and applied the shared presentation to
+  detail and Works feedback.
+- Hardened custom-theme preference loading against malformed JSON, unknown
+  keys, and invalid color values.
+- Aligned bundled-font tests with the current `w400` minimum application font
+  weight.
+
 ## 0.7.0 - 2026-08-03
 
 - Added actress alias management with multiple aliases per actress and

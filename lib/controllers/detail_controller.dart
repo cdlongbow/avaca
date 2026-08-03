@@ -19,6 +19,8 @@ class DetailController extends ChangeNotifier {
   Map<String, Object?> actressData = _buildFallbackActressData();
   List<String> currentAttrs = [];
   List<String> actressAliases = const [];
+  Map<String, Object?>? _editActressSnapshot;
+  List<String>? _editAttrsSnapshot;
 
   // 初始化頁面資料，並同步目前的分類屬性。
   Future<void> init() async {
@@ -233,6 +235,11 @@ class DetailController extends ChangeNotifier {
     BuildContext context,
     Map<String, Object?> formData,
   ) async {
+    if (!isEditing) {
+      _editActressSnapshot = Map<String, Object?>.from(actressData);
+      _editAttrsSnapshot = List<String>.from(currentAttrs);
+    }
+
     isEditing = !isEditing;
 
     if (!isEditing) {
@@ -246,6 +253,7 @@ class DetailController extends ChangeNotifier {
 
       _syncActressData(formData);
       await saveToDb(context, formData);
+      _clearEditSnapshot();
     }
 
     notifyListeners();
@@ -255,6 +263,28 @@ class DetailController extends ChangeNotifier {
       'name': formData['name']?.toString() ?? '',
       'current_attrs': currentAttrs,
     };
+  }
+
+  // 放棄尚未儲存的編輯，只恢復檢視狀態。
+  void cancelEditMode() {
+    if (!isEditing) return;
+
+    final actressSnapshot = _editActressSnapshot;
+    final attrsSnapshot = _editAttrsSnapshot;
+    if (actressSnapshot != null) {
+      actressData = Map<String, Object?>.from(actressSnapshot);
+    }
+    if (attrsSnapshot != null) {
+      currentAttrs = List<String>.from(attrsSnapshot);
+    }
+    isEditing = false;
+    _clearEditSnapshot();
+    notifyListeners();
+  }
+
+  void _clearEditSnapshot() {
+    _editActressSnapshot = null;
+    _editAttrsSnapshot = null;
   }
 
   // 將表單資料寫入資料庫，並依結果顯示提示訊息。

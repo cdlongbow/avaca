@@ -69,6 +69,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get confirmDelete => '確定刪除';
 
   @override
+  String get edit => '編輯';
+
+  @override
+  String get delete => '刪除';
+
+  @override
   String get appTitle => 'AVACA 收藏庫';
 
   @override
@@ -185,6 +191,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get colorOutline => '邊框 / 分隔線';
+
+  @override
+  String get colorSnackbarBackground => '提示訊息背景';
 
   @override
   String adjustColorTitle(String colorLabel) {
@@ -469,6 +478,12 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get confirmDelete => '确定删除';
 
   @override
+  String get edit => '编辑';
+
+  @override
+  String get delete => '删除';
+
+  @override
   String get appTitle => 'AVACA';
 
   @override
@@ -585,6 +600,9 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get colorOutline => '边框 / 分隔线';
+
+  @override
+  String get colorSnackbarBackground => '提示条背景';
 
   @override
   String adjustColorTitle(String colorLabel) {
@@ -869,6 +887,12 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get confirmDelete => '確定刪除';
 
   @override
+  String get edit => '編輯';
+
+  @override
+  String get delete => '刪除';
+
+  @override
   String get appTitle => 'AVACA';
 
   @override
@@ -985,6 +1009,9 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get colorOutline => '邊框 / 分隔線';
+
+  @override
+  String get colorSnackbarBackground => '提示訊息背景';
 
   @override
   String adjustColorTitle(String colorLabel) {

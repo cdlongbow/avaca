@@ -20,6 +20,8 @@
   "deleteWarningWithPhoto": "This cannot be undone. The photo file will also be deleted.",
   "cancel": "Cancel",
   "confirmDelete": "Delete",
+  "edit": "Edit",
+  "delete": "Delete",
   "appTitle": "AVACA",
   "search": "Search",
   "filterAndSort": "Filter & Sort",
@@ -75,6 +77,7 @@
   "colorPrimary": "Primary Accent",
   "colorOnPrimary": "Text on Primary",
   "colorOutline": "Border / Divider",
+  "colorSnackbarBackground": "Snackbar Background",
   "adjustColorTitle": "Adjust {colorLabel}",
   "@adjustColorTitle": {
     "placeholders": {

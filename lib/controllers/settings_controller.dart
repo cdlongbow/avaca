@@ -44,6 +44,7 @@ class SettingsController extends ChangeNotifier {
     'primary': Colors.blueGrey,
     'onPrimary': Colors.black,
     'outline': Colors.grey,
+    'snackbarBackground': Colors.black,
   };
 
   // 讀取儲存在裝置中的外觀設定，並同步到目前狀態。
@@ -111,11 +112,26 @@ class SettingsController extends ChangeNotifier {
 
     if (raw == null) return;
 
-    final decoded = jsonDecode(raw) as Map<String, dynamic>;
+    Map<String, dynamic> decoded;
+    try {
+      final value = jsonDecode(raw);
+      if (value is! Map) return;
+      decoded = <String, dynamic>{};
+      for (final entry in value.entries) {
+        if (entry.key is String) {
+          decoded[entry.key as String] = entry.value;
+        }
+      }
+    } on FormatException {
+      return;
+    }
     final merged = Map<String, Color>.from(customColors);
 
     for (final entry in decoded.entries) {
-      merged[entry.key] = Color(entry.value as int);
+      final value = entry.value;
+      if (value is int && merged.containsKey(entry.key)) {
+        merged[entry.key] = Color(value);
+      }
     }
 
     customColors = merged;

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../components/app_snackbar.dart';
 import '../controllers/works_controller.dart';
 import '../core/database.dart';
 import '../l10n/app_localizations.dart';
@@ -155,12 +156,15 @@ class _WorksViewState extends State<WorksView> {
         selectedWorkIds.clear();
       }
     });
-    final message = error != null || report?.databaseCommitted != true
+    final failed = error != null || report?.databaseCommitted != true;
+    final message = failed
         ? AppLocalizations.of(context).deleteFailed
         : AppLocalizations.of(context).worksDeleted(report!.deletedWorkRows);
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    if (failed) {
+      AppSnackBar.showError(context, message);
+    } else {
+      AppSnackBar.showSuccess(context, message);
+    }
   }
 
   @override
@@ -372,13 +376,26 @@ class _WorksViewState extends State<WorksView> {
       return;
     }
     final l10n = AppLocalizations.of(context);
-    var message = scrapeError != null
-        ? l10n.scrapeFailed
-        : result!.cancelled
-        ? l10n.scrapeCancelled(result.saved, result.excluded, result.failed)
-        : l10n.scrapeComplete(result.saved, result.excluded, result.failed);
-    if (scrapeError == null && !result!.cancelled) {
-      message = switch (result.actressImageStatus) {
+    final completedResult = result;
+    if (scrapeError != null || completedResult == null) {
+      AppSnackBar.showError(context, l10n.scrapeFailed);
+      return;
+    }
+
+    final cancelled = completedResult.cancelled;
+    var message = cancelled
+        ? l10n.scrapeCancelled(
+            completedResult.saved,
+            completedResult.excluded,
+            completedResult.failed,
+          )
+        : l10n.scrapeComplete(
+            completedResult.saved,
+            completedResult.excluded,
+            completedResult.failed,
+          );
+    if (!cancelled) {
+      message = switch (completedResult.actressImageStatus) {
         ActressImageSyncStatus.unavailable =>
           '$message ${l10n.scrapeAvatarUnavailable}',
         ActressImageSyncStatus.downloadFailed ||
@@ -388,9 +405,11 @@ class _WorksViewState extends State<WorksView> {
         ActressImageSyncStatus.replaced => message,
       };
     }
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    if (cancelled) {
+      AppSnackBar.showInfo(context, message);
+    } else {
+      AppSnackBar.showSuccess(context, message);
+    }
   }
 
   Future<WorksScrapeResult> _defaultScrapeExecutor(

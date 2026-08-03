@@ -2,10 +2,13 @@ import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:avaca/l10n/app_localizations.dart';
+import '../components/app_snackbar.dart';
 import '../controllers/detail_controller.dart';
 import '../core/database.dart';
 
 const double _detailControlRadius = 6.0;
+
+enum _DetailMenuAction { edit, delete }
 
 ButtonStyle _detailOutlinedButtonStyle() {
   return OutlinedButton.styleFrom(
@@ -327,6 +330,12 @@ class _DetailViewState extends State<DetailView> {
     }
   }
 
+  void _cancelEditMode() {
+    _dismissKeyboard();
+    controller.cancelEditMode();
+    _syncFieldsFromController();
+  }
+
   Map<String, Object?> _getFormData() {
     return {
       'name': nameController.text,
@@ -355,39 +364,99 @@ class _DetailViewState extends State<DetailView> {
           );
         }
 
-        return Scaffold(
-          backgroundColor: colorScheme.surface,
-          appBar: AppBar(
-            centerTitle: true,
-            backgroundColor: colorScheme.surfaceContainerHighest,
-            title: _buildAppBarTitle(),
-            actions: [
-              IconButton(
-                icon: Icon(controller.isEditing ? Icons.save : Icons.edit),
-                onPressed: _toggleEditMode,
-              ),
-              if (!controller.isEditing)
-                IconButton(
-                  icon: const Icon(Icons.delete_forever),
-                  color: colorScheme.error,
-                  onPressed: _openDeleteDialog,
+        return PopScope<void>(
+          canPop: !controller.isEditing,
+          onPopInvokedWithResult: (didPop, result) {
+            if (!didPop && controller.isEditing) {
+              _cancelEditMode();
+            }
+          },
+          child: Scaffold(
+            backgroundColor: colorScheme.surface,
+            appBar: AppBar(
+              centerTitle: true,
+              backgroundColor: colorScheme.surfaceContainerHighest,
+              leading: controller.isEditing
+                  ? IconButton(
+                      tooltip: MaterialLocalizations.of(
+                        context,
+                      ).backButtonTooltip,
+                      icon: const Icon(Icons.arrow_back),
+                      onPressed: _cancelEditMode,
+                    )
+                  : null,
+              title: _buildAppBarTitle(),
+              actions: controller.isEditing
+                  ? [
+                      IconButton(
+                        key: const Key('detail-save-button'),
+                        icon: const Icon(Icons.save),
+                        onPressed: _toggleEditMode,
+                      ),
+                    ]
+                  : [_buildOverflowMenu()],
+            ),
+            body: SafeArea(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    _buildProfilePanel(),
+                    const SizedBox(height: 16),
+                    _buildInfoPanel(),
+                  ],
                 ),
-            ],
-          ),
-          body: SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  _buildProfilePanel(),
-                  const SizedBox(height: 16),
-                  _buildInfoPanel(),
-                ],
               ),
             ),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildOverflowMenu() {
+    final l10n = AppLocalizations.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return PopupMenuButton<_DetailMenuAction>(
+      key: const Key('detail-overflow-menu'),
+      icon: const Icon(Icons.more_vert),
+      onSelected: (action) {
+        switch (action) {
+          case _DetailMenuAction.edit:
+            _toggleEditMode();
+          case _DetailMenuAction.delete:
+            _openDeleteDialog();
+        }
+      },
+      itemBuilder: (context) => [
+        PopupMenuItem<_DetailMenuAction>(
+          key: const Key('detail-edit-menu-item'),
+          value: _DetailMenuAction.edit,
+          child: Row(
+            children: [
+              const Icon(Icons.edit),
+              const SizedBox(width: 12),
+              Text(l10n.edit),
+            ],
+          ),
+        ),
+        PopupMenuItem<_DetailMenuAction>(
+          key: const Key('detail-delete-menu-item'),
+          value: _DetailMenuAction.delete,
+          child: Row(
+            children: [
+              Icon(Icons.delete_forever, color: colorScheme.error),
+              const SizedBox(width: 12),
+              Text(
+                l10n.delete,
+                key: const Key('detail-delete-menu-label'),
+                style: TextStyle(color: colorScheme.error),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -1000,10 +1069,9 @@ class _AliasesDialogState extends State<_AliasesDialog> {
       return;
     }
     setState(() => saving = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(AppLocalizations.of(context).saveFailedDuplicateName),
-      ),
+    AppSnackBar.showError(
+      context,
+      AppLocalizations.of(context).saveFailedDuplicateName,
     );
   }
 

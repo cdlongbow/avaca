@@ -100,8 +100,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.edit));
-    await tester.pumpAndSettle();
+    await _enterDetailEditMode(tester);
     await tester.tap(find.byKey(const Key('detail-name-field')));
     await tester.pump();
     expect(tester.testTextInput.isVisible, isTrue);
@@ -114,6 +113,31 @@ void main() {
     expect(find.byType(DetailView), findsOneWidget);
     expect(tester.testTextInput.isVisible, isFalse);
   });
+
+  testWidgets(
+    'physical back cancels unsaved detail edits and retains the route',
+    (tester) async {
+      final database = _FocusDatabase();
+      await tester.pumpWidget(
+        _app(home: DetailView(db: database, actressId: 1)),
+      );
+      await tester.pumpAndSettle();
+
+      await _enterDetailEditMode(tester);
+      await tester.enterText(
+        find.byKey(const Key('detail-name-field')),
+        '未儲存焦點測試',
+      );
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      expect(find.byType(DetailView), findsOneWidget);
+      expect(find.byKey(const Key('detail-name-field')), findsNothing);
+      expect(find.text('焦點測試'), findsOneWidget);
+      expect(find.byKey(const Key('detail-overflow-menu')), findsOneWidget);
+    },
+  );
 
   testWidgets('navigator observer clears focus without page-specific helpers', (
     tester,
@@ -172,4 +196,11 @@ Widget _app({
     home: home,
     routes: routes,
   );
+}
+
+Future<void> _enterDetailEditMode(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('detail-overflow-menu')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const Key('detail-edit-menu-item')));
+  await tester.pumpAndSettle();
 }

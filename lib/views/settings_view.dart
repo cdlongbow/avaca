@@ -508,6 +508,9 @@ class _SettingsViewState extends State<SettingsView> {
       'primary' => AppLocalizations.of(context).colorPrimary,
       'onPrimary' => AppLocalizations.of(context).colorOnPrimary,
       'outline' => AppLocalizations.of(context).colorOutline,
+      'snackbarBackground' => AppLocalizations.of(
+        context,
+      ).colorSnackbarBackground,
       _ => key,
     };
   }
