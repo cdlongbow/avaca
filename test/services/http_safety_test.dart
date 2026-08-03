@@ -28,6 +28,26 @@ void main() {
     expect(requests, 0);
   });
 
+  test('rejects a non-allowlisted referer before sending', () async {
+    var requests = 0;
+    final fetcher = SafeHttpFetcher(
+      client: MockClient((_) async {
+        requests++;
+        return http.Response('unexpected', 200);
+      }),
+      allowedHosts: const {'www.javbus.com'},
+    );
+
+    await expectLater(
+      fetcher.get(
+        Uri.parse('https://www.javbus.com/pics/actress/zh5_a.jpg'),
+        referer: Uri.parse('https://example.com/'),
+      ),
+      throwsA(isA<UnsafeHttpUriException>()),
+    );
+    expect(requests, 0);
+  });
+
   test(
     'follows allowlisted redirects but rejects an offsite redirect',
     () async {

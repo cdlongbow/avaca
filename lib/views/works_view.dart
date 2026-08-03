@@ -240,11 +240,22 @@ class _WorksViewState extends State<WorksView> {
       return;
     }
     final l10n = AppLocalizations.of(context);
-    final message = scrapeError != null
+    var message = scrapeError != null
         ? l10n.scrapeFailed
         : result!.cancelled
         ? l10n.scrapeCancelled(result.saved, result.excluded, result.failed)
         : l10n.scrapeComplete(result.saved, result.excluded, result.failed);
+    if (scrapeError == null && !result!.cancelled) {
+      message = switch (result.actressImageStatus) {
+        ActressImageSyncStatus.unavailable =>
+          '$message ${l10n.scrapeAvatarUnavailable}',
+        ActressImageSyncStatus.downloadFailed ||
+        ActressImageSyncStatus.databaseFailed =>
+          '$message ${l10n.scrapeAvatarFailed}',
+        ActressImageSyncStatus.notRequested ||
+        ActressImageSyncStatus.replaced => message,
+      };
+    }
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
@@ -268,6 +279,9 @@ class _WorksViewState extends State<WorksView> {
     final service = WorksScrapeService(
       db: widget.db,
       client: JavBusClient(transport: transport),
+      actressImageDownloader: HttpActressImageDownloader(
+        authenticatedTransport: transport,
+      ),
     );
     try {
       return await service.scrape(
@@ -404,7 +418,9 @@ class _ScrapeSettingsDialog extends StatefulWidget {
 }
 
 class _ScrapeSettingsDialogState extends State<_ScrapeSettingsDialog> {
+  final formKey = GlobalKey<FormState>();
   final prefixController = TextEditingController();
+  final maxActressCountController = TextEditingController();
   final prefixes = <String>[];
   late bool syncDetails;
   late bool replaceImage;
@@ -416,12 +432,15 @@ class _ScrapeSettingsDialogState extends State<_ScrapeSettingsDialog> {
     syncDetails = widget.initial.syncDetails;
     replaceImage = widget.initial.replaceActressImage;
     fillMissingOnly = widget.initial.fillMissingOnly;
+    maxActressCountController.text =
+        widget.initial.maxActressCount?.toString() ?? '';
     prefixes.addAll(widget.initial.excludedPrefixes);
   }
 
   @override
   void dispose() {
     prefixController.dispose();
+    maxActressCountController.dispose();
     super.dispose();
   }
 
@@ -446,80 +465,105 @@ class _ScrapeSettingsDialogState extends State<_ScrapeSettingsDialog> {
       content: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 520),
         child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(l10n.syncActressDetails),
-                value: syncDetails,
-                onChanged: (value) {
-                  setState(() => syncDetails = value ?? false);
-                },
-              ),
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(l10n.replaceActressImage),
-                value: replaceImage,
-                onChanged: (value) {
-                  setState(() => replaceImage = value ?? false);
-                },
-              ),
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(l10n.fillMissingOnly),
-                value: fillMissingOnly,
-                onChanged: (value) {
-                  setState(() => fillMissingOnly = value ?? false);
-                },
-              ),
-              const SizedBox(height: 12),
-              Text(
-                l10n.excludedCodePrefixes,
-                style: Theme.of(context).textTheme.titleSmall,
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      key: const Key('scrape-prefix-input'),
-                      controller: prefixController,
-                      decoration: InputDecoration(
-                        hintText: l10n.codePrefixHint,
-                        isDense: true,
-                      ),
-                      textCapitalization: TextCapitalization.characters,
-                      onSubmitted: (_) => _addPrefix(),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton.filledTonal(
-                    key: const Key('scrape-prefix-add'),
-                    tooltip: l10n.addPrefix,
-                    onPressed: _addPrefix,
-                    icon: const Icon(Icons.add),
-                  ),
-                ],
-              ),
-              if (prefixes.isNotEmpty) ...[
+          child: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(l10n.syncActressDetails),
+                  value: syncDetails,
+                  onChanged: (value) {
+                    setState(() => syncDetails = value ?? false);
+                  },
+                ),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(l10n.replaceActressImage),
+                  value: replaceImage,
+                  onChanged: (value) {
+                    setState(() => replaceImage = value ?? false);
+                  },
+                ),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(l10n.fillMissingOnly),
+                  value: fillMissingOnly,
+                  onChanged: (value) {
+                    setState(() => fillMissingOnly = value ?? false);
+                  },
+                ),
                 const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                TextFormField(
+                  key: const Key('scrape-max-actress-count-input'),
+                  controller: maxActressCountController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: l10n.maxActressCountLabel,
+                    hintText: l10n.maxActressCountHint,
+                    isDense: true,
+                  ),
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
+                  validator: (value) {
+                    final cleaned = value?.trim() ?? '';
+                    if (cleaned.isEmpty) {
+                      return null;
+                    }
+                    final parsed = int.tryParse(cleaned);
+                    return parsed != null && parsed > 0
+                        ? null
+                        : l10n.maxActressCountInvalid;
+                  },
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  l10n.excludedCodePrefixes,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 8),
+                Row(
                   children: [
-                    for (final prefix in prefixes)
-                      InputChip(
-                        label: Text(prefix),
-                        onDeleted: () {
-                          setState(() => prefixes.remove(prefix));
-                        },
+                    Expanded(
+                      child: TextField(
+                        key: const Key('scrape-prefix-input'),
+                        controller: prefixController,
+                        decoration: InputDecoration(
+                          hintText: l10n.codePrefixHint,
+                          isDense: true,
+                        ),
+                        textCapitalization: TextCapitalization.characters,
+                        onSubmitted: (_) => _addPrefix(),
                       ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton.filledTonal(
+                      key: const Key('scrape-prefix-add'),
+                      tooltip: l10n.addPrefix,
+                      onPressed: _addPrefix,
+                      icon: const Icon(Icons.add),
+                    ),
                   ],
                 ),
+                if (prefixes.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final prefix in prefixes)
+                        InputChip(
+                          label: Text(prefix),
+                          onDeleted: () {
+                            setState(() => prefixes.remove(prefix));
+                          },
+                        ),
+                    ],
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -529,14 +573,22 @@ class _ScrapeSettingsDialogState extends State<_ScrapeSettingsDialog> {
           child: Text(l10n.cancel),
         ),
         FilledButton(
-          onPressed: () => Navigator.of(context).pop(
-            WorkScrapeOptions(
-              syncDetails: syncDetails,
-              replaceActressImage: replaceImage,
-              fillMissingOnly: fillMissingOnly,
-              excludedPrefixes: List.unmodifiable(prefixes),
-            ),
-          ),
+          onPressed: () {
+            if (!(formKey.currentState?.validate() ?? false)) {
+              return;
+            }
+            Navigator.of(context).pop(
+              WorkScrapeOptions(
+                syncDetails: syncDetails,
+                replaceActressImage: replaceImage,
+                fillMissingOnly: fillMissingOnly,
+                maxActressCount: int.tryParse(
+                  maxActressCountController.text.trim(),
+                ),
+                excludedPrefixes: List.unmodifiable(prefixes),
+              ),
+            );
+          },
           child: Text(l10n.startScrape),
         ),
       ],

@@ -3,6 +3,7 @@ import 'package:html/parser.dart' as html;
 
 import '../../models/scraped_actress_details.dart';
 import 'javbus_models.dart';
+import 'work_code.dart';
 
 class JavBusHtmlParser {
   JavBusActressPage parseActressPage(String source, {required Uri pageUri}) {
@@ -15,7 +16,7 @@ class JavBusHtmlParser {
     return JavBusActressPage(
       details: ScrapedActressDetails(
         name: _clean(info?.querySelector('span')?.text),
-        avatarUrl: _resolveOptional(pageUri, avatar?.attributes['src']),
+        avatarUrl: _resolveAvatar(pageUri, avatar?.attributes['src']),
         birthDate: _profileValue(info, const ['生日', '生年月日']),
         height: _digits(_profileValue(info, const ['身高', '身長'])),
         cup: _profileValue(info, const ['罩杯', 'カップ']),
@@ -47,12 +48,13 @@ class JavBusHtmlParser {
 
     final durationText = _field(fields, const ['長度', '长度', '収録時間']);
     final duration = RegExp(r'\d+').firstMatch(durationText ?? '')?.group(0);
-    final code =
+    final rawCode =
         _field(fields, const ['識別碼', '识别码', '品番']) ?? _codeFromUri(pageUri);
+    final code = canonicalizeJavBusWorkCode(rawCode);
     final rawTitle = _clean(document.querySelector('h3')?.text) ?? '';
     final strippedTitle = rawTitle
         .replaceFirst(
-          RegExp('^${RegExp.escape(code)}\\s*', caseSensitive: false),
+          RegExp('^${RegExp.escape(rawCode)}\\s*', caseSensitive: false),
           '',
         )
         .trim();
@@ -65,7 +67,44 @@ class JavBusHtmlParser {
       studio: _field(fields, const ['製作商', '制作商', 'メーカー']),
       publisher: _field(fields, const ['發行商', '发行商', 'レーベル']),
       series: _field(fields, const ['系列', 'シリーズ']),
+      actressUris: _actressUris(document, pageUri),
     );
+  }
+
+  List<Uri> _actressUris(Document document, Uri pageUri) {
+    final info = document.querySelector('.info');
+    if (info == null) {
+      return const [];
+    }
+    final children = info.children;
+    final headerIndex = children.indexWhere((element) {
+      final header = element.querySelector('.header');
+      final key = header?.text.replaceAll(RegExp(r'[:：\s]'), '') ?? '';
+      return const {'演員', '演员', '出演者'}.contains(key);
+    });
+    if (headerIndex < 0) {
+      return const [];
+    }
+
+    final result = <Uri>[];
+    final seen = <String>{};
+    for (final element in children.skip(headerIndex + 1)) {
+      final nextHeader = element.querySelector('.header');
+      if (nextHeader != null) {
+        break;
+      }
+      for (final anchor in element.querySelectorAll('a[href*="/star/"]')) {
+        final href = _clean(anchor.attributes['href']);
+        if (href == null) {
+          continue;
+        }
+        final uri = pageUri.resolve(href);
+        if (seen.add(uri.toString())) {
+          result.add(uri);
+        }
+      }
+    }
+    return List.unmodifiable(result);
   }
 
   List<JavBusActressSearchResult> parseActressSearchResults(
@@ -105,7 +144,7 @@ class JavBusHtmlParser {
       return null;
     }
     return JavBusWorkSummary(
-      code: code.toUpperCase(),
+      code: canonicalizeJavBusWorkCode(code),
       title: _clean(element.querySelector('.photo-info span')?.text) ?? '',
       releaseDate: dates.length > 1 ? _clean(dates[1].text) : null,
       detailUri: pageUri.resolve(href),
@@ -169,6 +208,14 @@ class JavBusHtmlParser {
   Uri? _resolveOptional(Uri pageUri, String? value) {
     final cleaned = _clean(value);
     return cleaned == null ? null : pageUri.resolve(cleaned);
+  }
+
+  Uri? _resolveAvatar(Uri pageUri, String? value) {
+    final uri = _resolveOptional(pageUri, value);
+    if (uri == null || uri.path.toLowerCase().endsWith('/nowprinting.gif')) {
+      return null;
+    }
+    return uri;
   }
 
   String? _clean(String? value) {

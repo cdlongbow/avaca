@@ -1,3 +1,5 @@
+import 'work_code.dart';
+
 enum WorkImageSource { dmm, mgstage }
 
 enum WorkImageVariant { card, detail }
@@ -25,6 +27,8 @@ class WorkImagePolicy {
     required String code,
     String? studio,
     bool dmmLeadingOne = false,
+    bool dmmTrailingV = false,
+    bool dmmTrailingH2 = false,
   }) {
     final parts = _parseCode(code);
     if (_isPrestige(studio)) {
@@ -40,7 +44,13 @@ class WorkImagePolicy {
     }
 
     final paddedNumber = parts.number.padLeft(5, '0');
-    final imageCode = '${dmmLeadingOne ? '1' : ''}${parts.prefix}$paddedNumber';
+    final suffix = dmmTrailingH2
+        ? 'h2'
+        : dmmTrailingV
+        ? 'v'
+        : '';
+    final imageCode =
+        '${dmmLeadingOne ? '1' : ''}${parts.prefix}$paddedNumber$suffix';
     final base =
         'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
         '$imageCode/$imageCode';
@@ -55,7 +65,7 @@ class WorkImagePolicy {
     final match = RegExp(
       r'^([a-z0-9_]+)-?(\d+)$',
       caseSensitive: false,
-    ).firstMatch(code.trim());
+    ).firstMatch(canonicalizeJavBusWorkCode(code));
     if (match == null) {
       throw FormatException('Unsupported work code: $code');
     }

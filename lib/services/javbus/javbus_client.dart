@@ -8,12 +8,17 @@ import 'javbus_html_parser.dart';
 import 'javbus_models.dart';
 import 'javbus_verification.dart';
 import 'prefix_exclusion.dart';
+import 'work_image_downloader.dart';
 
 abstract interface class JavBusTransport {
   Future<String> get(Uri uri);
 }
 
-class HttpJavBusTransport implements JavBusTransport {
+abstract interface class JavBusBinarySession {
+  Future<BinaryResponse> getBinary(Uri uri);
+}
+
+class HttpJavBusTransport implements JavBusTransport, JavBusBinarySession {
   HttpJavBusTransport({
     http.Client? client,
     this.timeout = const Duration(seconds: 20),
@@ -41,9 +46,26 @@ class HttpJavBusTransport implements JavBusTransport {
 
   @override
   Future<String> get(Uri uri) async {
+    final response = await _getResponse(uri);
+    return utf8.decode(response.bodyBytes, allowMalformed: true);
+  }
+
+  @override
+  Future<BinaryResponse> getBinary(Uri uri) async {
+    final response = await _getResponse(
+      uri,
+      referer: uri.replace(path: '/', query: null, fragment: null),
+    );
+    return BinaryResponse(
+      statusCode: response.statusCode,
+      bodyBytes: response.bodyBytes,
+    );
+  }
+
+  Future<SafeHttpResponse> _getResponse(Uri uri, {Uri? referer}) async {
     for (var attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        var response = await _fetcher.get(uri);
+        var response = await _fetcher.get(uri, referer: referer);
         for (
           var verificationRound = 0;
           _isVerificationPage(response.finalUri) && verificationRound < 3;
@@ -67,13 +89,13 @@ class HttpJavBusTransport implements JavBusTransport {
             ...challenge.submitFields,
             ...answers,
           });
-          response = await _fetcher.get(uri);
+          response = await _fetcher.get(uri, referer: referer);
         }
         if (_isVerificationPage(response.finalUri)) {
           throw const JavBusVerificationCancelledException();
         }
         if (response.statusCode >= 200 && response.statusCode < 300) {
-          return utf8.decode(response.bodyBytes, allowMalformed: true);
+          return response;
         }
         if (!_isTransient(response.statusCode) || attempt == maxAttempts) {
           throw JavBusRequestException(uri, response.statusCode);
@@ -165,14 +187,15 @@ class JavBusClient {
     Uri actressUri, {
     PrefixExclusion? exclusions,
     bool Function()? isCancelled,
+    JavBusActressPage? firstPage,
   }) async {
     _validateNavigationUri(actressUri);
     if (isCancelled?.call() ?? false) {
       return const [];
     }
-    final firstPage = await fetchActressPage(actressUri);
-    if (firstPage.pageCount > maxPages) {
-      throw JavBusPageLimitException(firstPage.pageCount, maxPages);
+    final resolvedFirstPage = firstPage ?? await fetchActressPage(actressUri);
+    if (resolvedFirstPage.pageCount > maxPages) {
+      throw JavBusPageLimitException(resolvedFirstPage.pageCount, maxPages);
     }
     final result = <JavBusWorkSummary>[];
     final codes = <String>{};
@@ -188,8 +211,8 @@ class JavBusClient {
       }
     }
 
-    append(firstPage.works);
-    for (var page = 2; page <= firstPage.pageCount; page++) {
+    append(resolvedFirstPage.works);
+    for (var page = 2; page <= resolvedFirstPage.pageCount; page++) {
       if (isCancelled?.call() ?? false) {
         break;
       }
