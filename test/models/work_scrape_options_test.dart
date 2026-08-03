@@ -7,13 +7,13 @@ void main() {
       syncDetails: false,
       replaceActressImage: true,
       fillMissingOnly: false,
+      maxActressCount: 3,
       excludedPrefixes: ['FC2-PPV_123', '1PON'],
     );
 
-    expect(WorkScrapeOptions.decode(options.encode()).excludedPrefixes, [
-      'FC2-PPV_123',
-      '1PON',
-    ]);
+    final decoded = WorkScrapeOptions.decode(options.encode());
+    expect(decoded.maxActressCount, 3);
+    expect(decoded.excludedPrefixes, ['FC2-PPV_123', '1PON']);
   });
 
   test('normalizes persisted prefixes without limiting their characters', () {
@@ -30,6 +30,22 @@ void main() {
     expect(options.syncDetails, isTrue);
     expect(options.replaceActressImage, isFalse);
     expect(options.fillMissingOnly, isTrue);
+    expect(options.maxActressCount, isNull);
     expect(options.excludedPrefixes, isEmpty);
+  });
+
+  test('accepts only positive persisted actress-count limits', () {
+    expect(
+      WorkScrapeOptions.decode('{"maxActressCount":2}').maxActressCount,
+      2,
+    );
+    expect(
+      WorkScrapeOptions.decode('{"maxActressCount":0}').maxActressCount,
+      isNull,
+    );
+    expect(
+      WorkScrapeOptions.decode('{"maxActressCount":"2"}').maxActressCount,
+      isNull,
+    );
   });
 }

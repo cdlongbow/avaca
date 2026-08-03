@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.6.10 - 2026-08-03
+
+- Added JavBus scraping for actress profiles and works, including localized
+  scrape controls, a configurable multi-actress threshold, and exact-name
+  merging across duplicate actress pages.
+- Added duplicate work-code filtering and normalization for trailing `-V`,
+  `-T`, and `-VT` suffixes so variants such as STARS codes resolve correctly.
+- Added safe work-image fallback attempts in the approved order: original,
+  leading `1`, leading `1` with trailing `v`, and trailing `h2`, while
+  rejecting placeholder images and unsafe URLs.
+- Added actress avatar session/Referer handling, work detail image display,
+  cleanup and database migration improvements, birthday persistence, and
+  related UI/localization updates.
+- Preserved the existing typography adjustments, including the manually
+  selected `w400` minimum font weight.
+
 ## 0.5.7 - 2026-07-29
 
 - Added compact, immediately applied filtering with created, modified, and

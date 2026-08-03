@@ -19,19 +19,26 @@ abstract interface class ActressImageDownloader {
 }
 
 class HttpActressImageDownloader implements ActressImageDownloader {
-  HttpActressImageDownloader({BinaryTransport? transport})
-    : _transport =
-          transport ??
-          HttpBinaryTransport(
-            allowedHosts: const {'www.javbus.com'},
-            maxBytes: 5 * 1024 * 1024,
-          );
+  HttpActressImageDownloader({
+    BinaryTransport? transport,
+    JavBusBinarySession? authenticatedTransport,
+  }) : assert(transport == null || authenticatedTransport == null),
+       _authenticatedTransport = authenticatedTransport,
+       _transport = authenticatedTransport == null
+           ? transport ??
+                 HttpBinaryTransport(
+                   allowedHosts: const {'www.javbus.com'},
+                   maxBytes: 5 * 1024 * 1024,
+                 )
+           : null;
 
-  final BinaryTransport _transport;
+  final BinaryTransport? _transport;
+  final JavBusBinarySession? _authenticatedTransport;
 
   @override
   Future<String> download(Uri uri, String targetPath) async {
-    final response = await _transport.get(uri);
+    final response =
+        await (_authenticatedTransport?.getBinary(uri) ?? _transport!.get(uri));
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw WorksScrapeException('Actress image request failed: $uri');
     }
@@ -51,6 +58,14 @@ class HttpActressImageDownloader implements ActressImageDownloader {
       transport.close();
     }
   }
+}
+
+enum ActressImageSyncStatus {
+  notRequested,
+  replaced,
+  unavailable,
+  downloadFailed,
+  databaseFailed,
 }
 
 class WorksScrapeCancellationToken {
@@ -85,12 +100,14 @@ class WorksScrapeResult {
     required this.excluded,
     required this.failed,
     required this.cancelled,
+    this.actressImageStatus = ActressImageSyncStatus.notRequested,
   });
 
   final int saved;
   final int excluded;
   final int failed;
   final bool cancelled;
+  final ActressImageSyncStatus actressImageStatus;
 }
 
 class WorksScrapeException implements Exception {
@@ -159,30 +176,56 @@ class WorksScrapeService {
     if (exactMatches.isEmpty) {
       throw WorksScrapeException('Exact actress was not found: $name');
     }
-    if (exactMatches.length > 1) {
-      throw WorksScrapeException('Actress name is ambiguous: $name');
+    final matchesByUri = <String, JavBusActressSearchResult>{};
+    for (final match in exactMatches) {
+      matchesByUri.putIfAbsent(match.uri.toString(), () => match);
     }
-    final actress = exactMatches.first;
-    final actressPage = await client.fetchActressPage(actress.uri);
-    if (cancellationToken?.isCancelled ?? false) {
-      return const WorksScrapeResult(
-        saved: 0,
-        excluded: 0,
-        failed: 0,
-        cancelled: true,
+    final actressPages = <JavBusActressPage>[];
+    final summariesByCode = <String, JavBusWorkSummary>{};
+    Object? lastSourceError;
+    for (final actress in matchesByUri.values) {
+      if (cancellationToken?.isCancelled ?? false) {
+        break;
+      }
+      try {
+        final page = await client.fetchActressPage(actress.uri);
+        final sourceWorks = await client.fetchAllActressWorks(
+          actress.uri,
+          firstPage: page,
+          isCancelled: () => cancellationToken?.isCancelled ?? false,
+        );
+        actressPages.add(page);
+        for (final work in sourceWorks) {
+          final code = work.code.trim().toUpperCase();
+          if (code.isNotEmpty) {
+            summariesByCode.putIfAbsent(code, () => work);
+          }
+        }
+      } catch (error) {
+        lastSourceError = error;
+      }
+    }
+    if (actressPages.isEmpty) {
+      if (cancellationToken?.isCancelled ?? false) {
+        return const WorksScrapeResult(
+          saved: 0,
+          excluded: 0,
+          failed: 0,
+          cancelled: true,
+        );
+      }
+      throw WorksScrapeException(
+        'Actress pages could not be fetched: $name'
+        '${lastSourceError == null ? '' : ' ($lastSourceError)'}',
       );
     }
-    await _syncActress(
+    final actressImageStatus = await _syncActress(
       actressId: actressId,
-      page: actressPage,
+      page: _mergeActressPages(actressPages),
       options: options,
     );
-
     final exclusions = PrefixExclusion(options.excludedPrefixes);
-    final summaries = await client.fetchAllActressWorks(
-      actress.uri,
-      isCancelled: () => cancellationToken?.isCancelled ?? false,
-    );
+    final summaries = summariesByCode.values.toList(growable: false);
     var saved = 0;
     var excluded = 0;
     var failed = 0;
@@ -204,6 +247,33 @@ class WorksScrapeService {
         if (cancellationToken?.isCancelled ?? false) {
           break;
         }
+        final maxActressCount = options.maxActressCount;
+        if (maxActressCount != null) {
+          if (details.actressUris.isEmpty) {
+            failed++;
+            _notify(
+              onProgress,
+              current,
+              summaries.length,
+              saved,
+              excluded,
+              failed,
+            );
+            continue;
+          }
+          if (details.actressUris.length > maxActressCount) {
+            excluded++;
+            _notify(
+              onProgress,
+              current,
+              summaries.length,
+              saved,
+              excluded,
+              failed,
+            );
+            continue;
+          }
+        }
         await _saveWork(
           actressId: actressId,
           details: details,
@@ -224,15 +294,63 @@ class WorksScrapeService {
       excluded: excluded,
       failed: failed,
       cancelled: cancellationToken?.isCancelled ?? false,
+      actressImageStatus: actressImageStatus,
     );
   }
 
-  Future<void> _syncActress({
+  JavBusActressPage _mergeActressPages(List<JavBusActressPage> pages) {
+    String? firstValue(String? Function(ScrapedActressDetails) select) {
+      for (final page in pages) {
+        final value = select(page.details)?.trim();
+        if (value != null && value.isNotEmpty) {
+          return value;
+        }
+      }
+      return null;
+    }
+
+    Uri? avatarUrl;
+    for (final page in pages) {
+      final candidate = page.details.avatarUrl;
+      if (_isUsableAvatar(candidate)) {
+        avatarUrl = candidate;
+        break;
+      }
+    }
+    return JavBusActressPage(
+      details: ScrapedActressDetails(
+        name: firstValue((details) => details.name),
+        avatarUrl: avatarUrl,
+        birthDate: firstValue((details) => details.birthDate),
+        height: firstValue((details) => details.height),
+        cup: firstValue((details) => details.cup),
+        bust: firstValue((details) => details.bust),
+        waist: firstValue((details) => details.waist),
+        hip: firstValue((details) => details.hip),
+      ),
+      works: const [],
+      pageCount: 1,
+    );
+  }
+
+  bool _isUsableAvatar(Uri? uri) {
+    if (uri == null) {
+      return false;
+    }
+    final port = uri.hasPort ? uri.port : 443;
+    return uri.scheme == 'https' &&
+        uri.userInfo.isEmpty &&
+        uri.host.toLowerCase() == 'www.javbus.com' &&
+        port == 443 &&
+        !uri.path.toLowerCase().endsWith('/nowprinting.gif');
+  }
+
+  Future<ActressImageSyncStatus> _syncActress({
     required int actressId,
     required JavBusActressPage page,
     required WorkScrapeOptions options,
   }) async {
-    await db.runManagedImageLifecycle(
+    return db.runManagedImageLifecycle(
       () => _syncActressUnlocked(
         actressId: actressId,
         page: page,
@@ -241,13 +359,16 @@ class WorksScrapeService {
     );
   }
 
-  Future<void> _syncActressUnlocked({
+  Future<ActressImageSyncStatus> _syncActressUnlocked({
     required int actressId,
     required JavBusActressPage page,
     required WorkScrapeOptions options,
   }) async {
     String? imagePath;
     String? previousImagePath;
+    var imageStatus = options.replaceActressImage
+        ? ActressImageSyncStatus.unavailable
+        : ActressImageSyncStatus.notRequested;
     if (options.replaceActressImage && page.details.avatarUrl != null) {
       try {
         previousImagePath = (await db.getActressById(
@@ -262,13 +383,15 @@ class WorksScrapeService {
             'actress_${actressId}_$version.jpg',
           ),
         );
+        imageStatus = ActressImageSyncStatus.replaced;
       } catch (_) {
         imagePath = null;
+        imageStatus = ActressImageSyncStatus.downloadFailed;
       }
     }
 
     if (!options.syncDetails && imagePath == null) {
-      return;
+      return imageStatus;
     }
 
     final source = page.details;
@@ -293,9 +416,11 @@ class WorksScrapeService {
       if (file.existsSync()) {
         await file.delete();
       }
+      return ActressImageSyncStatus.databaseFailed;
     } else if (updated && imagePath != null) {
       await _deletePreviousManagedAvatar(previousImagePath, imagePath);
     }
+    return imageStatus;
   }
 
   Future<void> _deletePreviousManagedAvatar(

@@ -61,7 +61,8 @@ class SafeHttpFetcher {
   String get cookieHeader =>
       _cookies.entries.map((entry) => '${entry.key}=${entry.value}').join('; ');
 
-  Future<SafeHttpResponse> get(Uri uri) => _request('GET', uri);
+  Future<SafeHttpResponse> get(Uri uri, {Uri? referer}) =>
+      _request('GET', uri, referer: referer);
 
   Future<SafeHttpResponse> postForm(Uri uri, Map<String, String> fields) =>
       _request('POST', uri, fields: fields);
@@ -70,6 +71,7 @@ class SafeHttpFetcher {
     String initialMethod,
     Uri uri, {
     Map<String, String>? fields,
+    Uri? referer,
   }) async {
     final stopwatch = Stopwatch()..start();
     var current = uri;
@@ -78,6 +80,10 @@ class SafeHttpFetcher {
     for (var redirects = 0; redirects <= maxRedirects; redirects++) {
       _validate(current);
       final request = http.Request(method, current)..followRedirects = false;
+      if (referer != null) {
+        _validate(referer);
+        request.headers['referer'] = referer.toString();
+      }
       if (_cookies.isNotEmpty) {
         request.headers['cookie'] = cookieHeader;
       }

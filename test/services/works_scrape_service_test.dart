@@ -12,10 +12,40 @@ import 'package:avaca/services/javbus/work_image_downloader.dart';
 import 'package:avaca/services/javbus/work_image_policy.dart';
 import 'package:avaca/services/works_scrape_service.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as image;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
   sqfliteFfiInit();
+
+  test(
+    'authenticated avatar downloader accepts a valid 125x125 image',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'avaca_authenticated_avatar_test_',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final session = _FakeJavBusBinarySession(
+        BinaryResponse(
+          statusCode: 200,
+          bodyBytes: image.encodeJpg(image.Image(width: 125, height: 125)),
+        ),
+      );
+      final target = '${directory.path}${Platform.pathSeparator}avatar.jpg';
+
+      final result =
+          await HttpActressImageDownloader(
+            authenticatedTransport: session,
+          ).download(
+            Uri.parse('https://www.javbus.com/pics/actress/zh5_a.jpg'),
+            target,
+          );
+
+      expect(session.requested.single.path, '/pics/actress/zh5_a.jpg');
+      expect(result, target);
+      expect(File(target).existsSync(), isTrue);
+    },
+  );
 
   test(
     'scrapes exact actress, excludes complex prefixes, and saves images',
@@ -88,6 +118,7 @@ void main() {
       expect(oldAvatar.existsSync(), isFalse);
       expect(result.saved, 1);
       expect(result.excluded, 1);
+      expect(result.actressImageStatus, ActressImageSyncStatus.replaced);
     },
   );
 
@@ -179,12 +210,139 @@ void main() {
       );
     },
   );
+
+  test(
+    'merges exact-name pages, deduplicates works, and enforces actress limit',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'avaca_scrape_merge_test_',
+      );
+      final database = AppDatabase.forTesting(
+        baseDir: directory.path,
+        databaseFactory: databaseFactoryFfi,
+      );
+      addTearDown(() async {
+        await database.close();
+        await directory.delete(recursive: true);
+      });
+      await database.init();
+      await database.addActress(name: '小湊よつ葉');
+      final sqlite = await database.database;
+      final actressId = (await sqlite.query('actresses')).single['id'] as int;
+      final client = _MergedJavBusClient();
+      final actressImages = _RecordingActressImageDownloader();
+      final service = WorksScrapeService(
+        db: database,
+        client: client,
+        workImageDownloader: _FakeWorkImageDownloader(),
+        actressImageDownloader: actressImages,
+        imageDirectory: directory.path,
+      );
+
+      final result = await service.scrape(
+        actressId: actressId,
+        actressName: '小湊よつ葉',
+        options: const WorkScrapeOptions(
+          replaceActressImage: true,
+          maxActressCount: 2,
+        ),
+      );
+
+      expect(client.actressPageRequests, [
+        'https://www.javbus.com/star/zen',
+        'https://www.javbus.com/star/zh5',
+      ]);
+      expect(client.detailRequests, [
+        'ONE-001',
+        'MANY-003',
+        'UNKNOWN-001',
+        'TWO-002',
+      ]);
+      expect(
+        (await database.getWorksForActress(
+          actressId,
+        )).map((row) => row['code']),
+        unorderedEquals(['ONE-001', 'TWO-002']),
+      );
+      expect(
+        actressImages.requested.single.toString(),
+        'https://www.javbus.com/pics/actress/zh5_a.jpg',
+      );
+      expect(result.saved, 2);
+      expect(result.excluded, 1);
+      expect(result.failed, 1);
+      expect(result.actressImageStatus, ActressImageSyncStatus.replaced);
+    },
+  );
+
+  test(
+    'reports avatar download failure and keeps the previous image',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'avaca_scrape_avatar_failure_test_',
+      );
+      final database = AppDatabase.forTesting(
+        baseDir: directory.path,
+        databaseFactory: databaseFactoryFfi,
+      );
+      addTearDown(() async {
+        await database.close();
+        await directory.delete(recursive: true);
+      });
+      await database.init();
+      await database.addActress(name: '涼森れむ');
+      final sqlite = await database.database;
+      final actressId = (await sqlite.query('actresses')).single['id'] as int;
+      const previousPath = 'C:\\existing\\remu.jpg';
+      await sqlite.update(
+        'actresses',
+        {'img_path': previousPath},
+        where: 'id = ?',
+        whereArgs: [actressId],
+      );
+      final service = WorksScrapeService(
+        db: database,
+        client: _FakeJavBusClient(),
+        workImageDownloader: _FakeWorkImageDownloader(),
+        actressImageDownloader: _ThrowingActressImageDownloader(),
+        imageDirectory: directory.path,
+      );
+
+      final result = await service.scrape(
+        actressId: actressId,
+        actressName: '涼森れむ',
+        options: const WorkScrapeOptions(
+          replaceActressImage: true,
+          excludedPrefixes: ['FC2-PPV_123'],
+        ),
+      );
+
+      expect(
+        (await database.getActressById(actressId))?['img_path'],
+        previousPath,
+      );
+      expect(result.actressImageStatus, ActressImageSyncStatus.downloadFailed);
+    },
+  );
 }
 
 class _NeverTransport implements JavBusTransport {
   @override
   Future<String> get(Uri uri) {
     throw StateError('Unexpected live request: $uri');
+  }
+}
+
+class _FakeJavBusBinarySession implements JavBusBinarySession {
+  _FakeJavBusBinarySession(this.response);
+
+  final BinaryResponse response;
+  final requested = <Uri>[];
+
+  @override
+  Future<BinaryResponse> getBinary(Uri uri) async {
+    requested.add(uri);
+    return response;
   }
 }
 
@@ -209,7 +367,7 @@ class _FakeJavBusClient extends JavBusClient {
     return JavBusActressPage(
       details: ScrapedActressDetails(
         name: '涼森れむ',
-        avatarUrl: Uri.parse('https://example.test/remu.jpg'),
+        avatarUrl: Uri.parse('https://www.javbus.com/pics/actress/uly_a.jpg'),
         birthDate: '1997-12-03',
         height: '160',
         cup: 'F',
@@ -227,6 +385,7 @@ class _FakeJavBusClient extends JavBusClient {
     Uri actressUri, {
     PrefixExclusion? exclusions,
     bool Function()? isCancelled,
+    JavBusActressPage? firstPage,
   }) async {
     receivedExclusions = exclusions?.values ?? [];
     return [
@@ -256,6 +415,84 @@ class _FakeJavBusClient extends JavBusClient {
       studio: 'プレステージ',
       publisher: 'ABSOLUTELYFANTASIA',
       series: '系列',
+    );
+  }
+}
+
+class _MergedJavBusClient extends JavBusClient {
+  _MergedJavBusClient() : super(transport: _NeverTransport());
+
+  final actressPageRequests = <String>[];
+  final detailRequests = <String>[];
+
+  @override
+  Future<List<JavBusActressSearchResult>> searchActresses(String name) async {
+    return [
+      JavBusActressSearchResult(
+        name: '小湊よつ葉',
+        uri: Uri.parse('https://www.javbus.com/star/zen'),
+      ),
+      JavBusActressSearchResult(
+        name: '小湊よつ葉',
+        uri: Uri.parse('https://www.javbus.com/star/zh5'),
+      ),
+    ];
+  }
+
+  @override
+  Future<JavBusActressPage> fetchActressPage(Uri uri) async {
+    actressPageRequests.add(uri.toString());
+    final validAvatar = uri.pathSegments.last == 'zh5';
+    return JavBusActressPage(
+      details: ScrapedActressDetails(
+        name: '小湊よつ葉',
+        avatarUrl: validAvatar
+            ? Uri.parse('https://www.javbus.com/pics/actress/zh5_a.jpg')
+            : null,
+      ),
+      works: const [],
+      pageCount: 1,
+    );
+  }
+
+  @override
+  Future<List<JavBusWorkSummary>> fetchAllActressWorks(
+    Uri actressUri, {
+    PrefixExclusion? exclusions,
+    bool Function()? isCancelled,
+    JavBusActressPage? firstPage,
+  }) async {
+    final second = actressUri.pathSegments.last == 'zh5';
+    return (second
+            ? ['many-003', 'TWO-002']
+            : ['ONE-001', 'MANY-003', 'UNKNOWN-001'])
+        .map(
+          (code) => JavBusWorkSummary(
+            code: code,
+            title: code,
+            detailUri: Uri.parse('https://www.javbus.com/$code'),
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  Future<JavBusWorkDetails> fetchWorkDetails(Uri uri) async {
+    final code = uri.pathSegments.last.toUpperCase();
+    detailRequests.add(code);
+    final actressCount = switch (code) {
+      'ONE-001' => 1,
+      'TWO-002' => 2,
+      'MANY-003' => 3,
+      _ => 0,
+    };
+    return JavBusWorkDetails(
+      code: code,
+      title: code,
+      actressUris: List.generate(
+        actressCount,
+        (index) => Uri.parse('https://www.javbus.com/star/$index'),
+      ),
     );
   }
 }
@@ -314,5 +551,25 @@ class _FakeActressImageDownloader implements ActressImageDownloader {
     await file.parent.create(recursive: true);
     await file.writeAsBytes([4, 5, 6]);
     return file.path;
+  }
+}
+
+class _RecordingActressImageDownloader implements ActressImageDownloader {
+  final requested = <Uri>[];
+
+  @override
+  Future<String> download(Uri uri, String targetPath) async {
+    requested.add(uri);
+    final file = File(targetPath);
+    await file.parent.create(recursive: true);
+    await file.writeAsBytes([4, 5, 6]);
+    return file.path;
+  }
+}
+
+class _ThrowingActressImageDownloader implements ActressImageDownloader {
+  @override
+  Future<String> download(Uri uri, String targetPath) {
+    throw const WorksScrapeException('Actress image request failed.');
   }
 }

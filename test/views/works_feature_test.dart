@@ -123,6 +123,11 @@ void main() {
     expect(find.text('同步詳細資料'), findsOneWidget);
     expect(find.text('更換女優頭像'), findsOneWidget);
     expect(find.text('二次刮削只補齊缺少的資訊'), findsOneWidget);
+    expect(find.text('多於此數量的女優不刮削'), findsOneWidget);
+    expect(
+      find.byKey(const Key('scrape-max-actress-count-input')),
+      findsOneWidget,
+    );
 
     await tester.enterText(
       find.byKey(const Key('scrape-prefix-input')),
@@ -167,6 +172,10 @@ void main() {
       find.byKey(const Key('scrape-prefix-input')),
       '1pon-HD',
     );
+    await tester.enterText(
+      find.byKey(const Key('scrape-max-actress-count-input')),
+      '3',
+    );
     await tester.tap(find.byKey(const Key('scrape-prefix-add')));
     await tester.tap(find.text('開始刮削'));
     await tester.pumpAndSettle();
@@ -175,8 +184,69 @@ void main() {
     expect(received!.excludedPrefixes, ['1PON-HD']);
     expect(received!.syncDetails, isTrue);
     expect(received!.fillMissingOnly, isTrue);
+    expect(received!.maxActressCount, 3);
     expect(find.byType(CircularProgressIndicator), findsNothing);
     expect(find.text('刮削完成：儲存 1、排除 0、失敗 0'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('actress-count limit rejects zero and keeps settings open', (
+    tester,
+  ) async {
+    await _pumpWorks(tester);
+
+    await tester.tap(find.byKey(const Key('works-scrape-action')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('scrape-max-actress-count-input')),
+      '0',
+    );
+    await tester.tap(find.text('開始刮削'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('請輸入大於等於 1 的整數'), findsOneWidget);
+    expect(find.text('刮削設定'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('actress-count limit rejects decimal input', (tester) async {
+    await _pumpWorks(tester);
+
+    await tester.tap(find.byKey(const Key('works-scrape-action')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('scrape-max-actress-count-input')),
+      '1.5',
+    );
+    await tester.tap(find.text('開始刮削'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('請輸入大於等於 1 的整數'), findsOneWidget);
+    expect(find.text('刮削設定'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('avatar failure is visible while the scrape still completes', (
+    tester,
+  ) async {
+    await _pumpWorks(
+      tester,
+      scrapeExecutor: (options, token, onProgress) async =>
+          const WorksScrapeResult(
+            saved: 1,
+            excluded: 0,
+            failed: 0,
+            cancelled: false,
+            actressImageStatus: ActressImageSyncStatus.downloadFailed,
+          ),
+    );
+
+    await tester.tap(find.byKey(const Key('works-scrape-action')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('開始刮削'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('女優頭像替換失敗，已保留原頭像'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

@@ -5,12 +5,14 @@ class WorkScrapeOptions {
     this.syncDetails = true,
     this.replaceActressImage = false,
     this.fillMissingOnly = true,
+    this.maxActressCount,
     this.excludedPrefixes = const [],
-  });
+  }) : assert(maxActressCount == null || maxActressCount > 0);
 
   final bool syncDetails;
   final bool replaceActressImage;
   final bool fillMissingOnly;
+  final int? maxActressCount;
   final List<String> excludedPrefixes;
 
   String encode() {
@@ -18,6 +20,7 @@ class WorkScrapeOptions {
       'syncDetails': syncDetails,
       'replaceActressImage': replaceActressImage,
       'fillMissingOnly': fillMissingOnly,
+      'maxActressCount': maxActressCount,
       'excludedPrefixes': excludedPrefixes,
     });
   }
@@ -33,6 +36,7 @@ class WorkScrapeOptions {
         return const WorkScrapeOptions();
       }
       final prefixes = json['excludedPrefixes'];
+      final rawMaxActressCount = json['maxActressCount'];
       return WorkScrapeOptions(
         syncDetails: json['syncDetails'] is bool
             ? json['syncDetails'] as bool
@@ -43,6 +47,9 @@ class WorkScrapeOptions {
         fillMissingOnly: json['fillMissingOnly'] is bool
             ? json['fillMissingOnly'] as bool
             : true,
+        maxActressCount: rawMaxActressCount is int && rawMaxActressCount > 0
+            ? rawMaxActressCount
+            : null,
         excludedPrefixes: prefixes is List
             ? prefixes
                   .whereType<String>()

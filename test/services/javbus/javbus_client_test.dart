@@ -35,6 +35,68 @@ void main() {
     },
   );
 
+  test(
+    'reuses a supplied first actress page while fetching pagination',
+    () async {
+      final transport = _FakeTransport({
+        'https://www.javbus.com/star/uly': _page(
+          pageCount: 2,
+          works: const [('ABF-183', 'first')],
+        ),
+        'https://www.javbus.com/star/uly/2': _page(
+          pageCount: 2,
+          works: const [('SONE-833', 'second')],
+        ),
+      });
+      final client = JavBusClient(transport: transport);
+      final firstPage = await client.fetchActressPage(
+        Uri.parse('https://www.javbus.com/star/uly'),
+      );
+
+      final works = await client.fetchAllActressWorks(
+        Uri.parse('https://www.javbus.com/star/uly'),
+        firstPage: firstPage,
+      );
+
+      expect(works.map((work) => work.code), ['ABF-183', 'SONE-833']);
+      expect(transport.requested, [
+        'https://www.javbus.com/star/uly',
+        'https://www.javbus.com/star/uly/2',
+      ]);
+    },
+  );
+
+  test('deduplicates edition suffixes against their base work codes', () async {
+    final transport = _FakeTransport({
+      'https://www.javbus.com/star/zen': _page(
+        pageCount: 2,
+        works: const [
+          ('STARS-859-V', 'video edition'),
+          ('STARS-757-T', 'special edition'),
+          ('STARS-715-VT', 'video special edition'),
+        ],
+      ),
+      'https://www.javbus.com/star/zen/2': _page(
+        pageCount: 2,
+        works: const [
+          ('STARS-859', 'base'),
+          ('STARS-757', 'base'),
+          ('STARS-715', 'base'),
+        ],
+      ),
+    });
+
+    final works = await JavBusClient(
+      transport: transport,
+    ).fetchAllActressWorks(Uri.parse('https://www.javbus.com/star/zen'));
+
+    expect(works.map((work) => work.code), [
+      'STARS-859',
+      'STARS-757',
+      'STARS-715',
+    ]);
+  });
+
   test('searches actresses and fetches selected work details', () async {
     final transport = _FakeTransport({
       'https://www.javbus.com/searchstar/remu': '''
@@ -163,6 +225,37 @@ void main() {
     expect(source, '<html>works</html>');
     expect(transport.cookieHeader, contains('driver=verified'));
   });
+
+  test(
+    'binary requests reuse cookies from the verified JavBus session',
+    () async {
+      var requestNumber = 0;
+      final transport = HttpJavBusTransport(
+        client: MockClient((request) async {
+          requestNumber++;
+          if (requestNumber == 1) {
+            return http.Response(
+              '<html>works</html>',
+              200,
+              headers: {'set-cookie': 'driver=verified; path=/'},
+            );
+          }
+          expect(request.url.path, '/pics/actress/zh5_a.jpg');
+          expect(request.headers['cookie'], contains('driver=verified'));
+          expect(request.headers['referer'], 'https://www.javbus.com/');
+          return http.Response.bytes(const [1, 2, 3], 200);
+        }),
+      );
+
+      await transport.get(Uri.parse('https://www.javbus.com/star/zh5'));
+      final image = await transport.getBinary(
+        Uri.parse('https://www.javbus.com/pics/actress/zh5_a.jpg'),
+      );
+
+      expect(image.statusCode, 200);
+      expect(image.bodyBytes, [1, 2, 3]);
+    },
+  );
 
   test('completes the current JavBus age confirmation form', () async {
     var requestNumber = 0;

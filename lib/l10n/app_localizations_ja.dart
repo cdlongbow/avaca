@@ -303,6 +303,21 @@ class AppLocalizationsJa extends AppLocalizations {
   String get replaceActressImage => '女優画像を差し替える';
 
   @override
+  String get maxActressCountLabel => 'この人数を超える女優の作品は取得しない';
+
+  @override
+  String get maxActressCountHint => '空欄の場合は制限なし';
+
+  @override
+  String get maxActressCountInvalid => '1以上の整数を入力してください';
+
+  @override
+  String get scrapeAvatarUnavailable => '利用可能な女優画像が見つかりませんでした。';
+
+  @override
+  String get scrapeAvatarFailed => '女優画像の差し替えに失敗したため、元の画像を保持しました。';
+
+  @override
   String get fillMissingOnly => '再取得時は未入力の情報のみ補完';
 
   @override
@@ -655,6 +670,21 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
 
   @override
   String get replaceActressImage => '女優画像を差し替える';
+
+  @override
+  String get maxActressCountLabel => 'この人数を超える女優の作品は取得しない';
+
+  @override
+  String get maxActressCountHint => '空欄の場合は制限なし';
+
+  @override
+  String get maxActressCountInvalid => '1以上の整数を入力してください';
+
+  @override
+  String get scrapeAvatarUnavailable => '利用可能な女優画像が見つかりませんでした。';
+
+  @override
+  String get scrapeAvatarFailed => '女優画像の差し替えに失敗したため、元の画像を保持しました。';
 
   @override
   String get fillMissingOnly => '再取得時は未入力の情報のみ補完';

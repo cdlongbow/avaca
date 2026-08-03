@@ -46,6 +46,56 @@ void main() {
     expect(work.series, 'PRESTIGE PREMIUM');
   });
 
+  test('removes V T and VT edition suffixes from scraped work codes', () {
+    final actressPage = parser.parseActressPage('''
+      <a class="movie-box" href="/STARS-859-V"><date>STARS-859-V</date></a>
+      <a class="movie-box" href="/STARS-757-T"><date>STARS-757-T</date></a>
+      <a class="movie-box" href="/STARS-715-VT"><date>STARS-715-VT</date></a>
+      <a class="movie-box" href="/STARS-859-VR"><date>STARS-859-VR</date></a>
+      <a class="movie-box" href="/FC2-PPV_123-999"><date>FC2-PPV_123-999</date></a>
+      ''', pageUri: Uri.parse('https://www.javbus.com/star/zen'));
+    final details = parser.parseWorkPage('''
+      <h3>STARS-859-V 特典版標題</h3>
+      <div class="info"><p><span class="header">識別碼:</span> STARS-859-V</p></div>
+      ''', pageUri: Uri.parse('https://www.javbus.com/STARS-859-V'));
+
+    expect(actressPage.works.map((work) => work.code), [
+      'STARS-859',
+      'STARS-757',
+      'STARS-715',
+      'STARS-859-VR',
+      'FC2-PPV_123-999',
+    ]);
+    expect(details.code, 'STARS-859');
+    expect(details.title, '特典版標題');
+  });
+
+  test('parses unique actresses only from the work actress section', () {
+    final work = parser.parseWorkPage(
+      _multiActressWorkHtml,
+      pageUri: Uri.parse('https://www.javbus.com/DOCD-096'),
+    );
+
+    expect(work.actressUris.map((uri) => uri.toString()), [
+      'https://www.javbus.com/star/14jf',
+      'https://www.javbus.com/star/1426',
+    ]);
+  });
+
+  test('treats empty and placeholder actress images as unavailable', () {
+    final empty = parser.parseActressPage(
+      '<div class="avatar-box"><img src=""><div class="photo-info"><span>小湊よつ葉</span></div></div>',
+      pageUri: Uri.parse('https://www.javbus.com/star/zen'),
+    );
+    final placeholder = parser.parseActressPage(
+      '<div class="avatar-box"><img src="https://pics.dmm.co.jp/mono/actjpgs/nowprinting.gif"><div class="photo-info"><span>星まりあ</span></div></div>',
+      pageUri: Uri.parse('https://www.javbus.com/star/muw'),
+    );
+
+    expect(empty.details.avatarUrl, isNull);
+    expect(placeholder.details.avatarUrl, isNull);
+  });
+
   test('parses actress search results and resolves relative links', () {
     final results = parser.parseActressSearchResults(
       _searchHtml,
@@ -97,5 +147,24 @@ const _searchHtml = '''
   <a class="avatar-box text-center" href="/star/uly">
     <div class="photo-info"><span class="mleft">涼森れむ<button>有碼</button></span></div>
   </a>
+</body></html>
+''';
+
+const _multiActressWorkHtml = '''
+<html><body>
+  <a href="/star/unrelated">頁面其他女優</a>
+  <h3>DOCD-096 多人作品</h3>
+  <div class="info">
+    <p><span class="header">識別碼:</span> DOCD-096</p>
+    <p class="star-show"><span class="header">演員</span>:</p>
+    <ul>
+      <li><a href="/star/14jf">喜多川みら</a></li>
+      <li><a href="/star/1426">谷村凪咲</a></li>
+    </ul>
+    <p>
+      <a href="/star/14jf">喜多川みら</a>
+      <a href="/star/1426">谷村凪咲</a>
+    </p>
+  </div>
 </body></html>
 ''';

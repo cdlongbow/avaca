@@ -25,6 +25,42 @@ void main() {
       expect(urls.source, WorkImageSource.dmm);
     });
 
+    test('ignores V T and VT edition suffixes in DMM image codes', () {
+      final cases = {
+        'STARS-859-V': 'stars00859',
+        'STARS-757-T': 'stars00757',
+        'STARS-715-VT': 'stars00715',
+      };
+
+      for (final entry in cases.entries) {
+        final urls = policy.urlsFor(code: entry.key);
+        expect(
+          urls.detail.toString(),
+          'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
+          '${entry.value}/${entry.value}pl.jpg',
+        );
+      }
+    });
+
+    test('builds the fourth DMM h2 candidate', () {
+      final urls = policy.urlsFor(
+        code: 'STARS-685',
+        dmmLeadingOne: true,
+        dmmTrailingH2: true,
+      );
+
+      expect(
+        urls.card.toString(),
+        'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
+        '1stars00685h2/1stars00685h2ps.jpg',
+      );
+      expect(
+        urls.detail.toString(),
+        'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
+        '1stars00685h2/1stars00685h2pl.jpg',
+      );
+    });
+
     test('uses MGStage for Prestige studio without padding the number', () {
       final urls = policy.urlsFor(code: 'ABF-183', studio: 'プレステージ');
 
@@ -72,6 +108,72 @@ void main() {
       ]);
     },
   );
+
+  test(
+    'DMM retries with a leading one and trailing v as the third candidate',
+    () async {
+      final placeholder = image.encodePng(image.Image(width: 90, height: 122));
+      final valid = image.encodePng(image.Image(width: 1700, height: 1200));
+      final transport = _FakeBinaryTransport([
+        BinaryResponse(statusCode: 200, bodyBytes: placeholder),
+        BinaryResponse(statusCode: 200, bodyBytes: placeholder),
+        BinaryResponse(statusCode: 200, bodyBytes: valid),
+      ]);
+      final downloader = WorkImageDownloader(transport: transport);
+
+      final result = await downloader.fetch(
+        code: 'START-135',
+        variant: WorkImageVariant.detail,
+      );
+
+      expect(result.bytes, valid);
+      expect(
+        result.sourceUri.toString(),
+        'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
+        '1start00135v/1start00135vpl.jpg',
+      );
+      expect(transport.requested.map((uri) => uri.toString()), [
+        'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
+            'start00135/start00135pl.jpg',
+        'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
+            '1start00135/1start00135pl.jpg',
+        'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
+            '1start00135v/1start00135vpl.jpg',
+      ]);
+    },
+  );
+
+  test('DMM retries with h2 as the fourth candidate', () async {
+    final placeholder = image.encodePng(image.Image(width: 90, height: 122));
+    final valid = image.encodePng(image.Image(width: 2184, height: 1542));
+    final transport = _FakeBinaryTransport([
+      BinaryResponse(statusCode: 200, bodyBytes: placeholder),
+      BinaryResponse(statusCode: 200, bodyBytes: placeholder),
+      BinaryResponse(statusCode: 200, bodyBytes: placeholder),
+      BinaryResponse(statusCode: 200, bodyBytes: valid),
+    ]);
+
+    final result = await WorkImageDownloader(
+      transport: transport,
+    ).fetch(code: 'STARS-685', variant: WorkImageVariant.detail);
+
+    expect(result.bytes, valid);
+    expect(
+      result.sourceUri.toString(),
+      'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
+      '1stars00685h2/1stars00685h2pl.jpg',
+    );
+    expect(transport.requested.map((uri) => uri.toString()), [
+      'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
+          'stars00685/stars00685pl.jpg',
+      'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
+          '1stars00685/1stars00685pl.jpg',
+      'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
+          '1stars00685v/1stars00685vpl.jpg',
+      'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
+          '1stars00685h2/1stars00685h2pl.jpg',
+    ]);
+  });
 
   test('MGStage failure does not guess a DMM URL', () async {
     final transport = _FakeBinaryTransport([
@@ -124,11 +226,13 @@ void main() {
     },
   );
 
-  test('throws after both DMM attempts return invalid images', () async {
+  test('throws after all DMM attempts return invalid images', () async {
     final invalid = image.encodePng(image.Image(width: 90, height: 122));
     final transport = _FakeBinaryTransport([
       BinaryResponse(statusCode: 200, bodyBytes: invalid),
       const BinaryResponse(statusCode: 500, bodyBytes: []),
+      const BinaryResponse(statusCode: 404, bodyBytes: []),
+      const BinaryResponse(statusCode: 404, bodyBytes: []),
     ]);
 
     await expectLater(
@@ -137,7 +241,7 @@ void main() {
       ).fetch(code: 'START-196', variant: WorkImageVariant.card),
       throwsA(isA<WorkImageDownloadException>()),
     );
-    expect(transport.requested, hasLength(2));
+    expect(transport.requested, hasLength(4));
   });
 
   test('writes downloaded bytes to the requested local file', () async {
