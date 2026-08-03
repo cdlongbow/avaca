@@ -618,6 +618,7 @@ class _ScrapeSettingsDialogState extends State<_ScrapeSettingsDialog> {
   late bool syncDetails;
   late bool replaceImage;
   late bool fillMissingOnly;
+  bool prefixesExpanded = false;
 
   @override
   void initState() {
@@ -654,104 +655,166 @@ class _ScrapeSettingsDialogState extends State<_ScrapeSettingsDialog> {
     final l10n = AppLocalizations.of(context);
 
     return AlertDialog(
-      title: Text(l10n.scrapeSettings),
+      title: Text(l10n.scrapeSettings, key: const Key('scrape-settings-title')),
+      titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
       content: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 520),
         child: SingleChildScrollView(
+          key: const Key('scrape-settings-scroll'),
           child: Form(
             key: formKey,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                CheckboxListTile(
+                const SizedBox(
+                  key: Key('scrape-settings-gap-title'),
+                  height: 8,
+                ),
+                SwitchListTile(
+                  key: const Key('scrape-sync-details-switch'),
                   contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  controlAffinity: ListTileControlAffinity.trailing,
                   title: Text(l10n.syncActressDetails),
                   value: syncDetails,
                   onChanged: (value) {
-                    setState(() => syncDetails = value ?? false);
+                    setState(() => syncDetails = value);
                   },
                 ),
-                CheckboxListTile(
+                const SizedBox(key: Key('scrape-settings-gap-sync'), height: 8),
+                SwitchListTile(
+                  key: const Key('scrape-replace-actress-image-switch'),
                   contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  controlAffinity: ListTileControlAffinity.trailing,
                   title: Text(l10n.replaceActressImage),
                   value: replaceImage,
                   onChanged: (value) {
-                    setState(() => replaceImage = value ?? false);
+                    setState(() => replaceImage = value);
                   },
                 ),
-                CheckboxListTile(
+                const SizedBox(
+                  key: Key('scrape-settings-gap-replace'),
+                  height: 8,
+                ),
+                SwitchListTile(
+                  key: const Key('scrape-fill-missing-only-switch'),
                   contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  controlAffinity: ListTileControlAffinity.trailing,
                   title: Text(l10n.fillMissingOnly),
                   value: fillMissingOnly,
                   onChanged: (value) {
-                    setState(() => fillMissingOnly = value ?? false);
+                    setState(() => fillMissingOnly = value);
                   },
                 ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  key: const Key('scrape-max-actress-count-input'),
-                  controller: maxActressCountController,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: l10n.maxActressCountLabel,
-                    hintText: l10n.maxActressCountHint,
-                    isDense: true,
-                  ),
-                  autovalidateMode: AutovalidateMode.onUserInteraction,
-                  validator: (value) {
-                    final cleaned = value?.trim() ?? '';
-                    if (cleaned.isEmpty) {
-                      return null;
-                    }
-                    final parsed = int.tryParse(cleaned);
-                    return parsed != null && parsed > 0
-                        ? null
-                        : l10n.maxActressCountInvalid;
-                  },
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  l10n.excludedCodePrefixes,
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const SizedBox(height: 8),
+                const SizedBox(key: Key('scrape-settings-gap-fill'), height: 8),
                 Row(
+                  key: const Key('scrape-max-actress-count-row'),
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Expanded(
-                      child: TextField(
-                        key: const Key('scrape-prefix-input'),
-                        controller: prefixController,
+                    Expanded(child: Text(l10n.maxActressCountLabel)),
+                    const SizedBox(width: 16),
+                    SizedBox(
+                      width: 150,
+                      child: TextFormField(
+                        key: const Key('scrape-max-actress-count-input'),
+                        controller: maxActressCountController,
+                        keyboardType: TextInputType.number,
+                        textAlign: TextAlign.end,
                         decoration: InputDecoration(
-                          hintText: l10n.codePrefixHint,
+                          hintText: l10n.maxActressCountHint,
                           isDense: true,
                         ),
-                        textCapitalization: TextCapitalization.characters,
-                        onSubmitted: (_) => _addPrefix(),
+                        autovalidateMode: AutovalidateMode.onUserInteraction,
+                        validator: (value) {
+                          final cleaned = value?.trim() ?? '';
+                          if (cleaned.isEmpty) {
+                            return null;
+                          }
+                          final parsed = int.tryParse(cleaned);
+                          return parsed != null && parsed > 0
+                              ? null
+                              : l10n.maxActressCountInvalid;
+                        },
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton.filledTonal(
-                      key: const Key('scrape-prefix-add'),
-                      tooltip: l10n.addPrefix,
-                      onPressed: _addPrefix,
-                      icon: const Icon(Icons.add),
                     ),
                   ],
                 ),
-                if (prefixes.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
+                const SizedBox(key: Key('scrape-settings-gap-max'), height: 8),
+                ListTile(
+                  key: const Key('scrape-prefix-section'),
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: Text(
+                    l10n.excludedCodePrefixes,
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      for (final prefix in prefixes)
-                        InputChip(
-                          label: Text(prefix),
-                          onDeleted: () {
-                            setState(() => prefixes.remove(prefix));
-                          },
+                      Text(
+                        '${prefixes.length}',
+                        key: const Key('scrape-prefix-count'),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(
+                        prefixesExpanded
+                            ? Icons.expand_less
+                            : Icons.expand_more,
+                        key: const Key('scrape-prefix-chevron'),
+                      ),
+                    ],
+                  ),
+                  onTap: () {
+                    setState(() => prefixesExpanded = !prefixesExpanded);
+                  },
+                ),
+                if (prefixesExpanded) ...[
+                  Column(
+                    key: const Key('scrape-prefix-section-content'),
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              key: const Key('scrape-prefix-input'),
+                              controller: prefixController,
+                              decoration: InputDecoration(
+                                hintText: l10n.codePrefixHint,
+                                isDense: true,
+                              ),
+                              textCapitalization: TextCapitalization.characters,
+                              onSubmitted: (_) => _addPrefix(),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton.filledTonal(
+                            key: const Key('scrape-prefix-add'),
+                            tooltip: l10n.addPrefix,
+                            onPressed: _addPrefix,
+                            icon: const Icon(Icons.add),
+                          ),
+                        ],
+                      ),
+                      if (prefixes.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final prefix in prefixes)
+                              InputChip(
+                                label: Text(prefix),
+                                onDeleted: () {
+                                  setState(() => prefixes.remove(prefix));
+                                },
+                              ),
+                          ],
                         ),
+                      ],
                     ],
                   ),
                 ],
@@ -760,6 +823,7 @@ class _ScrapeSettingsDialogState extends State<_ScrapeSettingsDialog> {
           ),
         ),
       ),
+      contentPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),

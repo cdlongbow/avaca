@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.3 - 2026-08-04
+
+- Refined scrape settings into compact switch and count rows with consistent
+  spacing, a collapsible excluded-prefix editor, and constrained-screen
+  scrolling.
+- Updated application text buttons to use the secondary text color while
+  preserving emphasized button contrast colors.
+
 ## 0.7.2 - 2026-08-03
 
 - Unified detail-page Edit and Delete actions under a localized overflow menu;

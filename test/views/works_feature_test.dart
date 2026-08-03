@@ -211,31 +211,127 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('scrape action opens settings and accepts complex prefixes', (
+  testWidgets(
+    'scrape settings use compact switch rows and collapsible prefixes',
+    (tester) async {
+      await _pumpWorks(tester);
+
+      await tester.tap(find.byKey(const Key('works-scrape-action')));
+      await tester.pumpAndSettle();
+
+      final switchTiles = tester
+          .widgetList<SwitchListTile>(find.byType(SwitchListTile))
+          .toList(growable: false);
+      expect(switchTiles, hasLength(3));
+      for (final tile in switchTiles) {
+        expect(tile.controlAffinity, ListTileControlAffinity.trailing);
+      }
+      expect(find.text('同步詳細資料'), findsOneWidget);
+      expect(find.text('更換女優頭像'), findsOneWidget);
+      expect(find.text('二次刮削只補齊缺少的資訊'), findsOneWidget);
+      expect(find.text('多於此數量的女優不刮削'), findsOneWidget);
+      expect(
+        find.byKey(const Key('scrape-max-actress-count-row')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('scrape-max-actress-count-input')),
+        findsOneWidget,
+      );
+      final maxCountFinder = find.byKey(
+        const Key('scrape-max-actress-count-input'),
+      );
+      final maxCountEditable = tester.widget<EditableText>(
+        find.descendant(
+          of: maxCountFinder,
+          matching: find.byType(EditableText),
+        ),
+      );
+      expect(maxCountEditable.textAlign, TextAlign.end);
+
+      final spacingKeys = <String>[
+        'scrape-settings-gap-title',
+        'scrape-settings-gap-sync',
+        'scrape-settings-gap-replace',
+        'scrape-settings-gap-fill',
+        'scrape-settings-gap-max',
+      ];
+      for (final key in spacingKeys) {
+        final gap = tester.widget<SizedBox>(find.byKey(Key(key)));
+        expect(gap.height, inInclusiveRange(6, 8));
+      }
+      final titleBottom = tester
+          .getRect(find.byKey(const Key('scrape-settings-title')))
+          .bottom;
+      final settingsRowKeys = <String>[
+        'scrape-sync-details-switch',
+        'scrape-replace-actress-image-switch',
+        'scrape-fill-missing-only-switch',
+        'scrape-max-actress-count-row',
+        'scrape-prefix-section',
+      ];
+      final settingsRows = settingsRowKeys
+          .map((key) => tester.getRect(find.byKey(Key(key))))
+          .toList(growable: false);
+      expect(settingsRows.first.top - titleBottom, closeTo(8, 0.5));
+      for (var index = 1; index < settingsRows.length; index++) {
+        expect(
+          settingsRows[index].top - settingsRows[index - 1].bottom,
+          closeTo(8, 0.5),
+        );
+      }
+
+      expect(find.byKey(const Key('scrape-prefix-section')), findsOneWidget);
+      expect(find.byKey(const Key('scrape-prefix-count')), findsOneWidget);
+      expect(find.byKey(const Key('scrape-prefix-input')), findsNothing);
+      expect(find.byKey(const Key('scrape-prefix-add')), findsNothing);
+
+      await tester.tap(find.byKey(const Key('scrape-prefix-section')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('scrape-prefix-input')), findsOneWidget);
+      expect(find.byKey(const Key('scrape-prefix-add')), findsOneWidget);
+
+      await tester.enterText(
+        find.byKey(const Key('scrape-prefix-input')),
+        'fc2-ppv_123',
+      );
+      await tester.tap(find.byKey(const Key('scrape-prefix-add')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('FC2-PPV_123'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('scrape settings remain scrollable in a constrained viewport', (
     tester,
   ) async {
     await _pumpWorks(tester);
 
     await tester.tap(find.byKey(const Key('works-scrape-action')));
     await tester.pumpAndSettle();
-
-    expect(find.text('同步詳細資料'), findsOneWidget);
-    expect(find.text('更換女優頭像'), findsOneWidget);
-    expect(find.text('二次刮削只補齊缺少的資訊'), findsOneWidget);
-    expect(find.text('多於此數量的女優不刮削'), findsOneWidget);
-    expect(
-      find.byKey(const Key('scrape-max-actress-count-input')),
-      findsOneWidget,
-    );
-
-    await tester.enterText(
-      find.byKey(const Key('scrape-prefix-input')),
-      'fc2-ppv_123',
-    );
-    await tester.tap(find.byKey(const Key('scrape-prefix-add')));
+    await tester.tap(find.byKey(const Key('scrape-prefix-section')));
     await tester.pumpAndSettle();
 
-    expect(find.text('FC2-PPV_123'), findsOneWidget);
+    tester.view.physicalSize = const Size(300, 300);
+    addTearDown(tester.view.resetPhysicalSize);
+    await tester.pumpAndSettle();
+
+    final scrollable = find.byKey(const Key('scrape-settings-scroll'));
+    expect(scrollable, findsOneWidget);
+    final scrollableStateFinder = find.descendant(
+      of: scrollable,
+      matching: find.byType(Scrollable),
+    );
+    final states = scrollableStateFinder
+        .evaluate()
+        .whereType<StatefulElement>()
+        .map((element) => element.state)
+        .whereType<ScrollableState>()
+        .toList(growable: false);
+    expect(states.any((state) => state.position.maxScrollExtent > 0), isTrue);
+    await tester.drag(scrollable, const Offset(0, -100));
+    await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
 
@@ -266,6 +362,8 @@ void main() {
     );
 
     await tester.tap(find.byKey(const Key('works-scrape-action')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('scrape-prefix-section')));
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const Key('scrape-prefix-input')),

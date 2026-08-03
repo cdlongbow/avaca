@@ -310,7 +310,7 @@ class AppTheme {
   static TextButtonThemeData _textButtonTheme(AppPalette palette) {
     return TextButtonThemeData(
       style: ButtonStyle(
-        foregroundColor: WidgetStatePropertyAll(palette.primary),
+        foregroundColor: WidgetStatePropertyAll(palette.onSurfaceVariant),
         textStyle: WidgetStatePropertyAll(_appTextStyle()),
       ),
     );

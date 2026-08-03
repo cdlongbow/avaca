@@ -105,6 +105,37 @@ void main() {
       }
     });
 
+    test('uses the secondary text token for TextButton foregrounds', () {
+      const palette = AppPalette(
+        brightness: Brightness.dark,
+        surface: Color(0xFF111111),
+        surfaceContainer: Color(0xFF222222),
+        onSurface: Color(0xFF333333),
+        onSurfaceVariant: Color(0xFF445566),
+        primary: Color(0xFF667788),
+        onPrimary: Color(0xFF99AABB),
+        outline: Color(0xFFCCDDEE),
+      );
+      final theme = AppTheme.fromPalette(palette);
+
+      expect(
+        theme.textButtonTheme.style?.foregroundColor?.resolve({}),
+        palette.onSurfaceVariant,
+      );
+      expect(
+        theme.filledButtonTheme.style?.foregroundColor?.resolve({}),
+        palette.onPrimary,
+      );
+      expect(
+        theme.elevatedButtonTheme.style?.foregroundColor?.resolve({}),
+        palette.onPrimary,
+      );
+      expect(
+        theme.outlinedButtonTheme.style?.foregroundColor?.resolve({}),
+        palette.primary,
+      );
+    });
+
     testWidgets(
       'renders mixed-language names with the same family and locale',
       (tester) async {
