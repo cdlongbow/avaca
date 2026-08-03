@@ -285,6 +285,39 @@ class AppLocalizationsEn extends AppLocalizations {
   String get works => 'Works';
 
   @override
+  String get aliases => 'Aliases';
+
+  @override
+  String get manageAliases => 'Manage aliases';
+
+  @override
+  String get aliasInputHint => 'Enter an alternate name';
+
+  @override
+  String get addAlias => 'Add alias';
+
+  @override
+  String get saveAliases => 'Save aliases';
+
+  @override
+  String get noAliases => 'No aliases';
+
+  @override
+  String get deleteWorks => 'Delete works';
+
+  @override
+  String get deleteWorksTitle => 'Delete selected works?';
+
+  @override
+  String get deleteWorksWarning =>
+      'The selected works will be removed globally, including links from other actresses.';
+
+  @override
+  String worksDeleted(int count) {
+    return 'Deleted $count works';
+  }
+
+  @override
   String get loadFailedGeneric => 'Failed to load';
 
   @override

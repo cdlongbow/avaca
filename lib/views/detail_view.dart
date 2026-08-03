@@ -468,6 +468,16 @@ class _DetailViewState extends State<DetailView> {
                       ],
                     ),
                     const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        key: const Key('detail-aliases-button'),
+                        onPressed: _openAliases,
+                        style: _detailOutlinedButtonStyle(),
+                        child: Text(AppLocalizations.of(context).aliases),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     KeyedSubtree(
                       key: const Key('detail-attributes'),
                       child: isEditing
@@ -654,6 +664,17 @@ class _DetailViewState extends State<DetailView> {
     if (mounted) {
       await controller.refreshWorkCount();
     }
+  }
+
+  Future<void> _openAliases() async {
+    _dismissKeyboard();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => _AliasesDialog(
+        initialAliases: controller.getCurrentAliases(),
+        onSave: (aliases) => controller.saveAliases(aliases),
+      ),
+    );
   }
 
   void _dismissKeyboard() {
@@ -926,6 +947,134 @@ class _DetailViewState extends State<DetailView> {
           ],
         );
       },
+    );
+  }
+}
+
+class _AliasesDialog extends StatefulWidget {
+  const _AliasesDialog({required this.initialAliases, required this.onSave});
+
+  final List<String> initialAliases;
+  final Future<bool> Function(Iterable<String> aliases) onSave;
+
+  @override
+  State<_AliasesDialog> createState() => _AliasesDialogState();
+}
+
+class _AliasesDialogState extends State<_AliasesDialog> {
+  late final List<String> aliases;
+  final inputController = TextEditingController();
+  var saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    aliases = widget.initialAliases.toList();
+  }
+
+  @override
+  void dispose() {
+    inputController.dispose();
+    super.dispose();
+  }
+
+  void _addAlias() {
+    final value = inputController.text.trim();
+    if (value.isEmpty ||
+        aliases.any((alias) => alias.toLowerCase() == value.toLowerCase())) {
+      return;
+    }
+    setState(() {
+      aliases.add(value);
+      inputController.clear();
+    });
+  }
+
+  Future<void> _save() async {
+    if (saving) return;
+    setState(() => saving = true);
+    final success = await widget.onSave(aliases);
+    if (!mounted) return;
+    if (success) {
+      Navigator.of(context).pop();
+      return;
+    }
+    setState(() => saving = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(AppLocalizations.of(context).saveFailedDuplicateName),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return AlertDialog(
+      key: const Key('detail-aliases-dialog'),
+      title: Text(l10n.manageAliases),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 480),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      key: const Key('detail-alias-input'),
+                      controller: inputController,
+                      enabled: !saving,
+                      decoration: InputDecoration(
+                        hintText: l10n.aliasInputHint,
+                        isDense: true,
+                      ),
+                      onSubmitted: (_) => _addAlias(),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton.filledTonal(
+                    key: const Key('detail-alias-add'),
+                    tooltip: l10n.addAlias,
+                    onPressed: saving ? null : _addAlias,
+                    icon: const Icon(Icons.add),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              if (aliases.isEmpty)
+                Text(l10n.noAliases)
+              else
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final alias in aliases)
+                      InputChip(
+                        label: Text(alias),
+                        onDeleted: saving
+                            ? null
+                            : () => setState(() => aliases.remove(alias)),
+                      ),
+                  ],
+                ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: saving ? null : () => Navigator.of(context).pop(),
+          child: Text(l10n.cancel),
+        ),
+        FilledButton(
+          key: const Key('detail-alias-save'),
+          onPressed: saving ? null : _save,
+          child: Text(l10n.saveAliases),
+        ),
+      ],
     );
   }
 }

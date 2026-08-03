@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:path/path.dart' as path;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -253,10 +254,54 @@ class ActressDeletionReport {
     'file_cleanup': fileCleanup.toJson(),
     'maintenance': maintenance.toJson(),
   };
+}
 
+/// Auditable result of deleting works globally from the local database.
+///
+/// A work is shared by zero or more actresses through [actress_works].  The
+/// deletion operation removes the selected work rows and every relation in a
+/// single transaction, then performs managed-image cleanup after commit.
+class WorkDeletionReport {
+  const WorkDeletionReport({
+    required this.databaseCommitted,
+    required this.requestedWorkIds,
+    required this.deletedWorkIds,
+    required this.deletedWorkRows,
+    required this.deletedActressWorkRows,
+    required this.fileCleanup,
+    required this.cacheEvictionPaths,
+    required this.pendingFileDeletionsBefore,
+    required this.pendingFileDeletionsAfter,
+  });
+
+  final bool databaseCommitted;
+  final List<int> requestedWorkIds;
+  final List<int> deletedWorkIds;
+  final int deletedWorkRows;
+  final int deletedActressWorkRows;
+  final ManagedFileCleanupReport fileCleanup;
+  final List<String> cacheEvictionPaths;
+  final List<String> pendingFileDeletionsBefore;
+  final List<String> pendingFileDeletionsAfter;
+
+  Map<String, Object?> toJson() => {
+    'database_committed': databaseCommitted,
+    'requested_work_ids': requestedWorkIds,
+    'deleted_work_ids': deletedWorkIds,
+    'deleted_work_rows': deletedWorkRows,
+    'deleted_actress_work_rows': deletedActressWorkRows,
+    'cache_eviction_paths': cacheEvictionPaths,
+    'pending_file_deletions': {
+      'before': pendingFileDeletionsBefore,
+      'after': pendingFileDeletionsAfter,
+    },
+    'file_cleanup': fileCleanup.toJson(),
+  };
 }
 
 class AppDatabase {
+  static const int _sqliteBindBatchSize = 500;
+
   AppDatabase()
     : _baseDirOverride = null,
       _databaseFactoryOverride = null,
@@ -274,8 +319,7 @@ class AppDatabase {
        _databaseFactoryOverride = databaseFactory,
        _deleteFileOverride = deleteFile,
        _afterDeleteTransactionCommitted = afterDeleteTransactionCommitted,
-       _managedImageCanonicalPathResolver =
-           managedImageCanonicalPathResolver;
+       _managedImageCanonicalPathResolver = managedImageCanonicalPathResolver;
 
   static const String appName = 'AVACA';
   static const String databaseFileName = 'avaca.db';
@@ -288,8 +332,7 @@ class AppDatabase {
   final DatabaseFactory? _databaseFactoryOverride;
   final ManagedFileDelete? _deleteFileOverride;
   final DeleteTransactionCommittedCallback? _afterDeleteTransactionCommitted;
-  final ManagedImageCanonicalPathResolver?
-  _managedImageCanonicalPathResolver;
+  final ManagedImageCanonicalPathResolver? _managedImageCanonicalPathResolver;
   Database? _database;
   bool _initialized = false;
   Future<void> _managedImageLifecycleTail = Future.value();
@@ -367,9 +410,10 @@ class AppDatabase {
 
     _initialized = true;
     final startupCleanup = await _flushPendingFileDeletions(_database!);
-    _writeStructuredResult('pending_file_deletions_startup_retry', () => {
-      'file_cleanup': startupCleanup.toJson(),
-    });
+    _writeStructuredResult(
+      'pending_file_deletions_startup_retry',
+      () => {'file_cleanup': startupCleanup.toJson()},
+    );
   }
 
   // 取得目前可用的資料庫連線，尚未初始化時會先完成初始化。
@@ -499,6 +543,18 @@ class AppDatabase {
         FOREIGN KEY (work_id) REFERENCES works(id) ON DELETE CASCADE
       )
     ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS actress_aliases (
+        actress_id INTEGER NOT NULL,
+        alias TEXT NOT NULL COLLATE NOCASE,
+        PRIMARY KEY (actress_id, alias),
+        FOREIGN KEY (actress_id) REFERENCES actresses(id) ON DELETE CASCADE
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_actress_aliases_actress '
+      'ON actress_aliases(actress_id, alias COLLATE NOCASE)',
+    );
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_actress_works_work '
       'ON actress_works(work_id)',
@@ -579,6 +635,7 @@ class AppDatabase {
     }
 
     final row = rows.first;
+    final aliases = await getActressAliases(actressId);
 
     return {
       'id': row['id'],
@@ -591,7 +648,72 @@ class AppDatabase {
       'bwh': row['bwh'],
       'cup': row['cup'],
       'birth_date': row['birth_date'],
+      'aliases': aliases,
     };
+  }
+
+  /// Returns the stored aliases for an actress in deterministic NOCASE order.
+  Future<List<String>> getActressAliases(int actressId) async {
+    final db = await database;
+    final rows = await db.query(
+      'actress_aliases',
+      columns: ['alias'],
+      where: 'actress_id = ?',
+      whereArgs: [actressId],
+      orderBy: 'alias COLLATE NOCASE ASC',
+    );
+    return rows
+        .map((row) => row['alias']?.toString())
+        .whereType<String>()
+        .toList(growable: false);
+  }
+
+  /// Replaces an actress's aliases after trimming, deduplicating (NOCASE), and
+  /// excluding the canonical actress name.
+  Future<void> replaceActressAliases({
+    required int actressId,
+    required Iterable<String> aliases,
+  }) async {
+    final db = await database;
+    await db.transaction((transaction) async {
+      final actressRows = await transaction.query(
+        'actresses',
+        columns: ['name'],
+        where: 'id = ?',
+        whereArgs: [actressId],
+        limit: 1,
+      );
+      if (actressRows.isEmpty) {
+        throw StateError('Actress $actressId does not exist.');
+      }
+      final canonical = actressRows.single['name']?.toString().trim() ?? '';
+      final canonicalKey = canonical.toLowerCase();
+      final normalized = <String>[];
+      final seen = <String>{};
+      for (final source in aliases) {
+        final value = source.trim();
+        if (value.isEmpty) {
+          continue;
+        }
+        final key = value.toLowerCase();
+        if (key == canonicalKey || !seen.add(key)) {
+          continue;
+        }
+        normalized.add(value);
+      }
+
+      await transaction.delete(
+        'actress_aliases',
+        where: 'actress_id = ?',
+        whereArgs: [actressId],
+      );
+      for (final alias in normalized) {
+        await transaction.insert('actress_aliases', {
+          'actress_id': actressId,
+          'alias': alias,
+        });
+      }
+    });
   }
 
   static const _workColumns = <String>[
@@ -784,27 +906,38 @@ class AppDatabase {
     }
 
     final imageValue = details.imagePath?.trim();
+    final mergedName = merged('name', details.name);
     try {
-      await db.update(
-        'actresses',
-        {
-          'name': merged('name', details.name),
-          'img_path':
-              replaceImage && imageValue != null && imageValue.isNotEmpty
-              ? imageValue
-              : current['img_path'],
-          'height': merged('height', details.height),
-          'bwh': merged('bwh', details.bwh),
-          'cup': merged('cup', details.cup),
-          'birth_date': merged(
-            'birth_date',
-            normalizedBirthDate.valid ? normalizedBirthDate.value : null,
-          ),
-          'modified_at': DateTime.now().toIso8601String(),
-        },
-        where: 'id = ?',
-        whereArgs: [actressId],
-      );
+      await db.transaction((transaction) async {
+        await transaction.update(
+          'actresses',
+          {
+            'name': mergedName,
+            'img_path':
+                replaceImage && imageValue != null && imageValue.isNotEmpty
+                ? imageValue
+                : current['img_path'],
+            'height': merged('height', details.height),
+            'bwh': merged('bwh', details.bwh),
+            'cup': merged('cup', details.cup),
+            'birth_date': merged(
+              'birth_date',
+              normalizedBirthDate.valid ? normalizedBirthDate.value : null,
+            ),
+            'modified_at': DateTime.now().toIso8601String(),
+          },
+          where: 'id = ?',
+          whereArgs: [actressId],
+        );
+        final canonical = mergedName?.toString().trim() ?? '';
+        if (canonical.isNotEmpty) {
+          await transaction.delete(
+            'actress_aliases',
+            where: 'actress_id = ? AND alias = ? COLLATE NOCASE',
+            whereArgs: [actressId, canonical],
+          );
+        }
+      });
       return true;
     } on DatabaseException {
       return false;
@@ -913,34 +1046,41 @@ class AppDatabase {
     try {
       final db = await database;
 
-      await db.rawUpdate(
-        '''
-        UPDATE actresses
-        SET name = ?,
-            img_path = ?,
-            main_type = ?,
-            memo = ?,
-            height = ?,
-            weight = ?,
-            bwh = ?,
-            cup = ?,
-            birth_date = ?,
-            modified_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-        ''',
-        [
-          name,
-          imgPath,
-          mainType,
-          memo,
-          height,
-          weight,
-          bwh,
-          cup,
-          normalizedBirthDate.value,
-          actressId,
-        ],
-      );
+      await db.transaction((transaction) async {
+        await transaction.rawUpdate(
+          '''
+          UPDATE actresses
+          SET name = ?,
+              img_path = ?,
+              main_type = ?,
+              memo = ?,
+              height = ?,
+              weight = ?,
+              bwh = ?,
+              cup = ?,
+              birth_date = ?,
+              modified_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+          ''',
+          [
+            name,
+            imgPath,
+            mainType,
+            memo,
+            height,
+            weight,
+            bwh,
+            cup,
+            normalizedBirthDate.value,
+            actressId,
+          ],
+        );
+        await transaction.delete(
+          'actress_aliases',
+          where: 'actress_id = ? AND alias = ? COLLATE NOCASE',
+          whereArgs: [actressId, name.trim()],
+        );
+      });
 
       return true;
     } on DatabaseException {
@@ -984,6 +1124,221 @@ class AppDatabase {
   // 刪除指定收藏資料。保留布林入口供既有呼叫端使用。
   Future<bool> deleteActress(int actressId) async {
     return (await deleteActressWithReport(actressId)).databaseCommitted;
+  }
+
+  /// Deletes selected work rows globally, including every actress relation.
+  ///
+  /// Database rows and pending managed-file paths are committed atomically;
+  /// physical files are validated and removed only after the transaction.
+  Future<WorkDeletionReport> deleteWorksWithReport(
+    Iterable<int> workIds,
+  ) async {
+    final requested = <int>[];
+    final seen = <int>{};
+    for (final id in workIds) {
+      if (id > 0 && seen.add(id)) {
+        requested.add(id);
+      }
+    }
+    return runManagedImageLifecycle(() => _deleteWorksWithReport(requested));
+  }
+
+  Future<WorkDeletionReport> _deleteWorksWithReport(
+    List<int> requestedWorkIds,
+  ) async {
+    final db = await database;
+    final pendingBefore = await _pendingFileDeletionPaths(db);
+    const noCleanup = ManagedFileCleanupReport();
+
+    final candidates = <_FileDeletionCandidate>[];
+    try {
+      final rowsById = <int, Map<String, Object?>>{};
+      for (
+        var start = 0;
+        start < requestedWorkIds.length;
+        start += _sqliteBindBatchSize
+      ) {
+        final end = min(start + _sqliteBindBatchSize, requestedWorkIds.length);
+        final batch = requestedWorkIds.sublist(start, end);
+        final placeholders = List.filled(batch.length, '?').join(', ');
+        final rows = await db.rawQuery('''
+          SELECT id, card_image_path, detail_image_path
+          FROM works
+          WHERE id IN ($placeholders)
+          ''', batch);
+        for (final row in rows) {
+          rowsById[row['id'] as int] = row;
+        }
+      }
+      final validatedByStoredPath = <String, _ValidatedManagedImage>{};
+      Future<_ValidatedManagedImage> validate(String storedPath) async {
+        return validatedByStoredPath[storedPath] ??=
+            await _validateManagedImage(storedPath);
+      }
+
+      for (final id in requestedWorkIds) {
+        final row = rowsById[id];
+        if (row == null) {
+          continue;
+        }
+        final cardImagePath = row['card_image_path']?.toString();
+        final detailImagePath = row['detail_image_path']?.toString();
+        for (final image in [
+          (kind: 'card', storedPath: cardImagePath),
+          (kind: 'detail', storedPath: detailImagePath),
+        ]) {
+          final storedPath = image.storedPath;
+          if (storedPath == null || storedPath.trim().isEmpty) {
+            continue;
+          }
+          candidates.add(
+            _FileDeletionCandidate(
+              kind: image.kind,
+              databaseStoredPath: storedPath,
+              validated: await validate(storedPath),
+              workId: id,
+            ),
+          );
+        }
+      }
+
+      final outcome = await db.transaction<_WorkDeleteTransactionOutcome>((
+        transaction,
+      ) async {
+        if (requestedWorkIds.isEmpty) {
+          return const _WorkDeleteTransactionOutcome(
+            deletedWorkIds: [],
+            deletedActressWorkRows: 0,
+            deletedWorkRows: 0,
+          );
+        }
+        final existingIds = <int>[];
+        for (
+          var start = 0;
+          start < requestedWorkIds.length;
+          start += _sqliteBindBatchSize
+        ) {
+          final end = min(
+            start + _sqliteBindBatchSize,
+            requestedWorkIds.length,
+          );
+          final batch = requestedWorkIds.sublist(start, end);
+          final placeholders = List.filled(batch.length, '?').join(', ');
+          final existingRows = await transaction.rawQuery(
+            'SELECT id FROM works WHERE id IN ($placeholders)',
+            batch,
+          );
+          existingIds.addAll(existingRows.map((row) => row['id'] as int));
+        }
+        if (existingIds.isEmpty) {
+          return const _WorkDeleteTransactionOutcome(
+            deletedWorkIds: [],
+            deletedActressWorkRows: 0,
+            deletedWorkRows: 0,
+          );
+        }
+        final existingIdSet = existingIds.toSet();
+        var actressWorkRowsDeleted = 0;
+        for (
+          var start = 0;
+          start < existingIds.length;
+          start += _sqliteBindBatchSize
+        ) {
+          final end = min(start + _sqliteBindBatchSize, existingIds.length);
+          final batch = existingIds.sublist(start, end);
+          final placeholders = List.filled(batch.length, '?').join(', ');
+          actressWorkRowsDeleted += await transaction.rawDelete(
+            'DELETE FROM actress_works WHERE work_id IN ($placeholders)',
+            batch,
+          );
+        }
+        for (final candidate in candidates.where(
+          (candidate) => existingIdSet.contains(candidate.workId),
+        )) {
+          await transaction.insert('pending_file_deletions', {
+            'path': candidate.pendingPath,
+          }, conflictAlgorithm: ConflictAlgorithm.ignore);
+        }
+        var workRowsDeleted = 0;
+        for (
+          var start = 0;
+          start < existingIds.length;
+          start += _sqliteBindBatchSize
+        ) {
+          final end = min(start + _sqliteBindBatchSize, existingIds.length);
+          final batch = existingIds.sublist(start, end);
+          final placeholders = List.filled(batch.length, '?').join(', ');
+          workRowsDeleted += await transaction.rawDelete(
+            'DELETE FROM works WHERE id IN ($placeholders)',
+            batch,
+          );
+        }
+        return _WorkDeleteTransactionOutcome(
+          deletedWorkIds: requestedWorkIds
+              .where(existingIdSet.contains)
+              .toList(growable: false),
+          deletedActressWorkRows: actressWorkRowsDeleted,
+          deletedWorkRows: workRowsDeleted,
+        );
+      });
+
+      if (outcome.deletedWorkRows == 0) {
+        return WorkDeletionReport(
+          databaseCommitted: false,
+          requestedWorkIds: List.unmodifiable(requestedWorkIds),
+          deletedWorkIds: const [],
+          deletedWorkRows: 0,
+          deletedActressWorkRows: 0,
+          fileCleanup: noCleanup,
+          cacheEvictionPaths: const [],
+          pendingFileDeletionsBefore: pendingBefore,
+          pendingFileDeletionsAfter: await _pendingFileDeletionPaths(db),
+        );
+      }
+
+      await _afterDeleteTransactionCommitted?.call();
+      final fileCleanup = await _flushPendingFileDeletions(
+        db,
+        validatedCandidates: candidates
+            .where(
+              (candidate) => outcome.deletedWorkIds.contains(candidate.workId),
+            )
+            .toList(growable: false),
+      );
+      final cachePaths = candidates
+          .where(
+            (candidate) => outcome.deletedWorkIds.contains(candidate.workId),
+          )
+          .map((candidate) => candidate.databaseStoredPath)
+          .toSet()
+          .toList(growable: false);
+      final report = WorkDeletionReport(
+        databaseCommitted: true,
+        requestedWorkIds: List.unmodifiable(requestedWorkIds),
+        deletedWorkIds: outcome.deletedWorkIds,
+        deletedWorkRows: outcome.deletedWorkRows,
+        deletedActressWorkRows: outcome.deletedActressWorkRows,
+        fileCleanup: fileCleanup,
+        cacheEvictionPaths: cachePaths,
+        pendingFileDeletionsBefore: pendingBefore,
+        pendingFileDeletionsAfter: await _pendingFileDeletionPaths(db),
+      );
+      _writeStructuredResult('works_delete', report.toJson);
+      return report;
+    } on DatabaseException catch (error) {
+      stderr.writeln('作品刪除失敗: $error');
+      return WorkDeletionReport(
+        databaseCommitted: false,
+        requestedWorkIds: List.unmodifiable(requestedWorkIds),
+        deletedWorkIds: const [],
+        deletedWorkRows: 0,
+        deletedActressWorkRows: 0,
+        fileCleanup: noCleanup,
+        cacheEvictionPaths: const [],
+        pendingFileDeletionsBefore: pendingBefore,
+        pendingFileDeletionsAfter: await _pendingFileDeletionPaths(db),
+      );
+    }
   }
 
   // 回傳資料庫與實體圖片清理的可稽核結果，供 UI 清快取與驗收使用。
@@ -1242,6 +1597,7 @@ class AppDatabase {
       validatedByStoredPath[storedPath] = validated;
       return validated;
     }
+
     final fileCandidates = <_FileDeletionCandidate>[];
     final actressImagePath = actressRows.single['img_path']?.toString();
     if (actressImagePath != null && actressImagePath.trim().isNotEmpty) {
@@ -1351,6 +1707,7 @@ class AppDatabase {
         rejected.add(pendingPath);
       }
     }
+
     final candidatesByPendingPath = <String, List<_FileDeletionCandidate>>{};
     for (final candidate in validatedCandidates) {
       candidatesByPendingPath
@@ -1409,7 +1766,8 @@ class AppDatabase {
           continue;
         }
 
-        final candidates = candidatesByPendingPath[pendingPath] ??
+        final candidates =
+            candidatesByPendingPath[pendingPath] ??
             [
               _FileDeletionCandidate(
                 kind: 'pending',
@@ -1581,17 +1939,13 @@ class AppDatabase {
     return counts;
   }
 
-  Future<bool> _diagnosticPathExists(
-    _ValidatedManagedImage validation,
-  ) async {
+  Future<bool> _diagnosticPathExists(_ValidatedManagedImage validation) async {
     final candidatePath =
         validation.canonicalFilePath ?? validation.normalizedPath;
     return candidatePath != null && await File(candidatePath).exists();
   }
 
-  Future<int> _diagnosticPathBytes(
-    _ValidatedManagedImage validation,
-  ) async {
+  Future<int> _diagnosticPathBytes(_ValidatedManagedImage validation) async {
     final candidatePath =
         validation.canonicalFilePath ?? validation.normalizedPath;
     if (candidatePath == null) {
@@ -1623,9 +1977,7 @@ class AppDatabase {
     return _deleteFileOverride?.call(file) ?? file.delete();
   }
 
-  Future<_ValidatedManagedImage> _validateManagedImage(
-    String imagePath,
-  ) async {
+  Future<_ValidatedManagedImage> _validateManagedImage(String imagePath) async {
     final trimmed = imagePath.trim();
     final lexicalRoot = path.normalize(
       path.absolute(_normalizeAndroidPrivateDataAlias(imgDir)),
@@ -1931,10 +2283,13 @@ class AppDatabase {
   }
 
   void _writeSecurityWarning(String path, String? reason) {
-    _writeStructuredResult('managed_image_rejected', () => {
-      'path': path,
-      'reason': reason ?? 'managed image validation failed',
-    });
+    _writeStructuredResult(
+      'managed_image_rejected',
+      () => {
+        'path': path,
+        'reason': reason ?? 'managed image validation failed',
+      },
+    );
   }
 
   String _fileKey(String filePath) {
@@ -2046,9 +2401,7 @@ class _ActressDeletionSnapshot {
       )
       .toList(growable: false);
 
-  List<_FileDeletionCandidate> selectCandidates(
-    List<int> orphanWorkIds,
-  ) {
+  List<_FileDeletionCandidate> selectCandidates(List<int> orphanWorkIds) {
     final orphanIds = orphanWorkIds.toSet();
     return fileCandidates
         .where(
@@ -2089,6 +2442,18 @@ class _DeleteTransactionOutcome {
   final int deletedWorkRows;
   final List<_FileDeletionCandidate> fileCandidates;
   final List<String> cacheEvictionPaths;
+}
+
+class _WorkDeleteTransactionOutcome {
+  const _WorkDeleteTransactionOutcome({
+    required this.deletedWorkIds,
+    required this.deletedActressWorkRows,
+    required this.deletedWorkRows,
+  });
+
+  final List<int> deletedWorkIds;
+  final int deletedActressWorkRows;
+  final int deletedWorkRows;
 }
 
 class _FileDeletionCandidate {
@@ -2185,6 +2550,5 @@ class _ValidatedManagedImage {
   final bool exists;
   final int bytes;
 
-  String get pendingPath =>
-      canonicalFilePath ?? normalizedPath ?? originalPath;
+  String get pendingPath => canonicalFilePath ?? normalizedPath ?? originalPath;
 }

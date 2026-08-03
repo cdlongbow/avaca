@@ -11,6 +11,7 @@ class WorksController extends ChangeNotifier {
   final int actressId;
 
   String actressName = '';
+  List<String> actressAliases = const [];
   List<Map<String, Object?>> works = const [];
   WorksLoadStatus status = WorksLoadStatus.loading;
   Object? loadError;
@@ -23,6 +24,10 @@ class WorksController extends ChangeNotifier {
         status = WorksLoadStatus.notFound;
       } else {
         actressName = actress['name']?.toString() ?? '';
+        final aliases = actress['aliases'];
+        actressAliases = aliases is Iterable
+            ? aliases.map((alias) => alias.toString()).toList(growable: false)
+            : const [];
         works = await db.getWorksForActress(actressId);
         status = WorksLoadStatus.loaded;
       }

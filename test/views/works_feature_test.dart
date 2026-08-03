@@ -89,6 +89,37 @@ class _WorksFeatureDatabase extends AppDatabase {
   Future<void> setSetting(String key, String value) async {}
 }
 
+class _DeletingWorksFeatureDatabase extends _WorksFeatureDatabase {
+  final deletedWorkIds = <int>[];
+
+  @override
+  Future<List<Map<String, Object?>>> getWorksForActress(int actressId) async {
+    final works = await super.getWorksForActress(actressId);
+    return works
+        .where((work) => !deletedWorkIds.contains(work['id']))
+        .toList(growable: false);
+  }
+
+  @override
+  Future<WorkDeletionReport> deleteWorksWithReport(
+    Iterable<int> workIds,
+  ) async {
+    final requested = workIds.toList(growable: false);
+    deletedWorkIds.addAll(requested);
+    return WorkDeletionReport(
+      databaseCommitted: true,
+      requestedWorkIds: requested,
+      deletedWorkIds: requested,
+      deletedWorkRows: requested.length,
+      deletedActressWorkRows: requested.length,
+      fileCleanup: const ManagedFileCleanupReport(),
+      cacheEvictionPaths: const [],
+      pendingFileDeletionsBefore: const [],
+      pendingFileDeletionsAfter: const [],
+    );
+  }
+}
+
 void main() {
   testWidgets('works page renders a three-column screenshot-style grid', (
     tester,
@@ -109,6 +140,74 @@ void main() {
     expect(second.top, closeTo(third.top, 0.01));
     expect(first.right, lessThan(second.left));
     expect(second.right, lessThan(third.left));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('long press enters multi-select and tap toggles work cards', (
+    tester,
+  ) async {
+    await _pumpWorks(tester);
+
+    await tester.longPress(find.byKey(const Key('work-card-1')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('work-card-selected-1')), findsOneWidget);
+    expect(find.byKey(const Key('works-delete-action')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('work-card-2')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('work-card-selected-1')), findsOneWidget);
+    expect(find.byKey(const Key('work-card-selected-2')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('work-card-1')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('work-card-selected-1')), findsNothing);
+    expect(find.byKey(const Key('work-card-selected-2')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'system back clears work selection and delete confirms global removal',
+    (tester) async {
+      await _pumpWorks(tester);
+
+      await tester.longPress(find.byKey(const Key('work-card-1')));
+      await tester.pumpAndSettle();
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.byType(WorksView), findsOneWidget);
+      expect(find.byKey(const Key('work-card-selected-1')), findsNothing);
+      expect(find.byKey(const Key('works-delete-action')), findsNothing);
+
+      await tester.longPress(find.byKey(const Key('work-card-1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('works-delete-action')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('works-delete-confirm')), findsOneWidget);
+      expect(find.textContaining('其他女優'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('confirming selected work deletion reloads and exits selection', (
+    tester,
+  ) async {
+    final database = _DeletingWorksFeatureDatabase();
+    await _pumpWorks(tester, database: database);
+
+    await tester.longPress(find.byKey(const Key('work-card-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('works-delete-action')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('確定刪除'));
+    await tester.pumpAndSettle();
+
+    expect(database.deletedWorkIds, [1]);
+    expect(find.byKey(const Key('work-card-1')), findsNothing);
+    expect(find.byKey(const Key('work-card-2')), findsOneWidget);
+    expect(find.byKey(const Key('works-delete-action')), findsNothing);
+    expect(find.byKey(const Key('works-scrape-action')), findsOneWidget);
+    expect(find.text('已刪除 1 部作品'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -325,6 +424,7 @@ void main() {
 
 Future<void> _pumpWorks(
   WidgetTester tester, {
+  AppDatabase? database,
   Future<WorksScrapeResult> Function(
     WorkScrapeOptions options,
     WorksScrapeCancellationToken token,
@@ -340,7 +440,7 @@ Future<void> _pumpWorks(
   await tester.pumpWidget(
     _localizedApp(
       home: WorksView(
-        db: _WorksFeatureDatabase(),
+        db: database ?? _WorksFeatureDatabase(),
         actressId: 7,
         scrapeExecutor: scrapeExecutor,
       ),

@@ -276,6 +276,107 @@ void main() {
   );
 
   test(
+    'scrapes canonical name then normalized aliases with tolerant exact matching',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'avaca_scrape_aliases_test_',
+      );
+      final database = AppDatabase.forTesting(
+        baseDir: directory.path,
+        databaseFactory: databaseFactoryFfi,
+      );
+      addTearDown(() async {
+        await database.close();
+        await directory.delete(recursive: true);
+      });
+      await database.init();
+      await database.addActress(name: '涼森れむ');
+      final sqlite = await database.database;
+      final actressId = (await sqlite.query('actresses')).single['id'] as int;
+      final client = _AliasAwareJavBusClient();
+      final service = WorksScrapeService(
+        db: database,
+        client: client,
+        workImageDownloader: _FakeWorkImageDownloader(),
+        imageDirectory: directory.path,
+      );
+
+      final result = await service.scrape(
+        actressId: actressId,
+        actressName: '涼森れむ',
+        aliases: const ['  Remu  ', 'Remu', 'missing', 'Broken', '涼森れむ'],
+        options: const WorkScrapeOptions(fillMissingOnly: false),
+      );
+
+      expect(client.searchRequests, ['涼森れむ', 'Remu', 'missing', 'Broken']);
+      expect(client.actressPageRequests, [
+        'https://www.javbus.com/star/canonical',
+        'https://www.javbus.com/star/remu',
+        'https://www.javbus.com/star/broken',
+      ]);
+      expect(
+        client.detailRequests,
+        containsAll(['DUP-001', 'CAN-002', 'ALIAS-003']),
+      );
+      expect(
+        client.detailRequests.where((code) => code == 'DUP-001'),
+        hasLength(1),
+      );
+      expect(result.saved, 3);
+      expect(result.failed, 0);
+      expect((await database.getActressById(actressId))?['name'], '涼森れむ');
+      expect(
+        (await database.getWorksForActress(
+          actressId,
+        )).map((row) => row['code']),
+        unorderedEquals(['DUP-001', 'CAN-002', 'ALIAS-003']),
+      );
+    },
+  );
+
+  test(
+    'retries a shared actress URI through an alias after page failure',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'avaca_scrape_alias_retry_test_',
+      );
+      final database = AppDatabase.forTesting(
+        baseDir: directory.path,
+        databaseFactory: databaseFactoryFfi,
+      );
+      addTearDown(() async {
+        await database.close();
+        await directory.delete(recursive: true);
+      });
+      await database.init();
+      await database.addActress(name: '涼森れむ');
+      final sqlite = await database.database;
+      final actressId = (await sqlite.query('actresses')).single['id'] as int;
+      final client = _RetrySharedUriJavBusClient();
+      final service = WorksScrapeService(
+        db: database,
+        client: client,
+        workImageDownloader: _FakeWorkImageDownloader(),
+        imageDirectory: directory.path,
+      );
+
+      final result = await service.scrape(
+        actressId: actressId,
+        actressName: '涼森れむ',
+        aliases: const ['Remu'],
+        options: const WorkScrapeOptions(excludedPrefixes: ['FC2']),
+      );
+
+      expect(client.pageRequests, 2);
+      expect(result.saved, 1);
+      expect(
+        (await database.getWorksForActress(actressId)).single['code'],
+        'ABF-367',
+      );
+    },
+  );
+
+  test(
     'reports avatar download failure and keeps the previous image',
     () async {
       final directory = await Directory.systemTemp.createTemp(
@@ -419,6 +520,29 @@ class _FakeJavBusClient extends JavBusClient {
   }
 }
 
+class _RetrySharedUriJavBusClient extends _FakeJavBusClient {
+  int pageRequests = 0;
+
+  @override
+  Future<List<JavBusActressSearchResult>> searchActresses(String name) async {
+    return [
+      JavBusActressSearchResult(
+        name: name,
+        uri: Uri.parse('https://www.javbus.com/star/shared'),
+      ),
+    ];
+  }
+
+  @override
+  Future<JavBusActressPage> fetchActressPage(Uri uri) {
+    pageRequests++;
+    if (pageRequests == 1) {
+      throw const WorksScrapeException('simulated transient page failure');
+    }
+    return super.fetchActressPage(uri);
+  }
+}
+
 class _MergedJavBusClient extends JavBusClient {
   _MergedJavBusClient() : super(transport: _NeverTransport());
 
@@ -494,6 +618,93 @@ class _MergedJavBusClient extends JavBusClient {
         (index) => Uri.parse('https://www.javbus.com/star/$index'),
       ),
     );
+  }
+}
+
+class _AliasAwareJavBusClient extends JavBusClient {
+  _AliasAwareJavBusClient() : super(transport: _NeverTransport());
+
+  final searchRequests = <String>[];
+  final actressPageRequests = <String>[];
+  final detailRequests = <String>[];
+
+  @override
+  Future<List<JavBusActressSearchResult>> searchActresses(String name) async {
+    searchRequests.add(name);
+    return switch (name) {
+      '涼森れむ' => [
+        JavBusActressSearchResult(
+          name: '涼森れむ',
+          uri: Uri.parse('https://www.javbus.com/star/canonical'),
+        ),
+        JavBusActressSearchResult(
+          name: '涼森れむ',
+          uri: Uri.parse('https://www.javbus.com/star/canonical'),
+        ),
+      ],
+      'Remu' => [
+        JavBusActressSearchResult(
+          name: 'remu',
+          uri: Uri.parse('https://www.javbus.com/star/remu'),
+        ),
+        JavBusActressSearchResult(
+          name: 'REMU',
+          uri: Uri.parse('https://www.javbus.com/star/remu'),
+        ),
+      ],
+      'Broken' => [
+        JavBusActressSearchResult(
+          name: 'Broken',
+          uri: Uri.parse('https://www.javbus.com/star/broken'),
+        ),
+      ],
+      _ => [
+        JavBusActressSearchResult(
+          name: 'not an exact match',
+          uri: Uri.parse('https://www.javbus.com/star/missing'),
+        ),
+      ],
+    };
+  }
+
+  @override
+  Future<JavBusActressPage> fetchActressPage(Uri uri) async {
+    actressPageRequests.add(uri.toString());
+    if (uri.pathSegments.last == 'broken') {
+      throw const WorksScrapeException('simulated alias page failure');
+    }
+    final canonical = uri.pathSegments.last == 'canonical';
+    return JavBusActressPage(
+      details: ScrapedActressDetails(name: canonical ? null : 'Remu'),
+      works: const [],
+      pageCount: 1,
+    );
+  }
+
+  @override
+  Future<List<JavBusWorkSummary>> fetchAllActressWorks(
+    Uri actressUri, {
+    PrefixExclusion? exclusions,
+    bool Function()? isCancelled,
+    JavBusActressPage? firstPage,
+  }) async {
+    final canonical = actressUri.pathSegments.last == 'canonical';
+    return (canonical ? ['DUP-001', 'CAN-002'] : ['dup-001', 'ALIAS-003'])
+        .map(
+          (code) => JavBusWorkSummary(
+            code: code,
+            title: code,
+            detailUri: Uri.parse('https://www.javbus.com/$code'),
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  Future<JavBusWorkDetails> fetchWorkDetails(Uri uri) async {
+    final code = uri.pathSegments.last.toUpperCase();
+    detailRequests.add(code);
+    return JavBusWorkDetails(code: code, title: code);
   }
 }
 

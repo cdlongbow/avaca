@@ -1,48 +1,17 @@
-import 'dart:io';
-
 import 'package:avaca/controllers/detail_controller.dart';
 import 'package:avaca/core/database.dart';
 import 'package:avaca/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:path/path.dart' as path;
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
-  sqfliteFfiInit();
-
   testWidgets('successful deletion shows a compact cleanup summary', (
     tester,
   ) async {
-    final temporaryDirectory = await Directory.systemTemp.createTemp(
-      'avaca_detail_delete_report_test_',
-    );
-    final database = AppDatabase.forTesting(
-      baseDir: path.join(
-        temporaryDirectory.path,
-        'application-documents',
-        'avaca_data',
-      ),
-      databaseFactory: databaseFactoryFfi,
-    );
-    addTearDown(() async {
-      await database.close();
-      if (temporaryDirectory.existsSync()) {
-        await temporaryDirectory.delete(recursive: true);
-      }
-    });
-    await database.init();
-    await database.addActress(name: 'report dialog actress');
-    final sqlite = await database.database;
-    final actressId =
-        (await sqlite.query(
-              'actresses',
-              columns: ['id'],
-              where: 'name = ?',
-              whereArgs: ['report dialog actress'],
-            )).single['id']
-            as int;
+    final database = _DeleteReportDatabase();
+    const actressId = 1;
     final controller = DetailController(db: database, actressId: actressId);
+    Future<void>? deletion;
 
     await tester.pumpWidget(
       MaterialApp(
@@ -52,7 +21,7 @@ void main() {
           builder: (context) => Scaffold(
             body: ElevatedButton(
               onPressed: () {
-                controller.executeDelete(context);
+                deletion = controller.executeDelete(context);
               },
               child: const Text('delete'),
             ),
@@ -63,13 +32,47 @@ void main() {
 
     await tester.tap(find.text('delete'));
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
-    await tester.pump(const Duration(milliseconds: 500));
+    await deletion;
+    await tester.pumpAndSettle();
 
     expect(find.byType(AlertDialog), findsNothing);
-    expect(
-      find.text('已刪除 0 個圖片檔，共釋放 0.00 MB'),
-      findsOneWidget,
-    );
+    expect(find.text('已刪除 0 個圖片檔，共釋放 0.00 MB'), findsOneWidget);
   });
+}
+
+class _DeleteReportDatabase extends AppDatabase {
+  @override
+  Future<ActressDeletionReport> deleteActressWithReport(int actressId) async {
+    return ActressDeletionReport(
+      databaseCommitted: true,
+      beforeTableCounts: const {
+        'actresses': 1,
+        'works': 0,
+        'actress_works': 0,
+        'pending_file_deletions': 0,
+      },
+      afterTableCounts: const {
+        'actresses': 0,
+        'works': 0,
+        'actress_works': 0,
+        'pending_file_deletions': 0,
+      },
+      beforeManagedImageStats: const ManagedImageStats(
+        fileCount: 0,
+        totalBytes: 0,
+      ),
+      afterManagedImageStats: const ManagedImageStats(
+        fileCount: 0,
+        totalBytes: 0,
+      ),
+      fileCleanup: const ManagedFileCleanupReport(),
+      maintenance: const DatabaseMaintenanceReport(
+        walCheckpointAttempted: false,
+        vacuumAttempted: false,
+        vacuumCompleted: false,
+      ),
+      cacheEvictionPaths: const [],
+      actressId: actressId,
+    );
+  }
 }
