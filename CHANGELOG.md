@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.5 - 2026-08-10
+
+- Rebalanced responsive Detail and Edit layouts across compact and wide screens.
+- Unified adaptive spacing and card geometry across Works, Work Detail,
+  Settings, and Add while restoring the Home gallery's original card flow.
+- Added CJK-aware adaptive UI Golden coverage and fixed the phone-landscape
+  filter sheet overflow.
+- Configured Android release signing and guarded plugin registration for
+  current release builds.
+
 ## 0.7.3 - 2026-08-04
 
 - Refined scrape settings into compact switch and count rows with consistent

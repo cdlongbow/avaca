@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:avaca/l10n/app_localizations.dart';
+import '../components/adaptive_page_layout.dart';
 import '../components/actress_card.dart';
 import '../controllers/home_controller.dart';
 import '../core/database.dart';
+import '../core/layout.dart';
 
 /// 首頁畫面。
 ///
@@ -111,12 +113,20 @@ class _HomeViewState extends State<HomeView> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: _buildAppBar(),
-      body: Column(
-        children: [
-          _buildSearchBar(),
-          Expanded(child: _buildGalleryFuture()),
-        ],
+      body: AdaptivePageLayout(
+        padding: EdgeInsets.zero,
+        compactBuilder: (context, tokens) => _buildHomeContent(tokens),
+        expandedBuilder: (context, tokens) => _buildHomeContent(tokens),
       ),
+    );
+  }
+
+  Widget _buildHomeContent(AppLayoutTokens tokens) {
+    return Column(
+      children: [
+        _buildSearchBar(tokens),
+        Expanded(child: _buildGalleryFuture(tokens)),
+      ],
     );
   }
 
@@ -148,7 +158,7 @@ class _HomeViewState extends State<HomeView> {
     );
   }
 
-  Widget _buildGalleryFuture() {
+  Widget _buildGalleryFuture(AppLayoutTokens tokens) {
     return FutureBuilder<List<Map<String, Object?>>>(
       future: galleryFuture,
       builder: (context, snapshot) {
@@ -177,7 +187,7 @@ class _HomeViewState extends State<HomeView> {
     );
   }
 
-  Widget _buildSearchBar() {
+  Widget _buildSearchBar(AppLayoutTokens tokens) {
     final isOpen = controller.isSearchOpen;
 
     return AnimatedContainer(
@@ -185,10 +195,10 @@ class _HomeViewState extends State<HomeView> {
       curve: Curves.decelerate,
       height: isOpen ? 55 : 0,
       margin: EdgeInsets.only(
-        left: 15,
-        right: 15,
-        top: isOpen ? 10 : 0,
-        bottom: isOpen ? 10 : 0,
+        left: tokens.gridPadding.left + 5,
+        right: tokens.gridPadding.right + 5,
+        top: isOpen ? tokens.gridGap : 0,
+        bottom: isOpen ? tokens.gridGap : 0,
       ),
       child: Material(
         color: Theme.of(context).colorScheme.surfaceContainerHigh,
@@ -297,44 +307,46 @@ class _HomeViewState extends State<HomeView> {
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  AppLocalizations.of(context).filterAndSort,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    AppLocalizations.of(context).filterAndSort,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  AppLocalizations.of(context).filterSection,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 4),
-                _buildOptions(
-                  options: filterOptions,
-                  selectedValue: controller.currentFilter,
-                  labelBuilder: _filterLabel,
-                  onSelected: controller.selectFilter,
-                  sheetSetState: sheetSetState,
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  AppLocalizations.of(context).sortSection,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 4),
-                _buildOptions(
-                  options: sortOptions,
-                  selectedValue: controller.currentSort,
-                  labelBuilder: _sortLabel,
-                  onSelected: controller.changeSort,
-                  sheetSetState: sheetSetState,
-                ),
-              ],
+                  const SizedBox(height: 10),
+                  Text(
+                    AppLocalizations.of(context).filterSection,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 4),
+                  _buildOptions(
+                    options: filterOptions,
+                    selectedValue: controller.currentFilter,
+                    labelBuilder: _filterLabel,
+                    onSelected: controller.selectFilter,
+                    sheetSetState: sheetSetState,
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    AppLocalizations.of(context).sortSection,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 4),
+                  _buildOptions(
+                    options: sortOptions,
+                    selectedValue: controller.currentSort,
+                    labelBuilder: _sortLabel,
+                    onSelected: controller.changeSort,
+                    sheetSetState: sheetSetState,
+                  ),
+                ],
+              ),
             ),
           ),
         );

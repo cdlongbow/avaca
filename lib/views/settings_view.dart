@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:avaca/l10n/app_localizations.dart';
+import '../components/adaptive_page_layout.dart';
 import '../controllers/settings_controller.dart';
 import '../core/database.dart';
+import '../core/layout.dart';
 
 class _SettingsInteractionTheme extends StatelessWidget {
   const _SettingsInteractionTheme({required this.child});
@@ -220,41 +222,58 @@ class _SettingsViewState extends State<SettingsView> {
             ),
           ),
         ),
-        body: _buildSettingsCategories(),
+        body: AdaptivePageLayout(
+          padding: EdgeInsets.zero,
+          compactBuilder: (context, tokens) => _buildSettingsCategories(tokens),
+          expandedBuilder: (context, tokens) =>
+              _buildSettingsCategories(tokens),
+        ),
       ),
     );
   }
 
-  Widget _buildSettingsCategories() {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        _categoryCard(
-          feedbackId: 'category-theme-colors',
-          icon: Icons.palette_outlined,
-          title: AppLocalizations.of(context).themeAndColors,
-          onTap: () => _openCategory(
-            titleBuilder: (context) =>
-                AppLocalizations.of(context).themeAndColors,
-            bodyBuilder: _buildThemeAndColors,
-          ),
+  Widget _buildSettingsCategories(AppLayoutTokens tokens) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: tokens.isCompact
+              ? double.infinity
+              : tokens.settingsShortContentMaxWidth,
         ),
-        const SizedBox(height: 8),
-        _categoryCard(
-          feedbackId: 'category-interface',
-          icon: Icons.language,
-          title: AppLocalizations.of(context).interfaceSettings,
-          onTap: () => _openCategory(
-            titleBuilder: (context) =>
-                AppLocalizations.of(context).interfaceSettings,
-            bodyBuilder: _buildInterfaceSettings,
-          ),
+        child: ListView(
+          padding: tokens.pagePadding,
+          children: [
+            _categoryCard(
+              tokens: tokens,
+              feedbackId: 'category-theme-colors',
+              icon: Icons.palette_outlined,
+              title: AppLocalizations.of(context).themeAndColors,
+              onTap: () => _openCategory(
+                titleBuilder: (context) =>
+                    AppLocalizations.of(context).themeAndColors,
+                bodyBuilder: _buildThemeAndColors,
+              ),
+            ),
+            const SizedBox(height: 8),
+            _categoryCard(
+              tokens: tokens,
+              feedbackId: 'category-interface',
+              icon: Icons.language,
+              title: AppLocalizations.of(context).interfaceSettings,
+              onTap: () => _openCategory(
+                titleBuilder: (context) =>
+                    AppLocalizations.of(context).interfaceSettings,
+                bodyBuilder: _buildInterfaceSettings,
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
   Widget _categoryCard({
+    required AppLayoutTokens tokens,
     required String feedbackId,
     required IconData icon,
     required String title,
@@ -275,9 +294,12 @@ class _SettingsViewState extends State<SettingsView> {
     );
   }
 
-  RoundedRectangleBorder _outlinedCardShape(BuildContext context) {
+  RoundedRectangleBorder _outlinedCardShape(
+    BuildContext context, {
+    double radius = _settingsCardRadius,
+  }) {
     return RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(_settingsCardRadius),
+      borderRadius: BorderRadius.circular(radius),
       side: BorderSide(width: 1, color: Theme.of(context).colorScheme.outline),
     );
   }
@@ -299,14 +321,14 @@ class _SettingsViewState extends State<SettingsView> {
 
   Widget _buildThemeAndColors(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.zero,
       children: [_themeModeSelector(context)],
     );
   }
 
   Widget _buildInterfaceSettings(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.zero,
       children: [_languageSelector(context)],
     );
   }
@@ -587,9 +609,31 @@ class _SettingsCategoryPage extends StatelessWidget {
             ),
           ),
         ),
-        body: ListenableBuilder(
-          listenable: controller,
-          builder: (context, _) => bodyBuilder(context),
+        body: AdaptivePageLayout(
+          padding: EdgeInsets.zero,
+          compactBuilder: (context, tokens) =>
+              _buildCategoryBody(context, tokens),
+          expandedBuilder: (context, tokens) =>
+              _buildCategoryBody(context, tokens),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCategoryBody(BuildContext context, AppLayoutTokens tokens) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: tokens.isCompact
+              ? double.infinity
+              : tokens.settingsShortContentMaxWidth,
+        ),
+        child: Padding(
+          padding: tokens.pagePadding,
+          child: ListenableBuilder(
+            listenable: controller,
+            builder: (context, _) => bodyBuilder(context),
+          ),
         ),
       ),
     );

@@ -1,14 +1,19 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:avaca/l10n/app_localizations.dart';
+import '../components/adaptive_page_layout.dart';
 import '../components/app_snackbar.dart';
 import '../controllers/detail_controller.dart';
 import '../core/database.dart';
+import '../core/layout.dart';
 
 const double _detailControlRadius = 6.0;
 
 enum _DetailMenuAction { edit, delete }
+
+enum _DetailLayoutMode { compact, intermediate, wide }
 
 ButtonStyle _detailOutlinedButtonStyle() {
   return OutlinedButton.styleFrom(
@@ -397,20 +402,158 @@ class _DetailViewState extends State<DetailView> {
                   : [_buildOverflowMenu()],
             ),
             body: SafeArea(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    _buildProfilePanel(),
-                    const SizedBox(height: 16),
-                    _buildInfoPanel(),
-                  ],
-                ),
+              child: AdaptivePageLayout(
+                padding: EdgeInsets.zero,
+                compactBuilder: (context, tokens) =>
+                    _buildDetailContent(tokens),
+                expandedBuilder: (context, tokens) =>
+                    _buildDetailContent(tokens),
               ),
             ),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildDetailContent(AppLayoutTokens tokens) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final textScale = MediaQuery.textScalerOf(context).scale(1);
+        final mode = tokens.canUseWideDetail(constraints.maxWidth, textScale)
+            ? _DetailLayoutMode.wide
+            : tokens.canUseIntermediateDetail(constraints.maxWidth, textScale)
+            ? _DetailLayoutMode.intermediate
+            : _DetailLayoutMode.compact;
+
+        final content = switch (mode) {
+          _DetailLayoutMode.compact || _DetailLayoutMode.intermediate => Column(
+            children: [
+              _buildProfilePanel(tokens),
+              SizedBox(height: tokens.sectionGap),
+              _buildInfoPanel(tokens),
+            ],
+          ),
+          _DetailLayoutMode.wide => Column(
+            children: [
+              _buildWideDetailRow(tokens),
+              SizedBox(height: tokens.sectionGap),
+              _buildNotesPanel(tokens),
+            ],
+          ),
+        };
+
+        return SingleChildScrollView(
+          padding: tokens.pagePadding,
+          child: content,
+        );
+      },
+    );
+  }
+
+  Widget _buildWideDetailRow(AppLayoutTokens tokens) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final textScale = MediaQuery.textScalerOf(context).scale(1);
+        final gap = tokens.contentColumnGap;
+        final leftWidth = tokens.detailImageMaxSize;
+        final remaining = constraints.maxWidth - leftWidth - gap * 2;
+        final middleMin = tokens.detailMiddleMinWidth * textScale;
+        final middleWidth = math.max(middleMin, remaining / 2);
+        final bodyWidth = remaining - middleWidth;
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: leftWidth,
+              child: _buildWideProfileVisual(leftWidth),
+            ),
+            SizedBox(width: gap),
+            SizedBox(width: middleWidth, child: _buildMetadataPanel(tokens)),
+            SizedBox(width: gap),
+            SizedBox(width: bodyWidth, child: _buildBodyPanel(tokens)),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildWideProfileVisual(double imageSize) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final name = controller.actressData['name']?.toString() ?? '';
+
+    return Container(
+      key: const Key('detail-profile-panel'),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildProfileImage(imageSize - 24),
+          if (name.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              name,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMetadataPanel(AppLayoutTokens tokens) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isEditing = controller.isEditing;
+
+    return Container(
+      key: const Key('detail-metadata-panel'),
+      padding: EdgeInsets.all(tokens.cardRadius),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(tokens.cardRadius),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  key: const Key('detail-works-button'),
+                  onPressed: _openWorks,
+                  style: _detailOutlinedButtonStyle(),
+                  child: Text(AppLocalizations.of(context).works),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                '${controller.workCount}',
+                key: const Key('detail-works-count'),
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton(
+            key: const Key('detail-aliases-button'),
+            onPressed: _openAliases,
+            style: _detailOutlinedButtonStyle(),
+            child: Text(AppLocalizations.of(context).aliases),
+          ),
+          const SizedBox(height: 12),
+          KeyedSubtree(
+            key: const Key('detail-attributes'),
+            child: isEditing ? _buildAttrEditRow() : _buildAttrViewRow(),
+          ),
+          if (isEditing) ...[const SizedBox(height: 12), _buildPhotoEditRow()],
+        ],
+      ),
     );
   }
 
@@ -484,26 +627,28 @@ class _DetailViewState extends State<DetailView> {
   }
 
   // 顯示個人照片、照片操作與屬性內容。
-  Widget _buildProfilePanel() {
+  Widget _buildProfilePanel(AppLayoutTokens tokens) {
     final colorScheme = Theme.of(context).colorScheme;
     final isEditing = controller.isEditing;
 
     return Container(
       key: const Key('detail-profile-panel'),
-      padding: isEditing ? const EdgeInsets.all(12) : EdgeInsets.zero,
+      padding: isEditing ? EdgeInsets.all(tokens.cardRadius) : EdgeInsets.zero,
       decoration: isEditing
           ? BoxDecoration(
               color: colorScheme.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(tokens.cardRadius),
             )
           : null,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final horizontalGap = isEditing ? 12.0 : 16.0;
+          final horizontalGap = isEditing && tokens.isCompact
+              ? 12.0
+              : tokens.contentColumnGap;
           final availableWidth = constraints.maxWidth - horizontalGap;
           final imageSize = isEditing
-              ? (availableWidth * 5 / 12).clamp(0.0, 220.0)
-              : (availableWidth / 2).clamp(0.0, 220.0);
+              ? (availableWidth * 5 / 12).clamp(0.0, tokens.detailImageMaxSize)
+              : (availableWidth / 2).clamp(0.0, tokens.detailImageMaxSize);
 
           return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -751,61 +896,69 @@ class _DetailViewState extends State<DetailView> {
   }
 
   // 顯示身體資料與私人筆記。
-  Widget _buildInfoPanel() {
+  Widget _buildInfoPanel(AppLayoutTokens tokens) {
     return Column(
       children: [
-        _buildCard(
-          title: AppLocalizations.of(context).bodyInfo,
-          child: Column(
-            children: [
-              _buildBirthDateField(),
-              const SizedBox(height: 6),
-              _buildStatField(
-                fieldKey: const Key('detail-height-field'),
-                label: AppLocalizations.of(context).heightCm,
-                controller: heightController,
-              ),
-              const SizedBox(height: 6),
-              _buildStatField(
-                fieldKey: const Key('detail-weight-field'),
-                label: AppLocalizations.of(context).weightKg,
-                controller: weightController,
-              ),
-              const SizedBox(height: 6),
-              _buildStatField(
-                fieldKey: const Key('detail-cup-field'),
-                label: AppLocalizations.of(context).cup,
-                controller: cupController,
-              ),
-              const SizedBox(height: 6),
-              _buildStatField(
-                fieldKey: const Key('detail-measurements-field'),
-                label: AppLocalizations.of(context).measurements,
-                controller: bwhController,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        _buildCard(
-          title: AppLocalizations.of(context).privateNotes,
-          child: controller.isEditing
-              ? TextField(
-                  controller: memoController,
-                  minLines: 5,
-                  maxLines: 10,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                  ),
-                )
-              : Text(
-                  memoController.text.isEmpty
-                      ? AppLocalizations.of(context).noNotes
-                      : memoController.text,
-                  style: const TextStyle(fontSize: 14),
-                ),
-        ),
+        _buildBodyPanel(tokens),
+        SizedBox(height: tokens.sectionGap),
+        _buildNotesPanel(tokens),
       ],
+    );
+  }
+
+  Widget _buildBodyPanel(AppLayoutTokens tokens) {
+    return _buildCard(
+      title: AppLocalizations.of(context).bodyInfo,
+      radius: tokens.cardRadius,
+      child: Column(
+        children: [
+          _buildBirthDateField(),
+          SizedBox(height: tokens.gridGap),
+          _buildStatField(
+            fieldKey: const Key('detail-height-field'),
+            label: AppLocalizations.of(context).heightCm,
+            controller: heightController,
+          ),
+          SizedBox(height: tokens.gridGap),
+          _buildStatField(
+            fieldKey: const Key('detail-weight-field'),
+            label: AppLocalizations.of(context).weightKg,
+            controller: weightController,
+          ),
+          SizedBox(height: tokens.gridGap),
+          _buildStatField(
+            fieldKey: const Key('detail-cup-field'),
+            label: AppLocalizations.of(context).cup,
+            controller: cupController,
+          ),
+          SizedBox(height: tokens.gridGap),
+          _buildStatField(
+            fieldKey: const Key('detail-measurements-field'),
+            label: AppLocalizations.of(context).measurements,
+            controller: bwhController,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNotesPanel(AppLayoutTokens tokens) {
+    return _buildCard(
+      title: AppLocalizations.of(context).privateNotes,
+      radius: tokens.cardRadius,
+      child: controller.isEditing
+          ? TextField(
+              controller: memoController,
+              minLines: 5,
+              maxLines: 10,
+              decoration: const InputDecoration(border: OutlineInputBorder()),
+            )
+          : Text(
+              memoController.text.isEmpty
+                  ? AppLocalizations.of(context).noNotes
+                  : memoController.text,
+              style: const TextStyle(fontSize: 14),
+            ),
     );
   }
 
@@ -952,7 +1105,11 @@ class _DetailViewState extends State<DetailView> {
     );
   }
 
-  Widget _buildCard({required String title, required Widget child}) {
+  Widget _buildCard({
+    required String title,
+    required Widget child,
+    double radius = 16,
+  }) {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Container(
@@ -960,7 +1117,7 @@ class _DetailViewState extends State<DetailView> {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(radius),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

@@ -2,14 +2,13 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:avaca/l10n/app_localizations.dart';
+import '../components/adaptive_page_layout.dart';
 import '../controllers/add_controller.dart';
 import '../core/database.dart';
+import '../core/layout.dart';
 
 class AddView extends StatefulWidget {
-  const AddView({
-    super.key,
-    required this.db,
-  });
+  const AddView({super.key, required this.db});
 
   final AppDatabase db;
 
@@ -25,9 +24,7 @@ class _AddViewState extends State<AddView> {
   @override
   void initState() {
     super.initState();
-    controller = AddController(
-      db: widget.db,
-    );
+    controller = AddController(db: widget.db);
     controller.addListener(_handleControllerChanged);
   }
 
@@ -56,10 +53,7 @@ class _AddViewState extends State<AddView> {
   }
 
   Future<void> saveActress() async {
-    await controller.saveActress(
-      context,
-      nameController.text,
-    );
+    await controller.saveActress(context, nameController.text);
   }
 
   Future<void> goBack() async {
@@ -75,9 +69,7 @@ class _AddViewState extends State<AddView> {
       appBar: AppBar(
         title: Text(
           AppLocalizations.of(context).addTitle,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-          ),
+          style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -86,20 +78,31 @@ class _AddViewState extends State<AddView> {
         backgroundColor: colorScheme.surfaceContainerHighest,
       ),
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              spacing: 20,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                _buildImageArea(),
-                _buildImageActionRow(),
-                _buildNameInput(),
-                _buildSaveButton(),
-              ],
-            ),
+        child: AdaptivePageLayout(
+          padding: EdgeInsets.zero,
+          compactBuilder: (context, tokens) => _buildForm(tokens),
+          expandedBuilder: (context, tokens) => _buildForm(tokens),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildForm(AppLayoutTokens tokens) {
+    return Center(
+      child: SingleChildScrollView(
+        padding: tokens.pagePadding,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: tokens.formMaxWidth),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            spacing: tokens.sectionGap,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              _buildImageArea(tokens),
+              _buildImageActionRow(tokens),
+              _buildNameInput(tokens),
+              _buildSaveButton(tokens),
+            ],
           ),
         ),
       ),
@@ -107,7 +110,7 @@ class _AddViewState extends State<AddView> {
   }
 
   // 照片預覽區塊。
-  Widget _buildImageArea() {
+  Widget _buildImageArea(AppLayoutTokens tokens) {
     final imageState = controller.imageState;
     final hasPreview = imageState['preview_visible'] == true;
 
@@ -117,25 +120,25 @@ class _AddViewState extends State<AddView> {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (!hasPreview) _buildImagePlaceholder(),
-          if (hasPreview) _buildImagePreview(),
+          if (!hasPreview) _buildImagePlaceholder(tokens),
+          if (hasPreview) _buildImagePreview(tokens),
         ],
       ),
     );
   }
 
   // 已選擇照片時顯示預覽。
-  Widget _buildImagePreview() {
+  Widget _buildImagePreview(AppLayoutTokens tokens) {
     final imageState = controller.imageState;
     final previewSrc = imageState['preview_src']?.toString() ?? '';
     final imageBytes = _decodeDataImage(previewSrc);
 
     if (imageBytes == null) {
-      return _buildImagePlaceholder();
+      return _buildImagePlaceholder(tokens);
     }
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(tokens.cardRadius),
       child: Image.memory(
         imageBytes,
         width: 180,
@@ -147,7 +150,7 @@ class _AddViewState extends State<AddView> {
   }
 
   // 尚未選擇照片時顯示預設佔位畫面。
-  Widget _buildImagePlaceholder() {
+  Widget _buildImagePlaceholder(AppLayoutTokens tokens) {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Container(
@@ -155,22 +158,16 @@ class _AddViewState extends State<AddView> {
       height: 180,
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(tokens.cardRadius),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Icon(
-            Icons.image,
-            size: 40,
-            color: colorScheme.onSurfaceVariant,
-          ),
+          Icon(Icons.image, size: 40, color: colorScheme.onSurfaceVariant),
           Text(
             AppLocalizations.of(context).noPhoto,
-            style: TextStyle(
-              color: colorScheme.onSurfaceVariant,
-            ),
+            style: TextStyle(color: colorScheme.onSurfaceVariant),
           ),
         ],
       ),
@@ -178,7 +175,7 @@ class _AddViewState extends State<AddView> {
   }
 
   // 照片選擇與移除按鈕列。
-  Widget _buildImageActionRow() {
+  Widget _buildImageActionRow(AppLayoutTokens tokens) {
     final imageState = controller.imageState;
     final showDeleteButton = imageState['delete_button_visible'] == true;
 
@@ -204,26 +201,26 @@ class _AddViewState extends State<AddView> {
   }
 
   // 姓名輸入欄位。
-  Widget _buildNameInput() {
+  Widget _buildNameInput(AppLayoutTokens tokens) {
     final colorScheme = Theme.of(context).colorScheme;
 
     return SizedBox(
-      width: 300,
+      width: tokens.isExpanded ? 480 : 300,
       child: TextField(
         controller: nameController,
         textAlign: TextAlign.center,
         decoration: InputDecoration(
           labelText: AppLocalizations.of(context).actressNameRequired,
-          border: const OutlineInputBorder(),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(tokens.cardRadius),
+          ),
           enabledBorder: OutlineInputBorder(
-            borderSide: BorderSide(
-              color: colorScheme.outline,
-            ),
+            borderRadius: BorderRadius.circular(tokens.cardRadius),
+            borderSide: BorderSide(color: colorScheme.outline),
           ),
           focusedBorder: OutlineInputBorder(
-            borderSide: BorderSide(
-              color: colorScheme.primary,
-            ),
+            borderRadius: BorderRadius.circular(tokens.cardRadius),
+            borderSide: BorderSide(color: colorScheme.primary),
           ),
         ),
       ),
@@ -231,11 +228,11 @@ class _AddViewState extends State<AddView> {
   }
 
   // 儲存按鈕。
-  Widget _buildSaveButton() {
+  Widget _buildSaveButton(AppLayoutTokens tokens) {
     final colorScheme = Theme.of(context).colorScheme;
 
     return SizedBox(
-      width: 200,
+      width: tokens.isExpanded ? 260 : 200,
       child: ElevatedButton.icon(
         onPressed: saveActress,
         icon: const Icon(Icons.save),

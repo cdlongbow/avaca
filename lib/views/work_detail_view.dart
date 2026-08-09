@@ -2,7 +2,9 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../components/adaptive_page_layout.dart';
 import '../core/database.dart';
+import '../core/layout.dart';
 import '../l10n/app_localizations.dart';
 
 class WorkDetailView extends StatefulWidget {
@@ -50,29 +52,105 @@ class _WorkDetailViewState extends State<WorkDetailView> {
   }
 
   Widget _buildContent(Map<String, Object?> work) {
+    return AdaptivePageLayout(
+      padding: EdgeInsets.zero,
+      compactBuilder: (context, tokens) => _buildCompactContent(work, tokens),
+      expandedBuilder: (context, tokens) => _buildExpandedContent(work, tokens),
+    );
+  }
+
+  Widget _buildCompactContent(
+    Map<String, Object?> work,
+    AppLayoutTokens tokens,
+  ) {
+    return ListView(
+      padding: EdgeInsets.fromLTRB(
+        tokens.pagePadding.left,
+        tokens.pagePadding.top,
+        tokens.pagePadding.right,
+        tokens.pagePadding.bottom * 2,
+      ),
+      children: [
+        _buildMedia(work['detail_image_path']?.toString() ?? ''),
+        SizedBox(height: tokens.sectionGap),
+        _buildMetadata(work, tokens),
+      ],
+    );
+  }
+
+  Widget _buildExpandedContent(
+    Map<String, Object?> work,
+    AppLayoutTokens tokens,
+  ) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final textScale = MediaQuery.textScalerOf(context).scale(1);
+        final splitRequired =
+            360 +
+            tokens.contentColumnGap +
+            tokens.detailPaneMinWidth * textScale;
+        if (constraints.maxWidth < splitRequired) {
+          return _buildCompactContent(work, tokens);
+        }
+
+        final mediaWidth = (constraints.maxWidth * 0.45)
+            .clamp(360.0, 520.0)
+            .toDouble();
+        return SingleChildScrollView(
+          padding: EdgeInsets.all(tokens.pagePadding.left),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: mediaWidth,
+                child: _buildMedia(work['detail_image_path']?.toString() ?? ''),
+              ),
+              SizedBox(width: tokens.contentColumnGap),
+              Expanded(child: _buildMetadata(work, tokens)),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMedia(String imagePath) {
+    return ClipRRect(
+      key: const Key('work-detail-image'),
+      borderRadius: BorderRadius.circular(16),
+      child: AspectRatio(aspectRatio: 1.48, child: _detailImage(imagePath)),
+    );
+  }
+
+  Widget _buildMetadata(Map<String, Object?> work, AppLayoutTokens tokens) {
     final l10n = AppLocalizations.of(context);
     final title = work['title']?.toString() ?? '';
-    final imagePath = work['detail_image_path']?.toString() ?? '';
     final duration = work['duration_minutes'];
+    final colorScheme = Theme.of(context).colorScheme;
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-      children: [
-        ClipRRect(
-          key: const Key('work-detail-image'),
-          borderRadius: BorderRadius.circular(10),
-          child: AspectRatio(aspectRatio: 1.48, child: _detailImage(imagePath)),
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 0,
+      color: colorScheme.surfaceContainerLow,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(tokens.cardRadius),
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(tokens.cardRadius + 4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: Theme.of(context).textTheme.titleLarge),
+            SizedBox(height: tokens.sectionGap / 2),
+            _value(work['code']?.toString()),
+            _value(work['release_date']?.toString()),
+            if (duration is int) _value(l10n.durationMinutes(duration)),
+            _labeledValue(l10n.studio, work['studio']?.toString()),
+            _labeledValue(l10n.publisher, work['publisher']?.toString()),
+            _labeledValue(l10n.series, work['series']?.toString()),
+          ],
         ),
-        const SizedBox(height: 20),
-        Text(title, style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 12),
-        _value(work['code']?.toString()),
-        _value(work['release_date']?.toString()),
-        if (duration is int) _value(l10n.durationMinutes(duration)),
-        _labeledValue(l10n.studio, work['studio']?.toString()),
-        _labeledValue(l10n.publisher, work['publisher']?.toString()),
-        _labeledValue(l10n.series, work['series']?.toString()),
-      ],
+      ),
     );
   }
 

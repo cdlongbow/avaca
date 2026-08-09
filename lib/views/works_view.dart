@@ -3,9 +3,11 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../components/adaptive_page_layout.dart';
 import '../components/app_snackbar.dart';
 import '../controllers/works_controller.dart';
 import '../core/database.dart';
+import '../core/layout.dart';
 import '../l10n/app_localizations.dart';
 import '../models/work_scrape_options.dart';
 import '../services/javbus/javbus_client.dart';
@@ -238,49 +240,72 @@ class _WorksViewState extends State<WorksView> {
       WorksLoadStatus.loaded =>
         controller.works.isEmpty
             ? Center(child: Text(AppLocalizations.of(context).noWorks))
-            : _buildWorksGrid(),
+            : _buildAdaptiveWorksGrid(),
     };
   }
 
-  Widget _buildWorksGrid() {
+  Widget _buildAdaptiveWorksGrid() {
+    return AdaptivePageLayout(
+      padding: EdgeInsets.zero,
+      compactBuilder: (context, tokens) => _buildWorksGrid(tokens),
+      expandedBuilder: (context, tokens) => _buildWorksGrid(tokens),
+    );
+  }
+
+  Widget _buildWorksGrid(AppLayoutTokens tokens) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final columns = constraints.maxWidth <= 600
-            ? 3
-            : constraints.maxWidth <= 1000
-            ? 4
-            : 6;
-
-        return GridView.builder(
-          padding: const EdgeInsets.fromLTRB(12, 16, 12, 24),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: columns,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 24,
-            childAspectRatio: 0.54,
-          ),
+        final geometry = tokens.gridGeometry(
+          availableWidth: constraints.maxWidth,
+          minItemWidth: tokens.workCardMinWidth,
+          maxItemWidth: tokens.workCardMaxWidth,
           itemCount: controller.works.length,
-          itemBuilder: (context, index) {
-            final work = controller.works[index];
-            final workId = work['id'];
-            final selected = workId is int && selectedWorkIds.contains(workId);
-            return KeyedSubtree(
-              key: selected ? Key('work-card-selected-$workId') : null,
-              child: _WorkCard(
-                key: Key('work-card-$workId'),
-                work: work,
-                selected: selected,
-                onTap: () {
-                  if (isSelecting) {
-                    _toggleSelection(work);
-                  } else {
-                    _openWorkDetail(work);
-                  }
-                },
-                onLongPress: () => _toggleSelection(work),
+          maxUsefulColumns: tokens.workMaxUsefulColumns,
+        );
+
+        return Align(
+          alignment: Alignment.topCenter,
+          child: SizedBox(
+            width: geometry.railWidth,
+            height: constraints.maxHeight,
+            child: GridView.builder(
+              padding: EdgeInsets.fromLTRB(
+                0,
+                tokens.sectionGap,
+                0,
+                tokens.sectionGap * 1.5,
               ),
-            );
-          },
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: geometry.columns,
+                crossAxisSpacing: tokens.gridGap,
+                mainAxisSpacing: tokens.sectionGap,
+                childAspectRatio: 0.54,
+              ),
+              itemCount: controller.works.length,
+              itemBuilder: (context, index) {
+                final work = controller.works[index];
+                final workId = work['id'];
+                final selected =
+                    workId is int && selectedWorkIds.contains(workId);
+                return KeyedSubtree(
+                  key: selected ? Key('work-card-selected-$workId') : null,
+                  child: _WorkCard(
+                    key: Key('work-card-$workId'),
+                    work: work,
+                    selected: selected,
+                    onTap: () {
+                      if (isSelecting) {
+                        _toggleSelection(work);
+                      } else {
+                        _openWorkDetail(work);
+                      }
+                    },
+                    onLongPress: () => _toggleSelection(work),
+                  ),
+                );
+              },
+            ),
+          ),
         );
       },
     );
