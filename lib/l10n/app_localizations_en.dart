@@ -279,6 +279,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get language => 'Language';
 
   @override
+  String get worksPageSize => 'Works page size';
+
+  @override
+  String get worksPageSizeSmall => 'Small';
+
+  @override
+  String get worksPageSizeLarge => 'Large';
+
+  @override
   String get traditionalChineseTaiwan => 'Traditional Chinese (Taiwan)';
 
   @override
@@ -417,4 +426,96 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get javBusVerificationSubmit => 'Submit verification';
+
+  @override
+  String get settingsDataTransferTitle => 'Data transfer';
+
+  @override
+  String get settingsDataTransferSubtitle =>
+      'Back up or restore actors, works, details, and images as a ZIP.';
+
+  @override
+  String get dataTransferExportTitle => 'Export data';
+
+  @override
+  String get dataTransferExportSubtitle =>
+      'Choose a destination for a complete ZIP backup.';
+
+  @override
+  String get dataTransferImportTitle => 'Import data';
+
+  @override
+  String get dataTransferImportSubtitle =>
+      'Choose a ZIP backup to restore it for immediate use.';
+
+  @override
+  String get dataTransferPreparing => 'Preparing data…';
+
+  @override
+  String get dataTransferDuplicateProgress =>
+      'Waiting for duplicate-actor choices…';
+
+  @override
+  String get dataTransferWriting => 'Writing data and images…';
+
+  @override
+  String get dataTransferExportSuccess => 'Export complete.';
+
+  @override
+  String dataTransferExportSuccessWithSkippedImages(int count) {
+    return 'Export complete; skipped $count unusable images.';
+  }
+
+  @override
+  String get dataTransferImportSuccess =>
+      'Import complete. The data is ready to use.';
+
+  @override
+  String get dataTransferDuplicateTitle => 'Duplicate actor found';
+
+  @override
+  String get dataTransferDuplicateExplanation =>
+      'Compare the avatars and work counts, then choose which actor details to use. Existing works and relations are kept.';
+
+  @override
+  String get dataTransferKeepExisting => 'Keep current details';
+
+  @override
+  String get dataTransferUseImported => 'Use imported details';
+
+  @override
+  String get dataTransferContinue => 'Continue';
+
+  @override
+  String dataTransferWorkCount(int count) {
+    return 'Works: $count';
+  }
+
+  @override
+  String get dataTransferArchiveTooLarge =>
+      'The ZIP exceeds the supported size.';
+
+  @override
+  String get dataTransferUnsafeArchive =>
+      'The ZIP contains an unsafe file path.';
+
+  @override
+  String get dataTransferCorruptArchive =>
+      'The ZIP is corrupt or an image checksum failed.';
+
+  @override
+  String get dataTransferFileUnreadable =>
+      'The selected file could not be read.';
+
+  @override
+  String get dataTransferActorNameConflict =>
+      'The imported actor name conflicts with another record.';
+
+  @override
+  String get dataTransferBusy =>
+      'Another data transfer is already in progress.';
+
+  @override
+  String get dataTransferFailed =>
+      'Data transfer failed. Existing data was not changed.';
 }

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.7 - 2026-08-10
+
+- Added ZIP data export and import for actresses, works, details, and all
+  managed images, with portable archive references and safe staging.
+- Added duplicate-actress import resolution with work counts, avatar previews,
+  and an in-app choice flow for keeping existing or imported details.
+- Added the third Settings category for data transfer with localized,
+  responsive controls consistent with the rest of the app.
+
 ## 0.7.5 - 2026-08-10
 
 - Rebalanced responsive Detail and Edit layouts across compact and wide screens.

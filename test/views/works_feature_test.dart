@@ -8,6 +8,7 @@ import 'package:avaca/views/detail_view.dart';
 import 'package:avaca/views/works_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class _WorksFeatureDatabase extends AppDatabase {
   @override
@@ -89,6 +90,28 @@ class _WorksFeatureDatabase extends AppDatabase {
   Future<void> setSetting(String key, String value) async {}
 }
 
+class _WideWorksFeatureDatabase extends _WorksFeatureDatabase {
+  @override
+  Future<List<Map<String, Object?>>> getWorksForActress(int actressId) async {
+    final works = [...await super.getWorksForActress(actressId)];
+    for (var id = 4; id <= 12; id++) {
+      works.add({
+        'id': id,
+        'code': 'WIDE-$id',
+        'title': '寬螢幕測試作品 $id',
+        'release_date': '2026-01-${id.toString().padLeft(2, '0')}',
+        'duration_minutes': 120,
+        'studio': '測試製作商',
+        'publisher': '測試發行商',
+        'series': '',
+        'card_image_path': '',
+        'detail_image_path': '',
+      });
+    }
+    return works;
+  }
+}
+
 class _DeletingWorksFeatureDatabase extends _WorksFeatureDatabase {
   final deletedWorkIds = <int>[];
 
@@ -121,25 +144,116 @@ class _DeletingWorksFeatureDatabase extends _WorksFeatureDatabase {
 }
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
   testWidgets('works page renders a three-column screenshot-style grid', (
     tester,
   ) async {
     await _pumpWorks(tester);
 
     expect(find.byKey(const Key('work-card-1')), findsOneWidget);
+
     expect(find.byKey(const Key('work-card-2')), findsOneWidget);
+
     expect(find.byKey(const Key('work-card-3')), findsOneWidget);
+
     expect(find.text('第一部測試作品'), findsOneWidget);
+
     expect(find.text('ABF-367'), findsOneWidget);
+
     expect(find.text('2026-07-17'), findsOneWidget);
+
+    final first = tester.getRect(find.byKey(const Key('work-card-1')));
+
+    final second = tester.getRect(find.byKey(const Key('work-card-2')));
+
+    final third = tester.getRect(find.byKey(const Key('work-card-3')));
+
+    expect(first.top, closeTo(second.top, 0.01));
+
+    expect(second.top, closeTo(third.top, 0.01));
+
+    expect(first.right, lessThan(second.left));
+
+    expect(second.right, lessThan(third.left));
+
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('large works page size keeps two cards in the first row', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({'works_page_size': 'large'});
+    await _pumpWorks(tester);
 
     final first = tester.getRect(find.byKey(const Key('work-card-1')));
     final second = tester.getRect(find.byKey(const Key('work-card-2')));
     final third = tester.getRect(find.byKey(const Key('work-card-3')));
     expect(first.top, closeTo(second.top, 0.01));
-    expect(second.top, closeTo(third.top, 0.01));
-    expect(first.right, lessThan(second.left));
-    expect(second.right, lessThan(third.left));
+    expect(third.top, greaterThan(second.top));
+  });
+
+  testWidgets('small works cards stay safe under narrow text scaling', (
+    tester,
+  ) async {
+    await _pumpWorks(
+      tester,
+      size: const Size(320, 480),
+      textScaler: const TextScaler.linear(1.25),
+    );
+
+    expect(find.byKey(const Key('work-card-1')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('small works cards shrink in the expanded landscape layout', (
+    tester,
+  ) async {
+    await _pumpWorks(tester, size: const Size(1440, 900));
+    final smallWidth = tester
+        .getRect(find.byKey(const Key('work-card-1')))
+        .width;
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    SharedPreferences.setMockInitialValues({'works_page_size': 'large'});
+    await _pumpWorks(tester, size: const Size(1440, 900));
+    final largeWidth = tester
+        .getRect(find.byKey(const Key('work-card-1')))
+        .width;
+
+    expect(smallWidth, lessThan(largeWidth));
+    expect(smallWidth, lessThanOrEqualTo(192));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('wide Works grid uses remaining width beyond the old cap', (
+    tester,
+  ) async {
+    final database = _WideWorksFeatureDatabase();
+
+    await _pumpWorks(tester, database: database, size: const Size(1440, 900));
+
+    final smallFirst = tester.getRect(find.byKey(const Key('work-card-1')));
+    final smallSeventh = tester.getRect(find.byKey(const Key('work-card-7')));
+    final smallGrid = tester.getRect(find.byType(GridView).first);
+
+    expect(smallSeventh.top, closeTo(smallFirst.top, 0.01));
+    expect(smallGrid.width, greaterThan(1300));
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    SharedPreferences.setMockInitialValues({'works_page_size': 'large'});
+    await _pumpWorks(tester, database: database, size: const Size(1440, 900));
+
+    final largeFirst = tester.getRect(find.byKey(const Key('work-card-1')));
+    final largeFifth = tester.getRect(find.byKey(const Key('work-card-5')));
+    final largeGrid = tester.getRect(find.byType(GridView).first);
+
+    expect(largeFifth.top, closeTo(largeFirst.top, 0.01));
+    expect(largeGrid.width, closeTo(smallGrid.width, 0.01));
     expect(tester.takeException(), isNull);
   });
 
@@ -149,42 +263,64 @@ void main() {
     await _pumpWorks(tester);
 
     await tester.longPress(find.byKey(const Key('work-card-1')));
+
     await tester.pumpAndSettle();
+
     expect(find.byKey(const Key('work-card-selected-1')), findsOneWidget);
+
     expect(find.byKey(const Key('works-delete-action')), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('work-card-2')));
+
     await tester.pumpAndSettle();
+
     expect(find.byKey(const Key('work-card-selected-1')), findsOneWidget);
+
     expect(find.byKey(const Key('work-card-selected-2')), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('work-card-1')));
+
     await tester.pumpAndSettle();
+
     expect(find.byKey(const Key('work-card-selected-1')), findsNothing);
+
     expect(find.byKey(const Key('work-card-selected-2')), findsOneWidget);
+
     expect(tester.takeException(), isNull);
   });
 
   testWidgets(
     'system back clears work selection and delete confirms global removal',
+
     (tester) async {
       await _pumpWorks(tester);
 
       await tester.longPress(find.byKey(const Key('work-card-1')));
+
       await tester.pumpAndSettle();
+
       await tester.binding.handlePopRoute();
+
       await tester.pumpAndSettle();
+
       expect(find.byType(WorksView), findsOneWidget);
+
       expect(find.byKey(const Key('work-card-selected-1')), findsNothing);
+
       expect(find.byKey(const Key('works-delete-action')), findsNothing);
 
       await tester.longPress(find.byKey(const Key('work-card-1')));
+
       await tester.pumpAndSettle();
+
       await tester.tap(find.byKey(const Key('works-delete-action')));
+
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('works-delete-confirm')), findsOneWidget);
+
       expect(find.textContaining('其他女優'), findsOneWidget);
+
       expect(tester.takeException(), isNull);
     },
   );
@@ -193,112 +329,166 @@ void main() {
     tester,
   ) async {
     final database = _DeletingWorksFeatureDatabase();
+
     await _pumpWorks(tester, database: database);
 
     await tester.longPress(find.byKey(const Key('work-card-1')));
+
     await tester.pumpAndSettle();
+
     await tester.tap(find.byKey(const Key('works-delete-action')));
+
     await tester.pumpAndSettle();
+
     await tester.tap(find.text('確定刪除'));
+
     await tester.pumpAndSettle();
 
     expect(database.deletedWorkIds, [1]);
+
     expect(find.byKey(const Key('work-card-1')), findsNothing);
+
     expect(find.byKey(const Key('work-card-2')), findsOneWidget);
+
     expect(find.byKey(const Key('works-delete-action')), findsNothing);
+
     expect(find.byKey(const Key('works-scrape-action')), findsOneWidget);
+
     expect(find.text('已刪除 1 部作品'), findsOneWidget);
+
     expect(tester.takeException(), isNull);
   });
 
   testWidgets(
     'scrape settings use compact switch rows and collapsible prefixes',
+
     (tester) async {
       await _pumpWorks(tester);
 
       await tester.tap(find.byKey(const Key('works-scrape-action')));
+
       await tester.pumpAndSettle();
 
       final switchTiles = tester
           .widgetList<SwitchListTile>(find.byType(SwitchListTile))
           .toList(growable: false);
+
       expect(switchTiles, hasLength(3));
+
       for (final tile in switchTiles) {
         expect(tile.controlAffinity, ListTileControlAffinity.trailing);
       }
+
       expect(find.text('同步詳細資料'), findsOneWidget);
+
       expect(find.text('更換女優頭像'), findsOneWidget);
+
       expect(find.text('二次刮削只補齊缺少的資訊'), findsOneWidget);
+
       expect(find.text('多於此數量的女優不刮削'), findsOneWidget);
+
       expect(
         find.byKey(const Key('scrape-max-actress-count-row')),
+
         findsOneWidget,
       );
+
       expect(
         find.byKey(const Key('scrape-max-actress-count-input')),
+
         findsOneWidget,
       );
+
       final maxCountFinder = find.byKey(
         const Key('scrape-max-actress-count-input'),
       );
+
       final maxCountEditable = tester.widget<EditableText>(
         find.descendant(
           of: maxCountFinder,
+
           matching: find.byType(EditableText),
         ),
       );
+
       expect(maxCountEditable.textAlign, TextAlign.end);
 
       final spacingKeys = <String>[
         'scrape-settings-gap-title',
+
         'scrape-settings-gap-sync',
+
         'scrape-settings-gap-replace',
+
         'scrape-settings-gap-fill',
+
         'scrape-settings-gap-max',
       ];
+
       for (final key in spacingKeys) {
         final gap = tester.widget<SizedBox>(find.byKey(Key(key)));
+
         expect(gap.height, inInclusiveRange(6, 8));
       }
+
       final titleBottom = tester
           .getRect(find.byKey(const Key('scrape-settings-title')))
           .bottom;
+
       final settingsRowKeys = <String>[
         'scrape-sync-details-switch',
+
         'scrape-replace-actress-image-switch',
+
         'scrape-fill-missing-only-switch',
+
         'scrape-max-actress-count-row',
+
         'scrape-prefix-section',
       ];
+
       final settingsRows = settingsRowKeys
           .map((key) => tester.getRect(find.byKey(Key(key))))
           .toList(growable: false);
+
       expect(settingsRows.first.top - titleBottom, closeTo(8, 0.5));
+
       for (var index = 1; index < settingsRows.length; index++) {
         expect(
           settingsRows[index].top - settingsRows[index - 1].bottom,
+
           closeTo(8, 0.5),
         );
       }
 
       expect(find.byKey(const Key('scrape-prefix-section')), findsOneWidget);
+
       expect(find.byKey(const Key('scrape-prefix-count')), findsOneWidget);
+
       expect(find.byKey(const Key('scrape-prefix-input')), findsNothing);
+
       expect(find.byKey(const Key('scrape-prefix-add')), findsNothing);
 
       await tester.tap(find.byKey(const Key('scrape-prefix-section')));
+
       await tester.pumpAndSettle();
+
       expect(find.byKey(const Key('scrape-prefix-input')), findsOneWidget);
+
       expect(find.byKey(const Key('scrape-prefix-add')), findsOneWidget);
 
       await tester.enterText(
         find.byKey(const Key('scrape-prefix-input')),
+
         'fc2-ppv_123',
       );
+
       await tester.tap(find.byKey(const Key('scrape-prefix-add')));
+
       await tester.pumpAndSettle();
 
       expect(find.text('FC2-PPV_123'), findsOneWidget);
+
       expect(tester.takeException(), isNull);
     },
   );
@@ -309,29 +499,42 @@ void main() {
     await _pumpWorks(tester);
 
     await tester.tap(find.byKey(const Key('works-scrape-action')));
+
     await tester.pumpAndSettle();
+
     await tester.tap(find.byKey(const Key('scrape-prefix-section')));
+
     await tester.pumpAndSettle();
 
     tester.view.physicalSize = const Size(300, 300);
+
     addTearDown(tester.view.resetPhysicalSize);
+
     await tester.pumpAndSettle();
 
     final scrollable = find.byKey(const Key('scrape-settings-scroll'));
+
     expect(scrollable, findsOneWidget);
+
     final scrollableStateFinder = find.descendant(
       of: scrollable,
+
       matching: find.byType(Scrollable),
     );
+
     final states = scrollableStateFinder
         .evaluate()
         .whereType<StatefulElement>()
         .map((element) => element.state)
         .whereType<ScrollableState>()
         .toList(growable: false);
+
     expect(states.any((state) => state.position.maxScrollExtent > 0), isTrue);
+
     await tester.drag(scrollable, const Offset(0, -100));
+
     await tester.pumpAndSettle();
+
     expect(tester.takeException(), isNull);
   });
 
@@ -339,51 +542,79 @@ void main() {
     tester,
   ) async {
     WorkScrapeOptions? received;
+
     await _pumpWorks(
       tester,
+
       scrapeExecutor: (options, token, onProgress) async {
         received = options;
+
         onProgress(
           const WorksScrapeProgress(
             current: 1,
+
             total: 1,
+
             saved: 1,
+
             excluded: 0,
+
             failed: 0,
           ),
         );
+
         return const WorksScrapeResult(
           saved: 1,
+
           excluded: 0,
+
           failed: 0,
+
           cancelled: false,
         );
       },
     );
 
     await tester.tap(find.byKey(const Key('works-scrape-action')));
+
     await tester.pumpAndSettle();
+
     await tester.tap(find.byKey(const Key('scrape-prefix-section')));
+
     await tester.pumpAndSettle();
+
     await tester.enterText(
       find.byKey(const Key('scrape-prefix-input')),
+
       '1pon-HD',
     );
+
     await tester.enterText(
       find.byKey(const Key('scrape-max-actress-count-input')),
+
       '3',
     );
+
     await tester.tap(find.byKey(const Key('scrape-prefix-add')));
+
     await tester.tap(find.text('開始刮削'));
+
     await tester.pumpAndSettle();
 
     expect(received, isNotNull);
+
     expect(received!.excludedPrefixes, ['1PON-HD']);
+
     expect(received!.syncDetails, isTrue);
+
     expect(received!.fillMissingOnly, isTrue);
+
     expect(received!.maxActressCount, 3);
+
     expect(find.byType(CircularProgressIndicator), findsNothing);
+
     expect(find.text('刮削完成：儲存 1、排除 0、失敗 0'), findsOneWidget);
+
     expect(tester.takeException(), isNull);
   });
 
@@ -393,16 +624,23 @@ void main() {
     await _pumpWorks(tester);
 
     await tester.tap(find.byKey(const Key('works-scrape-action')));
+
     await tester.pumpAndSettle();
+
     await tester.enterText(
       find.byKey(const Key('scrape-max-actress-count-input')),
+
       '0',
     );
+
     await tester.tap(find.text('開始刮削'));
+
     await tester.pumpAndSettle();
 
     expect(find.text('請輸入大於等於 1 的整數'), findsOneWidget);
+
     expect(find.text('刮削設定'), findsOneWidget);
+
     expect(tester.takeException(), isNull);
   });
 
@@ -410,16 +648,23 @@ void main() {
     await _pumpWorks(tester);
 
     await tester.tap(find.byKey(const Key('works-scrape-action')));
+
     await tester.pumpAndSettle();
+
     await tester.enterText(
       find.byKey(const Key('scrape-max-actress-count-input')),
+
       '1.5',
     );
+
     await tester.tap(find.text('開始刮削'));
+
     await tester.pumpAndSettle();
 
     expect(find.text('請輸入大於等於 1 的整數'), findsOneWidget);
+
     expect(find.text('刮削設定'), findsOneWidget);
+
     expect(tester.takeException(), isNull);
   });
 
@@ -428,22 +673,31 @@ void main() {
   ) async {
     await _pumpWorks(
       tester,
+
       scrapeExecutor: (options, token, onProgress) async =>
           const WorksScrapeResult(
             saved: 1,
+
             excluded: 0,
+
             failed: 0,
+
             cancelled: false,
+
             actressImageStatus: ActressImageSyncStatus.downloadFailed,
           ),
     );
 
     await tester.tap(find.byKey(const Key('works-scrape-action')));
+
     await tester.pumpAndSettle();
+
     await tester.tap(find.text('開始刮削'));
+
     await tester.pumpAndSettle();
 
     expect(find.textContaining('女優頭像替換失敗，已保留原頭像'), findsOneWidget);
+
     expect(tester.takeException(), isNull);
   });
 
@@ -453,14 +707,21 @@ void main() {
     await _pumpWorks(tester);
 
     await tester.tap(find.byKey(const Key('work-card-1')));
+
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('work-detail-image')), findsOneWidget);
+
     expect(find.text('第一部測試作品'), findsOneWidget);
+
     expect(find.text('135 分鐘'), findsOneWidget);
+
     expect(find.textContaining('プレステージ'), findsOneWidget);
+
     expect(find.textContaining('ABSOLUTELYFANTASIA'), findsOneWidget);
+
     expect(find.textContaining('「顔」で、ヌく。'), findsOneWidget);
+
     expect(tester.takeException(), isNull);
   });
 
@@ -468,53 +729,74 @@ void main() {
     tester,
   ) async {
     final result = Completer<WorksScrapeResult>();
+
     await _pumpWorks(
       tester,
+
       scrapeExecutor: (options, token, onProgress) => result.future,
     );
 
     await tester.tap(find.byKey(const Key('works-scrape-action')));
+
     await tester.pumpAndSettle();
+
     await tester.tap(find.text('開始刮削'));
+
     await tester.pump();
 
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
     await tester.binding.handlePopRoute();
+
     await tester.pump();
+
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
     expect(find.byType(WorksView), findsOneWidget);
 
     result.complete(
       const WorksScrapeResult(
         saved: 0,
+
         excluded: 0,
+
         failed: 0,
+
         cancelled: false,
       ),
     );
+
     await tester.pumpAndSettle();
+
     expect(find.byType(WorksView), findsOneWidget);
+
     expect(tester.takeException(), isNull);
   });
 
   testWidgets(
     'detail page shows the local work count beside a narrower button',
+
     (tester) async {
       await tester.pumpWidget(
         _localizedApp(
           home: DetailView(db: _WorksFeatureDatabase(), actressId: 7),
         ),
       );
+
       await tester.pumpAndSettle();
 
       final button = tester.getRect(
         find.byKey(const Key('detail-works-button')),
       );
+
       final count = tester.getRect(find.byKey(const Key('detail-works-count')));
 
       expect(find.text('178'), findsOneWidget);
+
       expect(button.right, lessThan(count.left));
+
       expect(button.width, lessThan(120));
+
       expect(tester.takeException(), isNull);
     },
   );
@@ -523,6 +805,8 @@ void main() {
 Future<void> _pumpWorks(
   WidgetTester tester, {
   AppDatabase? database,
+  Size size = const Size(390, 844),
+  TextScaler textScaler = TextScaler.noScaling,
   Future<WorksScrapeResult> Function(
     WorkScrapeOptions options,
     WorksScrapeCancellationToken token,
@@ -531,12 +815,13 @@ Future<void> _pumpWorks(
   scrapeExecutor,
 }) async {
   tester.view.devicePixelRatio = 1;
-  tester.view.physicalSize = const Size(390, 844);
+  tester.view.physicalSize = size;
   addTearDown(tester.view.resetDevicePixelRatio);
   addTearDown(tester.view.resetPhysicalSize);
 
   await tester.pumpWidget(
     _localizedApp(
+      textScaler: textScaler,
       home: WorksView(
         db: database ?? _WorksFeatureDatabase(),
         actressId: 7,
@@ -547,11 +832,18 @@ Future<void> _pumpWorks(
   await tester.pumpAndSettle();
 }
 
-Widget _localizedApp({required Widget home}) {
+Widget _localizedApp({
+  required Widget home,
+  TextScaler textScaler = TextScaler.noScaling,
+}) {
   return MaterialApp(
     locale: const Locale('zh', 'TW'),
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
+    builder: (context, child) => MediaQuery(
+      data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+      child: child!,
+    ),
     home: home,
   );
 }

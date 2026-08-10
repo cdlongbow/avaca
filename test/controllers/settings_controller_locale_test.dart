@@ -53,6 +53,45 @@ void main() {
     expect(prefs.getString('app_locale'), 'ja_JP');
   });
 
+  test(
+    'works page size defaults to Small when the preference is missing',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final controller = SettingsController(db: _FakeAppDatabase());
+
+      await controller.loadFromPrefs();
+
+      expect(controller.worksPageSize, WorksPageSize.small);
+    },
+  );
+
+  test(
+    'works page size falls back to Small for an invalid preference',
+    () async {
+      SharedPreferences.setMockInitialValues({'works_page_size': 'unknown'});
+      final controller = SettingsController(db: _FakeAppDatabase());
+
+      await controller.loadFromPrefs();
+
+      expect(controller.worksPageSize, WorksPageSize.small);
+    },
+  );
+
+  test('works page size persists and restores Small and Large', () async {
+    final controller = SettingsController(db: _FakeAppDatabase());
+
+    await controller.worksPageSizeChanged(WorksPageSize.large);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('works_page_size'), 'large');
+
+    final restored = SettingsController(db: _FakeAppDatabase());
+    await restored.loadFromPrefs();
+    expect(restored.worksPageSize, WorksPageSize.large);
+
+    await restored.worksPageSizeChanged(WorksPageSize.small);
+    expect(prefs.getString('works_page_size'), 'small');
+  });
+
   testWidgets('app restores ja_JP as its active locale', (tester) async {
     SharedPreferences.setMockInitialValues({
       'theme_mode': 'system',

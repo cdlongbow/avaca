@@ -1,12 +1,17 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:avaca/l10n/app_localizations.dart';
 import '../components/adaptive_page_layout.dart';
+import '../controllers/data_transfer_controller.dart';
 import '../controllers/settings_controller.dart';
 import '../core/database.dart';
 import '../core/layout.dart';
+import '../models/data_transfer_models.dart';
+import '../services/data_transfer_service.dart';
 
 class _SettingsInteractionTheme extends StatelessWidget {
   const _SettingsInteractionTheme({required this.child});
@@ -154,6 +159,7 @@ class SettingsView extends StatefulWidget {
     required this.db,
     required this.onThemeChanged,
     required this.onLocaleChanged,
+    this.transferController,
   });
 
   final AppDatabase db;
@@ -164,6 +170,7 @@ class SettingsView extends StatefulWidget {
   )
   onThemeChanged;
   final void Function(Locale? locale) onLocaleChanged;
+  final DataTransferController? transferController;
 
   @override
   State<SettingsView> createState() => _SettingsViewState();
@@ -178,11 +185,17 @@ class _SettingsViewState extends State<SettingsView> {
   );
 
   late final SettingsController controller;
+  late final DataTransferController dataTransferController;
+  late final bool _ownsDataTransferController;
 
   @override
   void initState() {
     super.initState();
     controller = SettingsController(db: widget.db);
+    _ownsDataTransferController = widget.transferController == null;
+    dataTransferController =
+        widget.transferController ??
+        DataTransferController(service: DataTransferService(db: widget.db));
     // 載入目前儲存的外觀設定
     controller.loadFromPrefs();
     controller.loadCustomTheme();
@@ -193,6 +206,7 @@ class _SettingsViewState extends State<SettingsView> {
   @override
   void dispose() {
     controller.removeListener(_onControllerChanged);
+    if (_ownsDataTransferController) dataTransferController.dispose();
     super.dispose();
   }
 
@@ -266,6 +280,18 @@ class _SettingsViewState extends State<SettingsView> {
                 bodyBuilder: _buildInterfaceSettings,
               ),
             ),
+            const SizedBox(height: 8),
+            _categoryCard(
+              tokens: tokens,
+              feedbackId: 'category-data-transfer',
+              icon: Icons.import_export,
+              title: AppLocalizations.of(context).settingsDataTransferTitle,
+              onTap: () => _openCategory(
+                titleBuilder: (context) =>
+                    AppLocalizations.of(context).settingsDataTransferTitle,
+                bodyBuilder: _buildDataTransferSettings,
+              ),
+            ),
           ],
         ),
       ),
@@ -329,8 +355,272 @@ class _SettingsViewState extends State<SettingsView> {
   Widget _buildInterfaceSettings(BuildContext context) {
     return ListView(
       padding: EdgeInsets.zero,
-      children: [_languageSelector(context)],
+      children: [
+        _languageSelector(context),
+        const SizedBox(height: 12),
+        _worksPageSizeSelector(context),
+      ],
     );
+  }
+
+  Widget _buildDataTransferSettings(BuildContext context) {
+    return ListenableBuilder(
+      listenable: dataTransferController,
+      builder: (context, _) {
+        final localizations = AppLocalizations.of(context);
+        final isBusy = dataTransferController.isBusy;
+        final progressText = switch (dataTransferController.phase) {
+          DataTransferPhase.preparing => localizations.dataTransferPreparing,
+          DataTransferPhase.reviewingDuplicates =>
+            localizations.dataTransferDuplicateProgress,
+          DataTransferPhase.writing => localizations.dataTransferWriting,
+          _ => null,
+        };
+        return ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            Text(
+              localizations.settingsDataTransferSubtitle,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 12),
+            _dataTransferActionCard(
+              context: context,
+              feedbackId: 'data-transfer-export',
+              icon: Icons.file_upload_outlined,
+              title: localizations.dataTransferExportTitle,
+              subtitle: isBusy && progressText != null
+                  ? progressText
+                  : localizations.dataTransferExportSubtitle,
+              enabled: !isBusy,
+              trailing: isBusy ? const _TransferProgressIndicator() : null,
+              onTap: _exportData,
+            ),
+            const SizedBox(height: 8),
+            _dataTransferActionCard(
+              context: context,
+              feedbackId: 'data-transfer-import',
+              icon: Icons.file_download_outlined,
+              title: localizations.dataTransferImportTitle,
+              subtitle: isBusy && progressText != null
+                  ? progressText
+                  : localizations.dataTransferImportSubtitle,
+              enabled: !isBusy,
+              trailing: isBusy ? const _TransferProgressIndicator() : null,
+              onTap: _importData,
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _dataTransferActionCard({
+    required BuildContext context,
+    required String feedbackId,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool enabled,
+    required VoidCallback onTap,
+    Widget? trailing,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return _SettingsTapFeedback(
+      id: feedbackId,
+      child: Card(
+        margin: EdgeInsets.zero,
+        clipBehavior: Clip.antiAlias,
+        color: colorScheme.surfaceContainerHighest,
+        elevation: 0,
+        shape: _outlinedCardShape(context),
+        child: ListTile(
+          enabled: enabled,
+          minVerticalPadding: 12,
+          leading: Icon(icon),
+          title: Text(title),
+          subtitle: Text(subtitle),
+          trailing: trailing ?? const Icon(Icons.chevron_right),
+          onTap: enabled ? onTap : null,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _exportData() async {
+    final result = await dataTransferController.exportData();
+    if (!mounted || result.cancelled) return;
+    final localizations = AppLocalizations.of(context);
+    final skippedImages = result.summary?.skippedImages ?? 0;
+    final message = result.error != null
+        ? _dataTransferErrorMessage(localizations, result.error!.code)
+        : skippedImages > 0
+        ? localizations.dataTransferExportSuccessWithSkippedImages(
+            skippedImages,
+          )
+        : localizations.dataTransferExportSuccess;
+    _showDataTransferMessage(message, isError: result.error != null);
+  }
+
+  Future<void> _importData() async {
+    final result = await dataTransferController.importData(
+      resolveDuplicate: _showDuplicateChooser,
+    );
+    if (!mounted || result.cancelled) return;
+    final localizations = AppLocalizations.of(context);
+    final message = result.error != null
+        ? _dataTransferErrorMessage(localizations, result.error!.code)
+        : localizations.dataTransferImportSuccess;
+    _showDataTransferMessage(message, isError: result.error != null);
+  }
+
+  Future<DataTransferDuplicateResolution?> _showDuplicateChooser(
+    DataTransferDuplicateCandidate candidate,
+  ) async {
+    DataTransferDuplicateResolution? selected;
+    return showDialog<DataTransferDuplicateResolution>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final localizations = AppLocalizations.of(context);
+          return AlertDialog(
+            shape: _outlinedCardShape(context),
+            title: Text(localizations.dataTransferDuplicateTitle),
+            content: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(localizations.dataTransferDuplicateExplanation),
+                    const SizedBox(height: 16),
+                    RadioGroup<DataTransferDuplicateResolution>(
+                      groupValue: selected,
+                      onChanged: (value) =>
+                          setDialogState(() => selected = value),
+                      child: Column(
+                        children: [
+                          _duplicateChoice(
+                            context: context,
+                            value: DataTransferDuplicateResolution.keepExisting,
+                            title: localizations.dataTransferKeepExisting,
+                            name: candidate.existingName,
+                            workCount: candidate.existingWorkCount,
+                            image: _existingAvatar(candidate.existingImagePath),
+                          ),
+                          _duplicateChoice(
+                            context: context,
+                            value: DataTransferDuplicateResolution.useImported,
+                            title: localizations.dataTransferUseImported,
+                            name: candidate.imported.name,
+                            workCount: candidate.importedWorkCount,
+                            image: _importedAvatar(
+                              candidate.importedAvatarBytes,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: Text(localizations.cancel),
+              ),
+              FilledButton(
+                onPressed: selected == null
+                    ? null
+                    : () => Navigator.pop(dialogContext, selected),
+                child: Text(localizations.dataTransferContinue),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _duplicateChoice({
+    required BuildContext context,
+    required DataTransferDuplicateResolution value,
+    required String title,
+    required String name,
+    required int workCount,
+    required Widget image,
+  }) {
+    final localizations = AppLocalizations.of(context);
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      elevation: 0,
+      color: Theme.of(context).colorScheme.surfaceContainer,
+      shape: _outlinedCardShape(context, radius: 10),
+      child: RadioListTile<DataTransferDuplicateResolution>(
+        value: value,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        secondary: image,
+        title: Text(title),
+        subtitle: Text(
+          '$name\n${localizations.dataTransferWorkCount(workCount)}',
+        ),
+      ),
+    );
+  }
+
+  Widget _existingAvatar(String? imagePath) {
+    if (imagePath == null || imagePath.trim().isEmpty) {
+      return const _TransferAvatarPlaceholder();
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Image.file(
+        File(imagePath),
+        width: 64,
+        height: 64,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => const _TransferAvatarPlaceholder(),
+      ),
+    );
+  }
+
+  Widget _importedAvatar(Uint8List? bytes) {
+    if (bytes == null || bytes.isEmpty) {
+      return const _TransferAvatarPlaceholder();
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Image.memory(
+        bytes,
+        width: 64,
+        height: 64,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => const _TransferAvatarPlaceholder(),
+      ),
+    );
+  }
+
+  String _dataTransferErrorMessage(
+    AppLocalizations localizations,
+    String code,
+  ) {
+    return switch (code) {
+      'archive_too_large' => localizations.dataTransferArchiveTooLarge,
+      'unsafe_archive' => localizations.dataTransferUnsafeArchive,
+      'corrupt_archive' => localizations.dataTransferCorruptArchive,
+      'file_unreadable' => localizations.dataTransferFileUnreadable,
+      'actor_name_conflict' => localizations.dataTransferActorNameConflict,
+      'busy' => localizations.dataTransferBusy,
+      _ => localizations.dataTransferFailed,
+    };
+  }
+
+  void _showDataTransferMessage(String message, {required bool isError}) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   Widget _themeModeSelector(BuildContext context) {
@@ -460,6 +750,54 @@ class _SettingsViewState extends State<SettingsView> {
     );
   }
 
+  Widget _worksPageSizeSelector(BuildContext context) {
+    final current = controller.worksPageSize;
+    final colorScheme = Theme.of(context).colorScheme;
+    final shape = _outlinedCardShape(context);
+
+    return _SettingsTapFeedback(
+      id: 'works-page-size',
+      child: ExpansionTile(
+        key: const PageStorageKey('works-page-size'),
+        tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+        childrenPadding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+        backgroundColor: colorScheme.surfaceContainerHighest,
+        collapsedBackgroundColor: colorScheme.surfaceContainerHighest,
+        shape: shape,
+        collapsedShape: shape,
+        clipBehavior: Clip.antiAlias,
+        expansionAnimationStyle: _expansionAnimationStyle,
+        title: Text(AppLocalizations.of(context).worksPageSize),
+        children: [
+          RadioGroup<WorksPageSize>(
+            groupValue: current,
+            onChanged: (selected) async {
+              if (selected != null) {
+                await controller.worksPageSizeChanged(selected);
+              }
+            },
+            child: Column(
+              children: [
+                RadioListTile<WorksPageSize>(
+                  key: const PageStorageKey('works-page-size-option-small'),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                  title: Text(AppLocalizations.of(context).worksPageSizeSmall),
+                  value: WorksPageSize.small,
+                ),
+                RadioListTile<WorksPageSize>(
+                  key: const PageStorageKey('works-page-size-option-large'),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                  title: Text(AppLocalizations.of(context).worksPageSizeLarge),
+                  value: WorksPageSize.large,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   String _themeModeLabel(BuildContext context, String value) {
     return switch (value) {
       'system' => AppLocalizations.of(context).followSystem,
@@ -579,6 +917,38 @@ class _SettingsViewState extends State<SettingsView> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _TransferProgressIndicator extends StatelessWidget {
+  const _TransferProgressIndicator();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox.square(
+      dimension: 22,
+      child: CircularProgressIndicator(strokeWidth: 2),
+    );
+  }
+}
+
+class _TransferAvatarPlaceholder extends StatelessWidget {
+  const _TransferAvatarPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Theme.of(context).colorScheme.outline),
+      ),
+      child: const SizedBox(
+        width: 64,
+        height: 64,
+        child: Icon(Icons.person_outline),
       ),
     );
   }

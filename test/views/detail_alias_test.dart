@@ -31,6 +31,20 @@ void main() {
       expect(works.bottom, lessThanOrEqualTo(aliases.top));
       expect(aliases.bottom, lessThanOrEqualTo(attributes.top));
 
+      final expectedTextColor = Theme.of(
+        tester.element(find.byType(DetailView)),
+      ).colorScheme.onSurface;
+      for (final key in const [
+        'detail-works-button',
+        'detail-aliases-button',
+      ]) {
+        final button = tester.widget<OutlinedButton>(find.byKey(Key(key)));
+        expect(
+          button.style?.foregroundColor?.resolve(<WidgetState>{}),
+          expectedTextColor,
+        );
+      }
+
       await tester.tap(find.byKey(const Key('detail-aliases-button')));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('detail-aliases-dialog')), findsOneWidget);

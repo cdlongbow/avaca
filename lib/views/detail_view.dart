@@ -15,8 +15,9 @@ enum _DetailMenuAction { edit, delete }
 
 enum _DetailLayoutMode { compact, intermediate, wide }
 
-ButtonStyle _detailOutlinedButtonStyle() {
+ButtonStyle _detailOutlinedButtonStyle({Color? foregroundColor}) {
   return OutlinedButton.styleFrom(
+    foregroundColor: foregroundColor,
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(_detailControlRadius),
     ),
@@ -510,6 +511,9 @@ class _DetailViewState extends State<DetailView> {
   Widget _buildMetadataPanel(AppLayoutTokens tokens) {
     final colorScheme = Theme.of(context).colorScheme;
     final isEditing = controller.isEditing;
+    final actionButtonStyle = _detailOutlinedButtonStyle(
+      foregroundColor: colorScheme.onSurface,
+    );
 
     return Container(
       key: const Key('detail-metadata-panel'),
@@ -527,7 +531,7 @@ class _DetailViewState extends State<DetailView> {
                 child: OutlinedButton(
                   key: const Key('detail-works-button'),
                   onPressed: _openWorks,
-                  style: _detailOutlinedButtonStyle(),
+                  style: actionButtonStyle,
                   child: Text(AppLocalizations.of(context).works),
                 ),
               ),
@@ -543,7 +547,7 @@ class _DetailViewState extends State<DetailView> {
           OutlinedButton(
             key: const Key('detail-aliases-button'),
             onPressed: _openAliases,
-            style: _detailOutlinedButtonStyle(),
+            style: actionButtonStyle,
             child: Text(AppLocalizations.of(context).aliases),
           ),
           const SizedBox(height: 12),
@@ -630,6 +634,9 @@ class _DetailViewState extends State<DetailView> {
   Widget _buildProfilePanel(AppLayoutTokens tokens) {
     final colorScheme = Theme.of(context).colorScheme;
     final isEditing = controller.isEditing;
+    final actionButtonStyle = _detailOutlinedButtonStyle(
+      foregroundColor: colorScheme.onSurface,
+    );
 
     return Container(
       key: const Key('detail-profile-panel'),
@@ -666,7 +673,7 @@ class _DetailViewState extends State<DetailView> {
                           child: OutlinedButton(
                             key: const Key('detail-works-button'),
                             onPressed: _openWorks,
-                            style: _detailOutlinedButtonStyle(),
+                            style: actionButtonStyle,
                             child: Text(AppLocalizations.of(context).works),
                           ),
                         ),
@@ -687,7 +694,7 @@ class _DetailViewState extends State<DetailView> {
                       child: OutlinedButton(
                         key: const Key('detail-aliases-button'),
                         onPressed: _openAliases,
-                        style: _detailOutlinedButtonStyle(),
+                        style: actionButtonStyle,
                         child: Text(AppLocalizations.of(context).aliases),
                       ),
                     ),

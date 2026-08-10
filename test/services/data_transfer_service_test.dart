@@ -1,0 +1,241 @@
+import 'dart:io';
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:archive/archive.dart';
+import 'package:avaca/core/database.dart';
+import 'package:avaca/models/data_transfer_manifest.dart';
+import 'package:avaca/models/data_transfer_models.dart';
+import 'package:avaca/models/work.dart';
+import 'package:avaca/services/data_transfer_service.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as path;
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+
+void main() {
+  sqfliteFfiInit();
+
+  late Directory sourceDirectory;
+  late Directory targetDirectory;
+  late AppDatabase source;
+  late AppDatabase target;
+
+  setUp(() async {
+    sourceDirectory = await Directory.systemTemp.createTemp(
+      'avaca_transfer_source_',
+    );
+    targetDirectory = await Directory.systemTemp.createTemp(
+      'avaca_transfer_target_',
+    );
+    source = AppDatabase.forTesting(
+      baseDir: sourceDirectory.path,
+      databaseFactory: databaseFactoryFfi,
+    );
+    target = AppDatabase.forTesting(
+      baseDir: targetDirectory.path,
+      databaseFactory: databaseFactoryFfi,
+    );
+    await source.init();
+    await target.init();
+  });
+
+  tearDown(() async {
+    await source.close();
+    await target.close();
+    if (sourceDirectory.existsSync()) {
+      await sourceDirectory.delete(recursive: true);
+    }
+    if (targetDirectory.existsSync()) {
+      await targetDirectory.delete(recursive: true);
+    }
+  });
+
+  test(
+    'exported ZIP imports into a clean database with usable images',
+    () async {
+      final avatar = File(path.join(source.imgDir, 'avatar.jpg'));
+      final card = File(path.join(source.imgDir, 'works', 'card.jpg'));
+      final detail = File(path.join(source.imgDir, 'works', 'detail.jpg'));
+      await card.parent.create(recursive: true);
+      await avatar.writeAsBytes([1, 2, 3, 4]);
+      await card.writeAsBytes([5, 6, 7]);
+      await detail.writeAsBytes([8, 9]);
+
+      await source.addActress(
+        name: 'Round Trip Actor',
+        imgPath: avatar.path,
+        mainType: '無碼',
+        tags: 'tag-a,tag-b',
+        memo: 'memo',
+        birthDate: '1999-01-01',
+      );
+      final sqlite = await source.database;
+      final actressId =
+          (await sqlite.query('actresses', columns: ['id'])).single['id']
+              as int;
+      await sqlite.update(
+        'actresses',
+        {'height': '160', 'weight': '48', 'bwh': '85-55-85', 'cup': 'F'},
+        where: 'id = ?',
+        whereArgs: [actressId],
+      );
+      await source.replaceActressAliases(
+        actressId: actressId,
+        aliases: const ['RTA', 'Round Trip'],
+      );
+      await source.upsertActressWork(
+        actressId: actressId,
+        work: Work(
+          code: 'RT-001',
+          title: 'Round Trip Work',
+          releaseDate: '2026-01-02',
+          durationMinutes: 120,
+          studio: 'Studio',
+          publisher: 'Publisher',
+          series: 'Series',
+          cardImagePath: card.path,
+          detailImagePath: detail.path,
+        ),
+      );
+
+      final exported = await DataTransferService(db: source).buildExport();
+      expect(exported.bytes, isNotEmpty);
+      expect(exported.summary.actresses, 1);
+      expect(exported.summary.works, 1);
+      expect(exported.summary.images, 3);
+
+      final result = await DataTransferService(
+        db: target,
+      ).importArchive(bytes: exported.bytes);
+      expect(result.succeeded, isTrue);
+
+      final importedActors = await target.getAllActresses();
+      expect(importedActors, hasLength(1));
+      expect(importedActors.single['name'], 'Round Trip Actor');
+      final importedId = importedActors.single['id'] as int;
+      final importedDetails = await target.getActressById(importedId);
+      expect(importedDetails?['birth_date'], '1999-01-01');
+      expect(importedDetails?['aliases'], containsAll(['RTA', 'Round Trip']));
+      expect(await target.getWorkCountForActress(importedId), 1);
+      final importedWork = (await target.getWorksForActress(importedId)).single;
+      expect(importedWork['code'], 'RT-001');
+      expect(
+        await File(importedActors.single['img_path'] as String).exists(),
+        isTrue,
+      );
+      expect(
+        await File(importedWork['card_image_path'] as String).exists(),
+        isTrue,
+      );
+      expect(
+        await File(importedWork['detail_image_path'] as String).exists(),
+        isTrue,
+      );
+    },
+  );
+
+  test(
+    'duplicate actor resolution keeps existing details but imports relations',
+    () async {
+      await source.addActress(name: 'Duplicate Actor', mainType: 'imported');
+      final sourceDb = await source.database;
+      final sourceActorId =
+          (await sourceDb.query('actresses')).single['id'] as int;
+      await source.upsertActressWork(
+        actressId: sourceActorId,
+        work: const Work(code: 'DUP-001', title: 'Imported Work'),
+      );
+      await target.addActress(name: 'duplicate actor', mainType: 'existing');
+
+      DataTransferDuplicateCandidate? candidate;
+      final exported = await DataTransferService(db: source).buildExport();
+      final result = await DataTransferService(db: target).importArchive(
+        bytes: exported.bytes,
+        resolveDuplicate: (value) async {
+          candidate = value;
+          return DataTransferDuplicateResolution.keepExisting;
+        },
+      );
+
+      expect(result.succeeded, isTrue);
+      expect(candidate, isNotNull);
+      expect(candidate!.existingWorkCount, 0);
+      expect(candidate!.importedWorkCount, 1);
+      final actors = await target.getAllActresses();
+      expect(actors, hasLength(1));
+      final targetActorId = actors.single['id'] as int;
+      expect(
+        (await target.getActressById(targetActorId))?['main_type'],
+        'existing',
+      );
+      expect(await target.getWorkCountForActress(targetActorId), 1);
+    },
+  );
+
+  test('invalid ZIP returns an error without changing the database', () async {
+    final before = await (await target.database).rawQuery(
+      'SELECT COUNT(*) AS count FROM actresses',
+    );
+    final result = await DataTransferService(
+      db: target,
+    ).importArchive(bytes: Uint8List.fromList([1, 2, 3, 4]));
+    final after = await (await target.database).rawQuery(
+      'SELECT COUNT(*) AS count FROM actresses',
+    );
+    expect(result.succeeded, isFalse);
+    expect(result.error, isNotNull);
+    expect(after.single['count'], before.single['count']);
+  });
+
+  test('ZIP traversal entries are rejected before staging files', () async {
+    final manifest = DataTransferManifest(
+      exportedAt: '2026-08-10T00:00:00Z',
+      actresses: const [],
+      works: const [],
+      relations: const [],
+      assets: [
+        DataTransferAsset(
+          id: 'asset000001',
+          path: '../outside.jpg',
+          size: 3,
+          sha256:
+              '039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a2b5f6a7c5be',
+        ),
+      ],
+    );
+    final archive = Archive()
+      ..addFile(
+        ArchiveFile.bytes('manifest.json', utf8.encode(manifest.encode())),
+      )
+      ..addFile(ArchiveFile.bytes('../outside.jpg', [1, 2, 3]));
+
+    final result = await DataTransferService(
+      db: target,
+    ).importArchive(bytes: Uint8List.fromList(ZipEncoder().encode(archive)));
+
+    expect(result.succeeded, isFalse);
+    expect(result.error?.code, 'unsafe_archive');
+    final count = await (await target.database).rawQuery(
+      'SELECT COUNT(*) AS count FROM actresses',
+    );
+    expect(count.single['count'], 0);
+  });
+
+  test('import keeps staged images referenced by the committed database rows',
+      () async {
+    final avatar = File(path.join(source.imgDir, 'avatar.jpg'));
+    await avatar.writeAsBytes([1, 2, 3, 4]);
+    await source.addActress(name: 'Staged Image Actor', imgPath: avatar.path);
+
+    final exported = await DataTransferService(db: source).buildExport();
+    final result = await DataTransferService(
+      db: target,
+    ).importArchive(bytes: exported.bytes);
+
+    expect(result.succeeded, isTrue);
+    final imported = (await target.getAllActresses()).single;
+    final importedPath = imported['img_path'] as String;
+    expect(importedPath, contains('.imports'));
+    expect(await File(importedPath).readAsBytes(), [1, 2, 3, 4]);
+  });
+}

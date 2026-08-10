@@ -277,6 +277,15 @@ class AppLocalizationsJa extends AppLocalizations {
   String get language => '言語';
 
   @override
+  String get worksPageSize => '作品ページのサイズ';
+
+  @override
+  String get worksPageSizeSmall => '小';
+
+  @override
+  String get worksPageSizeLarge => '大';
+
+  @override
   String get traditionalChineseTaiwan => '繁体字中国語（台湾）';
 
   @override
@@ -412,6 +421,87 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get javBusVerificationSubmit => '確認を送信';
+
+  @override
+  String get settingsDataTransferTitle => 'データの入出力';
+
+  @override
+  String get settingsDataTransferSubtitle =>
+      '女優、作品、詳細情報、画像を ZIP でバックアップまたは復元します。';
+
+  @override
+  String get dataTransferExportTitle => 'データをエクスポート';
+
+  @override
+  String get dataTransferExportSubtitle => '完全な ZIP バックアップの保存先を選択します。';
+
+  @override
+  String get dataTransferImportTitle => 'データをインポート';
+
+  @override
+  String get dataTransferImportSubtitle => 'ZIP バックアップを選択してすぐに復元します。';
+
+  @override
+  String get dataTransferPreparing => 'データを準備中…';
+
+  @override
+  String get dataTransferDuplicateProgress => '重複する女優の選択を待っています…';
+
+  @override
+  String get dataTransferWriting => 'データと画像を書き込み中…';
+
+  @override
+  String get dataTransferExportSuccess => 'エクスポートが完了しました。';
+
+  @override
+  String dataTransferExportSuccessWithSkippedImages(int count) {
+    return 'エクスポート完了。使用できない画像を $count 枚スキップしました。';
+  }
+
+  @override
+  String get dataTransferImportSuccess => 'インポートが完了しました。データをすぐに使用できます。';
+
+  @override
+  String get dataTransferDuplicateTitle => '重複する女優が見つかりました';
+
+  @override
+  String get dataTransferDuplicateExplanation =>
+      '画像と作品数を比較して、使用する女優の詳細情報を選択してください。既存の作品と関連付けは保持されます。';
+
+  @override
+  String get dataTransferKeepExisting => '現在の詳細を保持';
+
+  @override
+  String get dataTransferUseImported => 'インポートした詳細を使用';
+
+  @override
+  String get dataTransferContinue => '続行';
+
+  @override
+  String dataTransferWorkCount(int count) {
+    return '作品数: $count';
+  }
+
+  @override
+  String get dataTransferArchiveTooLarge => 'ZIP が対応サイズを超えています。';
+
+  @override
+  String get dataTransferUnsafeArchive => 'ZIP に安全でないファイルパスが含まれています。';
+
+  @override
+  String get dataTransferCorruptArchive => 'ZIP が壊れているか、画像のチェックサムに失敗しました。';
+
+  @override
+  String get dataTransferFileUnreadable => '選択したファイルを読み取れませんでした。';
+
+  @override
+  String get dataTransferActorNameConflict => 'インポートした女優名が別のデータと競合しています。';
+
+  @override
+  String get dataTransferBusy => '別のデータ転送が進行中です。';
+
+  @override
+  String get dataTransferFailed => 'データ転送に失敗しました。既存データは変更されていません。';
 }
 
 /// The translations for Japanese, as used in Japan (`ja_JP`).
@@ -687,6 +777,15 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
   String get language => '言語';
 
   @override
+  String get worksPageSize => '作品ページのサイズ';
+
+  @override
+  String get worksPageSizeSmall => '小';
+
+  @override
+  String get worksPageSizeLarge => '大';
+
+  @override
   String get traditionalChineseTaiwan => '繁体字中国語（台湾）';
 
   @override
@@ -822,4 +921,85 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
 
   @override
   String get javBusVerificationSubmit => '確認を送信';
+
+  @override
+  String get settingsDataTransferTitle => 'データの入出力';
+
+  @override
+  String get settingsDataTransferSubtitle =>
+      '女優、作品、詳細情報、画像を ZIP でバックアップまたは復元します。';
+
+  @override
+  String get dataTransferExportTitle => 'データをエクスポート';
+
+  @override
+  String get dataTransferExportSubtitle => '完全な ZIP バックアップの保存先を選択します。';
+
+  @override
+  String get dataTransferImportTitle => 'データをインポート';
+
+  @override
+  String get dataTransferImportSubtitle => 'ZIP バックアップを選択してすぐに復元します。';
+
+  @override
+  String get dataTransferPreparing => 'データを準備中…';
+
+  @override
+  String get dataTransferDuplicateProgress => '重複する女優の選択を待っています…';
+
+  @override
+  String get dataTransferWriting => 'データと画像を書き込み中…';
+
+  @override
+  String get dataTransferExportSuccess => 'エクスポートが完了しました。';
+
+  @override
+  String dataTransferExportSuccessWithSkippedImages(int count) {
+    return 'エクスポート完了。使用できない画像を $count 枚スキップしました。';
+  }
+
+  @override
+  String get dataTransferImportSuccess => 'インポートが完了しました。データをすぐに使用できます。';
+
+  @override
+  String get dataTransferDuplicateTitle => '重複する女優が見つかりました';
+
+  @override
+  String get dataTransferDuplicateExplanation =>
+      '画像と作品数を比較して、使用する女優の詳細情報を選択してください。既存の作品と関連付けは保持されます。';
+
+  @override
+  String get dataTransferKeepExisting => '現在の詳細を保持';
+
+  @override
+  String get dataTransferUseImported => 'インポートした詳細を使用';
+
+  @override
+  String get dataTransferContinue => '続行';
+
+  @override
+  String dataTransferWorkCount(int count) {
+    return '作品数: $count';
+  }
+
+  @override
+  String get dataTransferArchiveTooLarge => 'ZIP が対応サイズを超えています。';
+
+  @override
+  String get dataTransferUnsafeArchive => 'ZIP に安全でないファイルパスが含まれています。';
+
+  @override
+  String get dataTransferCorruptArchive => 'ZIP が壊れているか、画像のチェックサムに失敗しました。';
+
+  @override
+  String get dataTransferFileUnreadable => '選択したファイルを読み取れませんでした。';
+
+  @override
+  String get dataTransferActorNameConflict => 'インポートした女優名が別のデータと競合しています。';
+
+  @override
+  String get dataTransferBusy => '別のデータ転送が進行中です。';
+
+  @override
+  String get dataTransferFailed => 'データ転送に失敗しました。既存データは変更されていません。';
 }

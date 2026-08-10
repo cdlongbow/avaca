@@ -111,6 +111,9 @@
   "cropPanY": "上下平移",
   "confirmCrop": "確定裁切",
   "language": "語言",
+  "worksPageSize": "作品頁大小",
+  "worksPageSizeSmall": "小",
+  "worksPageSizeLarge": "大",
   "traditionalChineseTaiwan": "繁體中文（台灣）",
   "english": "英文",
   "simplifiedChinese": "簡體中文",
@@ -182,5 +185,32 @@
         "type": "String"
       }
     }
-  }
+  },
+  "settingsDataTransferTitle": "資料匯入與匯出",
+  "settingsDataTransferSubtitle": "以 ZIP 備份或還原演員、作品、詳細資料與圖片。",
+  "dataTransferExportTitle": "匯出資料",
+  "dataTransferExportSubtitle": "選擇位置儲存完整 ZIP 備份。",
+  "dataTransferImportTitle": "匯入資料",
+  "dataTransferImportSubtitle": "選擇 ZIP 備份並直接還原到目前資料庫。",
+  "dataTransferPreparing": "準備資料中…",
+  "dataTransferDuplicateProgress": "等待重複演員選擇…",
+  "dataTransferWriting": "寫入資料與圖片中…",
+  "dataTransferExportSuccess": "匯出完成。",
+  "dataTransferExportSuccessWithSkippedImages": "匯出完成，略過 {count} 張無法使用的圖片。",
+  "@dataTransferExportSuccessWithSkippedImages": {"placeholders": {"count": {"type": "int"}}},
+  "dataTransferImportSuccess": "匯入完成，資料已可直接使用。",
+  "dataTransferDuplicateTitle": "發現重複演員",
+  "dataTransferDuplicateExplanation": "請比較頭像與作品數，選擇要採用哪一份演員詳細資料。既有作品與關聯會保留。",
+  "dataTransferKeepExisting": "保留目前資料",
+  "dataTransferUseImported": "使用匯入資料",
+  "dataTransferContinue": "繼續",
+  "dataTransferWorkCount": "作品數：{count}",
+  "@dataTransferWorkCount": {"placeholders": {"count": {"type": "int"}}},
+  "dataTransferArchiveTooLarge": "ZIP 檔案超過可支援的大小。",
+  "dataTransferUnsafeArchive": "ZIP 含有不安全的檔案路徑。",
+  "dataTransferCorruptArchive": "ZIP 檔案損毀或圖片校驗失敗。",
+  "dataTransferFileUnreadable": "無法讀取所選檔案。",
+  "dataTransferActorNameConflict": "匯入演員名稱與其他資料衝突。",
+  "dataTransferBusy": "已有另一個資料傳輸作業正在進行。",
+  "dataTransferFailed": "資料傳輸失敗，未變更既有資料。"
 }

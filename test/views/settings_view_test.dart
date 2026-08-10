@@ -282,6 +282,40 @@ void main() {
     expect(find.text('語言'), findsOneWidget);
   });
 
+  testWidgets('interface category exposes works page size choices', (
+    tester,
+  ) async {
+    await _pumpSettings(tester);
+
+    await tester.tap(find.text('Interface'));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView).last, const Offset(0, -240));
+    await tester.pumpAndSettle();
+    expect(find.text('Works page size'), findsOneWidget);
+
+    await tester.tap(find.byKey(const PageStorageKey('works-page-size')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const PageStorageKey('works-page-size-option-small')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const PageStorageKey('works-page-size-option-large')),
+      findsOneWidget,
+    );
+    expect(find.text('Small'), findsOneWidget);
+    expect(find.text('Large'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const PageStorageKey('works-page-size-option-large')),
+    );
+    await tester.pumpAndSettle();
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('works_page_size'), 'large');
+  });
+
   testWidgets('AMOLED is hidden in effective light mode', (tester) async {
     tester.platformDispatcher.platformBrightnessTestValue = Brightness.light;
     addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);

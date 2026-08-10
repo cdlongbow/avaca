@@ -625,6 +625,24 @@ abstract class AppLocalizations {
   /// **'語言'**
   String get language;
 
+  /// No description provided for @worksPageSize.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'作品頁大小'**
+  String get worksPageSize;
+
+  /// No description provided for @worksPageSizeSmall.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'小'**
+  String get worksPageSizeSmall;
+
+  /// No description provided for @worksPageSizeLarge.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'大'**
+  String get worksPageSizeLarge;
+
   /// No description provided for @traditionalChineseTaiwan.
   ///
   /// In zh_TW, this message translates to:
@@ -876,6 +894,156 @@ abstract class AppLocalizations {
   /// In zh_TW, this message translates to:
   /// **'送出驗證'**
   String get javBusVerificationSubmit;
+
+  /// No description provided for @settingsDataTransferTitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'資料匯入與匯出'**
+  String get settingsDataTransferTitle;
+
+  /// No description provided for @settingsDataTransferSubtitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'以 ZIP 備份或還原演員、作品、詳細資料與圖片。'**
+  String get settingsDataTransferSubtitle;
+
+  /// No description provided for @dataTransferExportTitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'匯出資料'**
+  String get dataTransferExportTitle;
+
+  /// No description provided for @dataTransferExportSubtitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'選擇位置儲存完整 ZIP 備份。'**
+  String get dataTransferExportSubtitle;
+
+  /// No description provided for @dataTransferImportTitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'匯入資料'**
+  String get dataTransferImportTitle;
+
+  /// No description provided for @dataTransferImportSubtitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'選擇 ZIP 備份並直接還原到目前資料庫。'**
+  String get dataTransferImportSubtitle;
+
+  /// No description provided for @dataTransferPreparing.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'準備資料中…'**
+  String get dataTransferPreparing;
+
+  /// No description provided for @dataTransferDuplicateProgress.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'等待重複演員選擇…'**
+  String get dataTransferDuplicateProgress;
+
+  /// No description provided for @dataTransferWriting.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'寫入資料與圖片中…'**
+  String get dataTransferWriting;
+
+  /// No description provided for @dataTransferExportSuccess.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'匯出完成。'**
+  String get dataTransferExportSuccess;
+
+  /// No description provided for @dataTransferExportSuccessWithSkippedImages.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'匯出完成，略過 {count} 張無法使用的圖片。'**
+  String dataTransferExportSuccessWithSkippedImages(int count);
+
+  /// No description provided for @dataTransferImportSuccess.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'匯入完成，資料已可直接使用。'**
+  String get dataTransferImportSuccess;
+
+  /// No description provided for @dataTransferDuplicateTitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'發現重複演員'**
+  String get dataTransferDuplicateTitle;
+
+  /// No description provided for @dataTransferDuplicateExplanation.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'請比較頭像與作品數，選擇要採用哪一份演員詳細資料。既有作品與關聯會保留。'**
+  String get dataTransferDuplicateExplanation;
+
+  /// No description provided for @dataTransferKeepExisting.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'保留目前資料'**
+  String get dataTransferKeepExisting;
+
+  /// No description provided for @dataTransferUseImported.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'使用匯入資料'**
+  String get dataTransferUseImported;
+
+  /// No description provided for @dataTransferContinue.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'繼續'**
+  String get dataTransferContinue;
+
+  /// No description provided for @dataTransferWorkCount.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'作品數：{count}'**
+  String dataTransferWorkCount(int count);
+
+  /// No description provided for @dataTransferArchiveTooLarge.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'ZIP 檔案超過可支援的大小。'**
+  String get dataTransferArchiveTooLarge;
+
+  /// No description provided for @dataTransferUnsafeArchive.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'ZIP 含有不安全的檔案路徑。'**
+  String get dataTransferUnsafeArchive;
+
+  /// No description provided for @dataTransferCorruptArchive.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'ZIP 檔案損毀或圖片校驗失敗。'**
+  String get dataTransferCorruptArchive;
+
+  /// No description provided for @dataTransferFileUnreadable.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'無法讀取所選檔案。'**
+  String get dataTransferFileUnreadable;
+
+  /// No description provided for @dataTransferActorNameConflict.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'匯入演員名稱與其他資料衝突。'**
+  String get dataTransferActorNameConflict;
+
+  /// No description provided for @dataTransferBusy.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'已有另一個資料傳輸作業正在進行。'**
+  String get dataTransferBusy;
+
+  /// No description provided for @dataTransferFailed.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'資料傳輸失敗，未變更既有資料。'**
+  String get dataTransferFailed;
 }
 
 class _AppLocalizationsDelegate

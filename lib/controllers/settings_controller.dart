@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/database.dart';
 
+enum WorksPageSize { small, large }
+
 class SettingsController extends ChangeNotifier {
   SettingsController({required this.db});
 
@@ -12,9 +14,11 @@ class SettingsController extends ChangeNotifier {
   static const String _pureBlackKey = 'pure_black';
   static const String _customThemeKey = 'custom_theme';
   static const String _localeKey = 'app_locale';
+  static const String _worksPageSizeKey = 'works_page_size';
 
   ThemeMode themeMode = ThemeMode.system;
   bool isPureBlack = false;
+  WorksPageSize _worksPageSize = WorksPageSize.small;
 
   String _themeModeString = 'system';
   String _localeString = 'system';
@@ -25,6 +29,8 @@ class SettingsController extends ChangeNotifier {
   bool get isCustomTheme => _themeModeString == 'custom';
 
   Locale? get appLocale => _localeFromString(_localeString);
+
+  WorksPageSize get worksPageSize => _worksPageSize;
 
   /// 提供 UI 使用的主題選項（分層用）
   List<String> getThemeModeOptions() {
@@ -54,11 +60,13 @@ class SettingsController extends ChangeNotifier {
     final mode = prefs.getString(_themeModeKey) ?? 'system';
     final pure = prefs.getBool(_pureBlackKey) ?? false;
     final locale = prefs.getString(_localeKey) ?? 'system';
+    final worksPageSize = prefs.getString(_worksPageSizeKey);
 
     _themeModeString = mode;
     themeMode = _themeModeFromString(mode);
     isPureBlack = pure;
     _localeString = locale;
+    _worksPageSize = _worksPageSizeFromString(worksPageSize);
 
     notifyListeners();
   }
@@ -102,6 +110,17 @@ class SettingsController extends ChangeNotifier {
     await prefs.setBool(_pureBlackKey, value);
 
     isPureBlack = value;
+
+    notifyListeners();
+  }
+
+  // 更新作品頁大小，並將選擇結果寫入裝置儲存。
+  Future<void> worksPageSizeChanged(WorksPageSize value) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    await prefs.setString(_worksPageSizeKey, _worksPageSizeToString(value));
+
+    _worksPageSize = value;
 
     notifyListeners();
   }
@@ -168,6 +187,20 @@ class SettingsController extends ChangeNotifier {
       'ja_JP' => const Locale('ja', 'JP'),
       'en' => const Locale('en'),
       _ => null,
+    };
+  }
+
+  WorksPageSize _worksPageSizeFromString(String? value) {
+    return switch (value) {
+      'large' => WorksPageSize.large,
+      _ => WorksPageSize.small,
+    };
+  }
+
+  String _worksPageSizeToString(WorksPageSize value) {
+    return switch (value) {
+      WorksPageSize.small => 'small',
+      WorksPageSize.large => 'large',
     };
   }
 }

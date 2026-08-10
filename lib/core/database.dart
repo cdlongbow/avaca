@@ -425,6 +425,34 @@ class AppDatabase {
     return _database!;
   }
 
+  /// Runs a portable-data import inside the same serialized image lifecycle
+  /// used by the normal CRUD flows. Callers must finish writing any referenced
+  /// managed files before invoking this transaction.
+  Future<T> runDataTransferTransaction<T>(
+    Future<T> Function(DatabaseExecutor transaction) operation,
+  ) {
+    return runManagedImageLifecycle(() async {
+      final db = await database;
+      return db.transaction(operation);
+    });
+  }
+
+  /// Resolves an existing stored image only when it is a valid managed image.
+  /// Portable export code must never copy an arbitrary absolute path.
+  Future<File?> resolveManagedImageForTransfer(String? imagePath) async {
+    final value = imagePath?.trim();
+    if (value == null || value.isEmpty) return null;
+    final validated = await _validateManagedImage(value);
+    return validated.exists ? validated.resolvedFile : null;
+  }
+
+  /// Flushes pending managed-file deletions after an import transaction has
+  /// committed new references.
+  Future<ManagedFileCleanupReport> flushDataTransferFileDeletions() async {
+    final db = await database;
+    return _flushPendingFileDeletions(db);
+  }
+
   // 關閉資料庫連線並重置初始化狀態。
   Future<void> close() async {
     final db = _database;

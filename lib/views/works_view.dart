@@ -13,6 +13,7 @@ import '../models/work_scrape_options.dart';
 import '../services/javbus/javbus_client.dart';
 import '../services/javbus/javbus_verification.dart';
 import '../services/works_scrape_service.dart';
+import '../controllers/settings_controller.dart';
 import 'work_detail_view.dart';
 
 typedef WorksScrapeExecutor =
@@ -40,26 +41,51 @@ class WorksView extends StatefulWidget {
 
 class _WorksViewState extends State<WorksView> {
   late final WorksController controller;
+
   late final Future<void> initFuture;
+
   final selectedWorkIds = <int>{};
+
   var deletionBusy = false;
+  late final SettingsController settingsController;
 
   @override
   void initState() {
     super.initState();
+
     controller = WorksController(db: widget.db, actressId: widget.actressId);
+
+    settingsController = SettingsController(db: widget.db);
+
     initFuture = controller.init();
+
+    settingsController.loadFromPrefs();
+
     controller.addListener(_handleControllerChanged);
+
+    settingsController.addListener(_handleSettingsChanged);
   }
 
   @override
   void dispose() {
     controller.removeListener(_handleControllerChanged);
+
+    settingsController.removeListener(_handleSettingsChanged);
+
+    settingsController.dispose();
+
     controller.dispose();
+
     super.dispose();
   }
 
   void _handleControllerChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _handleSettingsChanged() {
     if (mounted) {
       setState(() {});
     }
@@ -71,14 +97,17 @@ class _WorksViewState extends State<WorksView> {
     if (selectedWorkIds.isEmpty || !mounted) {
       return;
     }
+
     setState(selectedWorkIds.clear);
   }
 
   void _handleBack() {
     if (isSelecting) {
       _clearSelection();
+
       return;
     }
+
     Navigator.of(context).pop();
   }
 
@@ -86,10 +115,13 @@ class _WorksViewState extends State<WorksView> {
     if (deletionBusy) {
       return;
     }
+
     final workId = work['id'];
+
     if (workId is! int) {
       return;
     }
+
     setState(() {
       if (!selectedWorkIds.add(workId)) {
         selectedWorkIds.remove(workId);
@@ -101,30 +133,43 @@ class _WorksViewState extends State<WorksView> {
     if (deletionBusy || selectedWorkIds.isEmpty) {
       return;
     }
+
     final l10n = AppLocalizations.of(context);
+
     final confirmed = await showDialog<bool>(
       context: context,
+
       barrierDismissible: false,
+
       builder: (dialogContext) => AlertDialog(
         key: const Key('works-delete-confirm'),
+
         title: Text(l10n.deleteWorksTitle),
+
         content: Text(l10n.deleteWorksWarning),
+
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
+
             child: Text(l10n.cancel),
           ),
+
           FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
+
             style: FilledButton.styleFrom(
               foregroundColor: Theme.of(dialogContext).colorScheme.onError,
+
               backgroundColor: Theme.of(dialogContext).colorScheme.error,
             ),
+
             child: Text(l10n.confirmDelete),
           ),
         ],
       ),
     );
+
     if (confirmed == true && mounted) {
       await _deleteSelectedWorks();
     }
@@ -134,34 +179,47 @@ class _WorksViewState extends State<WorksView> {
     if (deletionBusy || selectedWorkIds.isEmpty) {
       return;
     }
+
     final requested = selectedWorkIds.toList(growable: false);
+
     setState(() => deletionBusy = true);
+
     WorkDeletionReport? report;
+
     Object? error;
+
     try {
       report = await widget.db.deleteWorksWithReport(requested);
+
       if (report.databaseCommitted) {
         for (final imagePath in report.cacheEvictionPaths) {
           await FileImage(File(imagePath)).evict();
         }
+
         await controller.reloadWorks();
       }
     } catch (caught) {
       error = caught;
     }
+
     if (!mounted) {
       return;
     }
+
     setState(() {
       deletionBusy = false;
+
       if (report?.databaseCommitted == true) {
         selectedWorkIds.clear();
       }
     });
+
     final failed = error != null || report?.databaseCommitted != true;
+
     final message = failed
         ? AppLocalizations.of(context).deleteFailed
         : AppLocalizations.of(context).worksDeleted(report!.deletedWorkRows);
+
     if (failed) {
       AppSnackBar.showError(context, message);
     } else {
@@ -173,41 +231,55 @@ class _WorksViewState extends State<WorksView> {
   Widget build(BuildContext context) {
     return FutureBuilder<void>(
       future: initFuture,
+
       builder: (context, snapshot) {
         return PopScope(
           canPop: !isSelecting && !deletionBusy,
+
           onPopInvokedWithResult: (didPop, result) {
             if (!didPop && isSelecting) {
               _clearSelection();
             }
           },
+
           child: Scaffold(
             appBar: AppBar(
               leading: IconButton(
                 icon: const Icon(Icons.arrow_back),
+
                 tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+
                 onPressed: _handleBack,
               ),
+
               title: Text(_buildTitle(context)),
+
               actions: [
                 if (isSelecting)
                   IconButton(
                     key: const Key('works-delete-action'),
+
                     tooltip: AppLocalizations.of(context).deleteWorks,
+
                     onPressed: deletionBusy ? null : _openDeleteConfirmation,
+
                     icon: const Icon(Icons.delete_outline),
                   )
                 else
                   IconButton(
                     key: const Key('works-scrape-action'),
+
                     tooltip: AppLocalizations.of(context).scrapeWorks,
+
                     onPressed: controller.status == WorksLoadStatus.loaded
                         ? _openScrapeSettings
                         : null,
+
                     icon: const Icon(Icons.manage_search),
                   ),
               ],
             ),
+
             body: _buildBody(context),
           ),
         );
@@ -231,12 +303,15 @@ class _WorksViewState extends State<WorksView> {
       WorksLoadStatus.loading => const Center(
         child: CircularProgressIndicator(),
       ),
+
       WorksLoadStatus.error => Center(
         child: Text(AppLocalizations.of(context).loadFailedGeneric),
       ),
+
       WorksLoadStatus.notFound => Center(
         child: Text(AppLocalizations.of(context).dataNotFound),
       ),
+
       WorksLoadStatus.loaded =>
         controller.works.isEmpty
             ? Center(child: Text(AppLocalizations.of(context).noWorks))
@@ -247,7 +322,9 @@ class _WorksViewState extends State<WorksView> {
   Widget _buildAdaptiveWorksGrid() {
     return AdaptivePageLayout(
       padding: EdgeInsets.zero,
+
       compactBuilder: (context, tokens) => _buildWorksGrid(tokens),
+
       expandedBuilder: (context, tokens) => _buildWorksGrid(tokens),
     );
   }
@@ -255,44 +332,77 @@ class _WorksViewState extends State<WorksView> {
   Widget _buildWorksGrid(AppLayoutTokens tokens) {
     return LayoutBuilder(
       builder: (context, constraints) {
+        final isSmall = settingsController.worksPageSize == WorksPageSize.small;
+
         final geometry = tokens.gridGeometry(
           availableWidth: constraints.maxWidth,
-          minItemWidth: tokens.workCardMinWidth,
-          maxItemWidth: tokens.workCardMaxWidth,
+
+          minItemWidth: isSmall
+              ? tokens.workCardSmallMinWidth
+              : tokens.workCardMinWidth,
+
+          maxItemWidth: isSmall
+              ? tokens.workCardSmallMaxWidth
+              : tokens.workCardMaxWidth,
+
           itemCount: controller.works.length,
-          maxUsefulColumns: tokens.workMaxUsefulColumns,
+
+          // Works cards should use the available width naturally. The
+          // generic geometry still protects other grids with their own
+          // maxUsefulColumns values, but a fixed 4/6 cap leaves artificial
+          // rails on wide Works pages when there are enough items.
+          maxUsefulColumns: controller.works.length,
         );
 
         return Align(
           alignment: Alignment.topCenter,
+
           child: SizedBox(
             width: geometry.railWidth,
+
             height: constraints.maxHeight,
+
             child: GridView.builder(
               padding: EdgeInsets.fromLTRB(
                 0,
+
                 tokens.sectionGap,
+
                 0,
+
                 tokens.sectionGap * 1.5,
               ),
+
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: geometry.columns,
+
                 crossAxisSpacing: tokens.gridGap,
+
                 mainAxisSpacing: tokens.sectionGap,
+
                 childAspectRatio: 0.54,
               ),
+
               itemCount: controller.works.length,
+
               itemBuilder: (context, index) {
                 final work = controller.works[index];
+
                 final workId = work['id'];
+
                 final selected =
                     workId is int && selectedWorkIds.contains(workId);
+
                 return KeyedSubtree(
                   key: selected ? Key('work-card-selected-$workId') : null,
+
                   child: _WorkCard(
                     key: Key('work-card-$workId'),
+
                     work: work,
+
                     selected: selected,
+
                     onTap: () {
                       if (isSelecting) {
                         _toggleSelection(work);
@@ -300,6 +410,7 @@ class _WorksViewState extends State<WorksView> {
                         _openWorkDetail(work);
                       }
                     },
+
                     onLongPress: () => _toggleSelection(work),
                   ),
                 );
@@ -313,6 +424,7 @@ class _WorksViewState extends State<WorksView> {
 
   Future<void> _openWorkDetail(Map<String, Object?> work) async {
     final workId = work['id'];
+
     if (workId is! int) {
       return;
     }
@@ -326,6 +438,7 @@ class _WorksViewState extends State<WorksView> {
 
   Future<void> _openScrapeSettings() async {
     WorkScrapeOptions initial;
+
     try {
       initial = WorkScrapeOptions.decode(
         await widget.db.getSetting('works_scrape_options'),
@@ -333,14 +446,17 @@ class _WorksViewState extends State<WorksView> {
     } catch (_) {
       initial = const WorkScrapeOptions();
     }
+
     if (!mounted) {
       return;
     }
 
     final options = await showDialog<WorkScrapeOptions>(
       context: context,
+
       builder: (context) => _ScrapeSettingsDialog(initial: initial),
     );
+
     if (options == null || !mounted) {
       return;
     }
@@ -350,86 +466,119 @@ class _WorksViewState extends State<WorksView> {
     } catch (_) {
       // 儲存偏好失敗不應阻止本次刮削。
     }
+
     await _runScrape(options);
   }
 
   Future<void> _runScrape(WorkScrapeOptions options) async {
     final token = WorksScrapeCancellationToken();
+
     final progress = ValueNotifier<WorksScrapeProgress?>(null);
+
     final executor = widget.scrapeExecutor ?? _defaultScrapeExecutor;
+
     NavigatorState? progressNavigator;
+
     Route<void>? progressRoute;
 
     final dialog = showDialog<void>(
       context: context,
+
       barrierDismissible: false,
+
       builder: (dialogContext) {
         progressNavigator = Navigator.of(dialogContext);
+
         progressRoute = ModalRoute.of(dialogContext);
+
         return PopScope(
           canPop: false,
+
           child: _ScrapeProgressDialog(
             progress: progress,
+
             onCancel: token.cancel,
           ),
         );
       },
     );
+
     await WidgetsBinding.instance.endOfFrame;
 
     WorksScrapeResult? result;
+
     Object? scrapeError;
+
     try {
       result = await executor(
         options,
+
         token,
+
         (value) => progress.value = value,
       );
+
       await controller.reloadWorks();
     } catch (error) {
       scrapeError = error;
     } finally {
       final route = progressRoute;
+
       if (route != null && route.isActive) {
         progressNavigator?.removeRoute(route);
       }
+
       await dialog;
+
       progress.dispose();
     }
 
     if (!mounted) {
       return;
     }
+
     final l10n = AppLocalizations.of(context);
+
     final completedResult = result;
+
     if (scrapeError != null || completedResult == null) {
       AppSnackBar.showError(context, l10n.scrapeFailed);
+
       return;
     }
 
     final cancelled = completedResult.cancelled;
+
     var message = cancelled
         ? l10n.scrapeCancelled(
             completedResult.saved,
+
             completedResult.excluded,
+
             completedResult.failed,
           )
         : l10n.scrapeComplete(
             completedResult.saved,
+
             completedResult.excluded,
+
             completedResult.failed,
           );
+
     if (!cancelled) {
       message = switch (completedResult.actressImageStatus) {
         ActressImageSyncStatus.unavailable =>
           '$message ${l10n.scrapeAvatarUnavailable}',
+
         ActressImageSyncStatus.downloadFailed ||
         ActressImageSyncStatus.databaseFailed =>
           '$message ${l10n.scrapeAvatarFailed}',
+
         ActressImageSyncStatus.notRequested ||
         ActressImageSyncStatus.replaced => message,
       };
     }
+
     if (cancelled) {
       AppSnackBar.showInfo(context, message);
     } else {
@@ -439,33 +588,47 @@ class _WorksViewState extends State<WorksView> {
 
   Future<WorksScrapeResult> _defaultScrapeExecutor(
     WorkScrapeOptions options,
+
     WorksScrapeCancellationToken token,
+
     void Function(WorksScrapeProgress progress) onProgress,
   ) async {
     String? initialCookies;
+
     try {
       initialCookies = await widget.db.getSetting('javbus_cookies');
     } catch (_) {
       initialCookies = null;
     }
+
     final transport = HttpJavBusTransport(
       initialCookieHeader: initialCookies,
+
       verificationHandler: _showJavBusVerification,
     );
+
     final service = WorksScrapeService(
       db: widget.db,
+
       client: JavBusClient(transport: transport),
+
       actressImageDownloader: HttpActressImageDownloader(
         authenticatedTransport: transport,
       ),
     );
+
     try {
       return await service.scrape(
         actressId: widget.actressId,
+
         actressName: controller.actressName,
+
         aliases: controller.actressAliases,
+
         options: options,
+
         cancellationToken: token,
+
         onProgress: onProgress,
       );
     } finally {
@@ -476,6 +639,7 @@ class _WorksViewState extends State<WorksView> {
           // Cookie 儲存失敗不應遮蔽原始刮削結果。
         }
       }
+
       service.close();
     }
   }
@@ -486,9 +650,12 @@ class _WorksViewState extends State<WorksView> {
     if (!mounted) {
       return Future.value(null);
     }
+
     return showDialog<Map<String, String>>(
       context: context,
+
       barrierDismissible: false,
+
       builder: (context) => _JavBusVerificationDialog(challenge: challenge),
     );
   }

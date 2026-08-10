@@ -276,6 +276,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get language => '語言';
 
   @override
+  String get worksPageSize => '作品頁大小';
+
+  @override
+  String get worksPageSizeSmall => '小';
+
+  @override
+  String get worksPageSizeLarge => '大';
+
+  @override
   String get traditionalChineseTaiwan => '繁體中文（台灣）';
 
   @override
@@ -411,6 +420,86 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get javBusVerificationSubmit => '送出驗證';
+
+  @override
+  String get settingsDataTransferTitle => '資料匯入與匯出';
+
+  @override
+  String get settingsDataTransferSubtitle => '以 ZIP 備份或還原演員、作品、詳細資料與圖片。';
+
+  @override
+  String get dataTransferExportTitle => '匯出資料';
+
+  @override
+  String get dataTransferExportSubtitle => '選擇位置儲存完整 ZIP 備份。';
+
+  @override
+  String get dataTransferImportTitle => '匯入資料';
+
+  @override
+  String get dataTransferImportSubtitle => '選擇 ZIP 備份並直接還原到目前資料庫。';
+
+  @override
+  String get dataTransferPreparing => '準備資料中…';
+
+  @override
+  String get dataTransferDuplicateProgress => '等待重複演員選擇…';
+
+  @override
+  String get dataTransferWriting => '寫入資料與圖片中…';
+
+  @override
+  String get dataTransferExportSuccess => '匯出完成。';
+
+  @override
+  String dataTransferExportSuccessWithSkippedImages(int count) {
+    return '匯出完成，略過 $count 張無法使用的圖片。';
+  }
+
+  @override
+  String get dataTransferImportSuccess => '匯入完成，資料已可直接使用。';
+
+  @override
+  String get dataTransferDuplicateTitle => '發現重複演員';
+
+  @override
+  String get dataTransferDuplicateExplanation =>
+      '請比較頭像與作品數，選擇要採用哪一份演員詳細資料。既有作品與關聯會保留。';
+
+  @override
+  String get dataTransferKeepExisting => '保留目前資料';
+
+  @override
+  String get dataTransferUseImported => '使用匯入資料';
+
+  @override
+  String get dataTransferContinue => '繼續';
+
+  @override
+  String dataTransferWorkCount(int count) {
+    return '作品數：$count';
+  }
+
+  @override
+  String get dataTransferArchiveTooLarge => 'ZIP 檔案超過可支援的大小。';
+
+  @override
+  String get dataTransferUnsafeArchive => 'ZIP 含有不安全的檔案路徑。';
+
+  @override
+  String get dataTransferCorruptArchive => 'ZIP 檔案損毀或圖片校驗失敗。';
+
+  @override
+  String get dataTransferFileUnreadable => '無法讀取所選檔案。';
+
+  @override
+  String get dataTransferActorNameConflict => '匯入演員名稱與其他資料衝突。';
+
+  @override
+  String get dataTransferBusy => '已有另一個資料傳輸作業正在進行。';
+
+  @override
+  String get dataTransferFailed => '資料傳輸失敗，未變更既有資料。';
 }
 
 /// The translations for Chinese, as used in China (`zh_CN`).
@@ -685,6 +774,15 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get language => '语言';
 
   @override
+  String get worksPageSize => '作品页大小';
+
+  @override
+  String get worksPageSizeSmall => '小';
+
+  @override
+  String get worksPageSizeLarge => '大';
+
+  @override
   String get traditionalChineseTaiwan => '繁体中文（台湾）';
 
   @override
@@ -820,6 +918,86 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get javBusVerificationSubmit => '提交验证';
+
+  @override
+  String get settingsDataTransferTitle => '数据导入与导出';
+
+  @override
+  String get settingsDataTransferSubtitle => '使用 ZIP 备份或还原女优、作品、详细资料和图片。';
+
+  @override
+  String get dataTransferExportTitle => '导出数据';
+
+  @override
+  String get dataTransferExportSubtitle => '选择位置保存完整 ZIP 备份。';
+
+  @override
+  String get dataTransferImportTitle => '导入数据';
+
+  @override
+  String get dataTransferImportSubtitle => '选择 ZIP 备份并直接还原到当前数据库。';
+
+  @override
+  String get dataTransferPreparing => '正在准备数据…';
+
+  @override
+  String get dataTransferDuplicateProgress => '等待重复女优选择…';
+
+  @override
+  String get dataTransferWriting => '正在写入数据和图片…';
+
+  @override
+  String get dataTransferExportSuccess => '导出完成。';
+
+  @override
+  String dataTransferExportSuccessWithSkippedImages(int count) {
+    return '导出完成，跳过 $count 张无法使用的图片。';
+  }
+
+  @override
+  String get dataTransferImportSuccess => '导入完成，数据已可直接使用。';
+
+  @override
+  String get dataTransferDuplicateTitle => '发现重复女优';
+
+  @override
+  String get dataTransferDuplicateExplanation =>
+      '请比较头像和作品数，选择要采用哪一份女优详细资料。现有作品和关联会保留。';
+
+  @override
+  String get dataTransferKeepExisting => '保留当前资料';
+
+  @override
+  String get dataTransferUseImported => '使用导入资料';
+
+  @override
+  String get dataTransferContinue => '继续';
+
+  @override
+  String dataTransferWorkCount(int count) {
+    return '作品数：$count';
+  }
+
+  @override
+  String get dataTransferArchiveTooLarge => 'ZIP 文件超过支持的大小。';
+
+  @override
+  String get dataTransferUnsafeArchive => 'ZIP 含有不安全的文件路径。';
+
+  @override
+  String get dataTransferCorruptArchive => 'ZIP 文件损坏或图片校验失败。';
+
+  @override
+  String get dataTransferFileUnreadable => '无法读取所选文件。';
+
+  @override
+  String get dataTransferActorNameConflict => '导入女优名称与其他资料冲突。';
+
+  @override
+  String get dataTransferBusy => '已有另一个数据传输作业正在进行。';
+
+  @override
+  String get dataTransferFailed => '数据传输失败，现有资料未变更。';
 }
 
 /// The translations for Chinese, as used in Taiwan (`zh_TW`).
@@ -1094,6 +1272,15 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get language => '語言';
 
   @override
+  String get worksPageSize => '作品頁大小';
+
+  @override
+  String get worksPageSizeSmall => '小';
+
+  @override
+  String get worksPageSizeLarge => '大';
+
+  @override
   String get traditionalChineseTaiwan => '繁體中文（台灣）';
 
   @override
@@ -1229,4 +1416,84 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get javBusVerificationSubmit => '送出驗證';
+
+  @override
+  String get settingsDataTransferTitle => '資料匯入與匯出';
+
+  @override
+  String get settingsDataTransferSubtitle => '以 ZIP 備份或還原演員、作品、詳細資料與圖片。';
+
+  @override
+  String get dataTransferExportTitle => '匯出資料';
+
+  @override
+  String get dataTransferExportSubtitle => '選擇位置儲存完整 ZIP 備份。';
+
+  @override
+  String get dataTransferImportTitle => '匯入資料';
+
+  @override
+  String get dataTransferImportSubtitle => '選擇 ZIP 備份並直接還原到目前資料庫。';
+
+  @override
+  String get dataTransferPreparing => '準備資料中…';
+
+  @override
+  String get dataTransferDuplicateProgress => '等待重複演員選擇…';
+
+  @override
+  String get dataTransferWriting => '寫入資料與圖片中…';
+
+  @override
+  String get dataTransferExportSuccess => '匯出完成。';
+
+  @override
+  String dataTransferExportSuccessWithSkippedImages(int count) {
+    return '匯出完成，略過 $count 張無法使用的圖片。';
+  }
+
+  @override
+  String get dataTransferImportSuccess => '匯入完成，資料已可直接使用。';
+
+  @override
+  String get dataTransferDuplicateTitle => '發現重複演員';
+
+  @override
+  String get dataTransferDuplicateExplanation =>
+      '請比較頭像與作品數，選擇要採用哪一份演員詳細資料。既有作品與關聯會保留。';
+
+  @override
+  String get dataTransferKeepExisting => '保留目前資料';
+
+  @override
+  String get dataTransferUseImported => '使用匯入資料';
+
+  @override
+  String get dataTransferContinue => '繼續';
+
+  @override
+  String dataTransferWorkCount(int count) {
+    return '作品數：$count';
+  }
+
+  @override
+  String get dataTransferArchiveTooLarge => 'ZIP 檔案超過可支援的大小。';
+
+  @override
+  String get dataTransferUnsafeArchive => 'ZIP 含有不安全的檔案路徑。';
+
+  @override
+  String get dataTransferCorruptArchive => 'ZIP 檔案損毀或圖片校驗失敗。';
+
+  @override
+  String get dataTransferFileUnreadable => '無法讀取所選檔案。';
+
+  @override
+  String get dataTransferActorNameConflict => '匯入演員名稱與其他資料衝突。';
+
+  @override
+  String get dataTransferBusy => '已有另一個資料傳輸作業正在進行。';
+
+  @override
+  String get dataTransferFailed => '資料傳輸失敗，未變更既有資料。';
 }

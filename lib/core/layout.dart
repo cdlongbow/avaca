@@ -48,6 +48,9 @@ class AppLayoutTokens {
     required this.workCardMinWidth,
     required this.workCardMaxWidth,
     required this.workMaxUsefulColumns,
+    required this.workCardSmallMinWidth,
+    required this.workCardSmallMaxWidth,
+    required this.workSmallMaxUsefulColumns,
     required this.detailPaneMinWidth,
     required this.detailMiddleMinWidth,
     required this.detailBodyMinWidth,
@@ -72,6 +75,9 @@ class AppLayoutTokens {
   final double workCardMinWidth;
   final double workCardMaxWidth;
   final int workMaxUsefulColumns;
+  final double workCardSmallMinWidth;
+  final double workCardSmallMaxWidth;
+  final int workSmallMaxUsefulColumns;
   final double detailPaneMinWidth;
   final double detailMiddleMinWidth;
   final double detailBodyMinWidth;
@@ -181,6 +187,9 @@ class AppLayoutPolicy {
     workCardMinWidth: 128,
     workCardMaxWidth: 220,
     workMaxUsefulColumns: 4,
+    workCardSmallMinWidth: 96,
+    workCardSmallMaxWidth: 220,
+    workSmallMaxUsefulColumns: 4,
     detailPaneMinWidth: 360,
     detailMiddleMinWidth: 360,
     detailBodyMinWidth: 360,
@@ -206,6 +215,9 @@ class AppLayoutPolicy {
     workCardMinWidth: 160,
     workCardMaxWidth: 240,
     workMaxUsefulColumns: 4,
+    workCardSmallMinWidth: 128,
+    workCardSmallMaxWidth: 192,
+    workSmallMaxUsefulColumns: 6,
     detailPaneMinWidth: 360,
     detailMiddleMinWidth: 360,
     detailBodyMinWidth: 360,
