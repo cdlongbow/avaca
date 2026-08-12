@@ -35,7 +35,9 @@ class _WorkDetailViewState extends State<WorkDetailView> {
         final work = snapshot.data;
         return Scaffold(
           appBar: AppBar(
-            leading: const AlignedAppBarBackButton(),
+            leading: Navigator.canPop(context)
+                ? const AlignedAppBarBackButton()
+                : null,
             title: Text(work?['code']?.toString() ?? ''),
           ),
           body: switch (snapshot.connectionState) {

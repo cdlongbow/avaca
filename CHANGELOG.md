@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.1 - 2026-08-13
+
+- Raised the Android release build-number to 2026 so 0.8.1 can update
+  manually built 0.7.10 packages that used build-number 2025.
+- Improved scrape-source settings, DMM image fallback handling, and adaptive
+  app-bar back-button behavior across detail pages.
+- Kept versioned GitHub Release assets, SHA-256 verification, and portable
+  Windows update packaging for the 0.8.1 release.
+
 ## 0.8.0 - 2026-08-13
 
 - Added Settings > Other > Software update with current/latest version

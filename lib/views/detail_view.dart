@@ -383,9 +383,11 @@ class _DetailViewState extends State<DetailView> {
             appBar: AppBar(
               centerTitle: true,
               backgroundColor: colorScheme.surfaceContainerHighest,
-              leading: AlignedAppBarBackButton(
-                onPressed: controller.isEditing ? _cancelEditMode : null,
-              ),
+              leading: controller.isEditing || Navigator.canPop(context)
+                  ? AlignedAppBarBackButton(
+                      onPressed: controller.isEditing ? _cancelEditMode : null,
+                    )
+                  : null,
               title: _buildAppBarTitle(),
               actions: controller.isEditing
                   ? [

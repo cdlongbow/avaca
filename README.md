@@ -13,7 +13,7 @@ update.cmd 更新命令。將 ZIP 解壓到想使用的資料夾後，直接執�
 avaca-X.Y.Z.zip，驗證版本與 avaca.exe 後替換
 portable 程式檔。也可以指定版本：
 
-    .\update.cmd 0.8.0
+    .\update.cmd 0.8.1
 
 更新命令會在替換程式前停止 AVACA，失敗時復原原本的程式 bundle，成功
 後重新啟動 App。AVACA Windows 版的資料庫、圖片與設定位於：
@@ -39,11 +39,10 @@ Actions 會驗證 tag 與 `pubspec.yaml` 版本一致，並且只建立以下四
 - `avaca-X.Y.Z.zip`
 - `avaca-X.Y.Z.zip.sha256`
 
-例如 `v0.8.0` 的資產名稱必須是
-`avaca-0.8.0-arm64-v8a.apk`、`avaca-0.8.0-arm64-v8a.apk.sha256`、
-`avaca-0.8.0.zip` 和 `avaca-0.8.0.zip.sha256`。Android 的
-`versionCode` 由 workflow 使用 `GITHUB_RUN_NUMBER + 25`，從 30 開始；正式發布時
-必須比上一版大。
+例如 `v0.8.1` 的資產名稱必須是
+`avaca-0.8.1-arm64-v8a.apk`、`avaca-0.8.1-arm64-v8a.apk.sha256`、
+`avaca-0.8.1.zip` 和 `avaca-0.8.1.zip.sha256`。Android 的
+`versionCode` 本版固定為 2026；之後每次正式 Release 遞增 1。
 
 Android release signing 使用 GitHub Actions secrets，不會把 keystore 或
 密碼提交到 repository。需要設定：

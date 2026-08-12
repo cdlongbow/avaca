@@ -6,14 +6,15 @@
 
 ## 版本與 Tag
 
-- Release Tag 必須是 `vX.Y.Z`，例如 `v0.8.0`。
+- Release Tag 必須是 `vX.Y.Z`，例如 `v0.8.1`。
 - Tag 的 `X.Y.Z` 必須與 `pubspec.yaml` 的版本完全一致。
 - 只發布正式版，不使用 draft 或 prerelease 資產。
 - Android 的 `versionName` 使用 `X.Y.Z`。
-- Android 的 `versionCode` 使用 `GITHUB_RUN_NUMBER + 25`，從 30 開始；本次
-  `v0.8.0` 的下一次 workflow run 為 run #5，因此 APK 的 `versionCode` 是
-  30。之後每個正式發布的 APK 都必須比上一個正式發布的 APK 使用更大的整數。
-  Android 不接受較小或重複的 `versionCode` 作為更新。
+- `v0.8.0` 的歷史 APK 使用 `versionCode=30`；`v0.8.1` 使用
+  `versionCode=2026`。從 `v0.8.1` 開始，workflow 以 GitHub Release workflow
+  run #6 對應 2026，之後每個正式 Release run 遞增 1（公式為
+  `GITHUB_RUN_NUMBER + 2020`）。Android 不接受較小或重複的 `versionCode`
+  作為更新。
 - 同一個 Tag 重新執行 workflow 會保留同一個 `github.run_number`，只能更新同一個 GitHub Release；要發布新版本，必須使用新的 `vX.Y.Z` Tag。
 
 ## GitHub Release 資產檔名
@@ -25,13 +26,13 @@ Release 中的上傳資產必須且只能使用下列四個檔名。`X.Y.Z` 取�
 | Android ARM64 | `avaca-X.Y.Z-arm64-v8a.apk` | `avaca-X.Y.Z-arm64-v8a.apk.sha256` |
 | Windows x64 portable | `avaca-X.Y.Z.zip` | `avaca-X.Y.Z.zip.sha256` |
 
-例如 `v0.8.0` 必須產生：
+例如 `v0.8.1` 必須產生：
 
 ```text
-avaca-0.8.0-arm64-v8a.apk
-avaca-0.8.0-arm64-v8a.apk.sha256
-avaca-0.8.0.zip
-avaca-0.8.0.zip.sha256
+avaca-0.8.1-arm64-v8a.apk
+avaca-0.8.1-arm64-v8a.apk.sha256
+avaca-0.8.1.zip
+avaca-0.8.1.zip.sha256
 ```
 
 命名要求：

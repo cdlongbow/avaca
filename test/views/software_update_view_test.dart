@@ -33,8 +33,8 @@ class _FakeDatabase extends AppDatabase {
 class _FakeVersionProvider implements AppVersionProvider {
   @override
   Future<AppVersionInfo> load() async => const AppVersionInfo(
-    version: '0.8.0',
-    buildNumber: '1',
+    version: '0.8.1',
+    buildNumber: '2026',
     platform: SoftwareUpdatePlatform.android,
     architecture: 'arm64-v8a',
   );
@@ -80,8 +80,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Current version'), findsOneWidget);
-    expect(find.text('0.8.0'), findsOneWidget);
-    expect(find.text('0.8.0+1'), findsNothing);
+    expect(find.text('0.8.1'), findsOneWidget);
+    expect(find.text('0.8.1+2026'), findsNothing);
     expect(find.text('Latest version'), findsOneWidget);
     expect(find.text('Check for updates automatically'), findsOneWidget);
     expect(find.byKey(const ValueKey('software-update-check')), findsOneWidget);
@@ -105,8 +105,8 @@ void main() {
 
       expect(find.byType(AlertDialog), findsOneWidget);
       expect(find.text('Update available'), findsNWidgets(2));
-      expect(find.text('Current version: 0.8.0'), findsOneWidget);
-      expect(find.text('Current version: 0.8.0+1'), findsNothing);
+      expect(find.text('Current version: 0.8.1'), findsOneWidget);
+      expect(find.text('Current version: 0.8.1+2026'), findsNothing);
       expect(find.byKey(const ValueKey('software-update-now')), findsOneWidget);
 
       await tester.tap(find.byKey(const ValueKey('software-update-now')));
@@ -129,12 +129,12 @@ Future<SoftwareUpdateController> _buildController({
   _FakeInstaller? installer,
 }) async {
   final release = const SoftwareRelease(
-    tagName: 'v0.8.1',
-    version: SemanticVersion(0, 8, 1),
+    tagName: 'v0.8.2',
+    version: SemanticVersion(0, 8, 2),
     assets: <ReleaseAsset>[],
   );
   final asset = ReleaseAsset(
-    name: 'avaca-0.8.1-arm64-v8a.apk',
+    name: 'avaca-0.8.2-arm64-v8a.apk',
     downloadUrl: Uri.parse('https://github.com/william12233/avaca/update.apk'),
     size: 1,
     digest: 'sha256:${sha256.convert([0])}',
@@ -151,14 +151,14 @@ Future<SoftwareUpdateController> _buildController({
     }
     return http.Response(
       jsonEncode({
-        'tag_name': 'v0.8.1',
+        'tag_name': 'v0.8.2',
         'draft': false,
         'prerelease': false,
         'assets': [
           {
-            'name': 'avaca-0.8.1-arm64-v8a.apk',
+            'name': 'avaca-0.8.2-arm64-v8a.apk',
             'browser_download_url':
-                'https://github.com/william12233/avaca/releases/download/v0.8.1/avaca-0.8.1-arm64-v8a.apk',
+                'https://github.com/william12233/avaca/releases/download/v0.8.2/avaca-0.8.2-arm64-v8a.apk',
             'size': 1,
             'digest': 'sha256:${sha256.convert([0])}',
           },

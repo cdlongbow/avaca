@@ -47,9 +47,13 @@ jobs:
             exit 1
           fi
 
-          version_code=$((GITHUB_RUN_NUMBER + 25))
+          if [[ "$version" == '0.8.0' ]]; then
+            version_code=30
+          else
+            version_code=$((GITHUB_RUN_NUMBER + 2020))
+          fi
           if (( version_code < 30 )); then
-            echo "Android versionCode must start at 30; calculated $version_code." >&2
+            echo "Android versionCode is invalid: $version_code." >&2
             exit 1
           fi
 
@@ -310,14 +314,14 @@ jobs:
           set -euo pipefail
           tag="${{ needs.metadata.outputs.tag }}"
           version="${{ needs.metadata.outputs.version }}"
-          notes_file="$GITHUB_WORKSPACE/docs/release-notes-0.8.0.md"
+          notes_file="$GITHUB_WORKSPACE/docs/release-notes-$version.md"
           create_notes_args=(--generate-notes)
-          if [[ "$version" == '0.8.0' && -f "$notes_file" ]]; then
+          if [[ -f "$notes_file" ]]; then
             create_notes_args=(--notes-file "$notes_file")
           fi
 
           if gh release view "$tag" --repo "$GH_REPO" >/dev/null 2>&1; then
-            if [[ "$version" == '0.8.0' && -f "$notes_file" ]]; then
+            if [[ -f "$notes_file" ]]; then
               gh release edit "$tag" \
                 --repo "$GH_REPO" \
                 --title "AVACA $version" \
