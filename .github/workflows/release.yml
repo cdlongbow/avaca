@@ -99,6 +99,12 @@ jobs:
           storeFile=avaca-release.jks
           EOF
 
+      - name: Use runner Java for Gradle
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -i '/^[[:space:]]*org\.gradle\.java\.home[[:space:]]*=/d' android/gradle.properties
+
       - name: Build ARMv8-A APK
         run: >
           flutter build apk
