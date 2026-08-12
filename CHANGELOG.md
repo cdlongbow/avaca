@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.10 - 2026-08-12
+
+- Added tag-driven GitHub release packaging for versioned ARMv8-A Android APK
+  and Windows x64 portable archives.
+- Added a portable-folder updater command that replaces only the application
+  bundle while preserving the existing %LOCALAPPDATA%\AVACA database and
+  managed images.
+- Standardized release asset names to include the application version, such
+  as "avaca-0.7.10-arm64-v8a.apk" and "avaca-0.7.10.zip".
+
 ## 0.7.7 - 2026-08-10
 
 - Added ZIP data export and import for actresses, works, details, and all
