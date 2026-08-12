@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../components/aligned_app_bar_back_button.dart';
 import '../components/adaptive_page_layout.dart';
 import '../core/database.dart';
 import '../core/layout.dart';
@@ -33,7 +34,10 @@ class _WorkDetailViewState extends State<WorkDetailView> {
       builder: (context, snapshot) {
         final work = snapshot.data;
         return Scaffold(
-          appBar: AppBar(title: Text(work?['code']?.toString() ?? '')),
+          appBar: AppBar(
+            leading: const AlignedAppBarBackButton(),
+            title: Text(work?['code']?.toString() ?? ''),
+          ),
           body: switch (snapshot.connectionState) {
             ConnectionState.waiting => const Center(
               child: CircularProgressIndicator(),

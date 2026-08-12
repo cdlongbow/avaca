@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:avaca/l10n/app_localizations.dart';
+import '../components/aligned_app_bar_back_button.dart';
 import '../components/adaptive_page_layout.dart';
 import '../controllers/add_controller.dart';
 import '../core/database.dart';
@@ -71,10 +72,7 @@ class _AddViewState extends State<AddView> {
           AppLocalizations.of(context).addTitle,
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: goBack,
-        ),
+        leading: AlignedAppBarBackButton(onPressed: goBack),
         backgroundColor: colorScheme.surfaceContainerHighest,
       ),
       body: SafeArea(

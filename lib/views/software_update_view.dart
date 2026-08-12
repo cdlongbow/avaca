@@ -31,7 +31,7 @@ class _SoftwareUpdateViewState extends State<SoftwareUpdateView> {
       builder: (context, _) {
         final localizations = AppLocalizations.of(context);
         final controller = widget.controller;
-        final current = controller.currentVersion?.displayVersion ?? '—';
+        final current = controller.currentVersion?.version ?? '—';
         final latest = controller.latestRelease?.version.toString() ?? '—';
 
         return ListView(
@@ -116,7 +116,7 @@ Future<void> showSoftwareUpdateDialog(
             if (result.release != null) ...[
               Text(
                 '${localizations.currentVersion}: '
-                '${result.current.displayVersion}',
+                '${result.current.version}',
               ),
               const SizedBox(height: 4),
               Text(

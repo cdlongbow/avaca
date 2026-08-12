@@ -1069,6 +1069,12 @@ abstract class AppLocalizations {
   /// **'其他'**
   String get otherSettings;
 
+  /// No description provided for @scrapeSources.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'刮削來源'**
+  String get scrapeSources;
+
   /// No description provided for @softwareUpdate.
   ///
   /// In zh_TW, this message translates to:

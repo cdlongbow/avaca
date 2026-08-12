@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:avaca/l10n/app_localizations.dart';
+import '../components/aligned_app_bar_back_button.dart';
 import '../components/adaptive_page_layout.dart';
 import '../controllers/data_transfer_controller.dart';
 import '../controllers/settings_controller.dart';
@@ -241,8 +242,7 @@ class _SettingsViewState extends State<SettingsView> {
           title: Text(AppLocalizations.of(context).settings),
           leading: _SettingsTapFeedback(
             id: 'settings-back',
-            child: IconButton(
-              icon: const Icon(Icons.arrow_back),
+            child: AlignedAppBarBackButton(
               onPressed: () => Navigator.pop(context),
             ),
           ),
@@ -407,7 +407,7 @@ class _SettingsViewState extends State<SettingsView> {
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 12),
-            _dataTransferActionCard(
+            _settingsActionCard(
               context: context,
               feedbackId: 'data-transfer-export',
               icon: Icons.file_upload_outlined,
@@ -420,7 +420,7 @@ class _SettingsViewState extends State<SettingsView> {
               onTap: _exportData,
             ),
             const SizedBox(height: 8),
-            _dataTransferActionCard(
+            _settingsActionCard(
               context: context,
               feedbackId: 'data-transfer-import',
               icon: Icons.file_download_outlined,
@@ -443,7 +443,7 @@ class _SettingsViewState extends State<SettingsView> {
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        _dataTransferActionCard(
+        _settingsActionCard(
           context: context,
           feedbackId: 'other-software-update',
           icon: Icons.system_update_alt_outlined,
@@ -457,16 +457,34 @@ class _SettingsViewState extends State<SettingsView> {
                 SoftwareUpdateView(controller: updateController),
           ),
         ),
+        const SizedBox(height: 8),
+        _settingsActionCard(
+          context: context,
+          feedbackId: 'other-scrape-sources',
+          icon: Icons.source_outlined,
+          title: localizations.scrapeSources,
+          subtitle: null,
+          enabled: true,
+          onTap: () => _openCategory(
+            titleBuilder: (context) =>
+                AppLocalizations.of(context).scrapeSources,
+            bodyBuilder: _buildScrapeSourcesSettings,
+          ),
+        ),
       ],
     );
   }
 
-  Widget _dataTransferActionCard({
+  Widget _buildScrapeSourcesSettings(BuildContext context) {
+    return ListView(padding: EdgeInsets.zero);
+  }
+
+  Widget _settingsActionCard({
     required BuildContext context,
     required String feedbackId,
     required IconData icon,
     required String title,
-    required String subtitle,
+    String? subtitle,
     required bool enabled,
     required VoidCallback onTap,
     Widget? trailing,
@@ -485,7 +503,7 @@ class _SettingsViewState extends State<SettingsView> {
           minVerticalPadding: 12,
           leading: Icon(icon),
           title: Text(title),
-          subtitle: Text(subtitle),
+          subtitle: subtitle == null ? null : Text(subtitle),
           trailing: trailing ?? const Icon(Icons.chevron_right),
           onTap: enabled ? onTap : null,
         ),
@@ -1019,8 +1037,7 @@ class _SettingsCategoryPage extends StatelessWidget {
           title: Text(titleBuilder(context)),
           leading: _SettingsTapFeedback(
             id: 'category-back',
-            child: IconButton(
-              icon: const Icon(Icons.arrow_back),
+            child: AlignedAppBarBackButton(
               onPressed: () => Navigator.pop(context),
             ),
           ),

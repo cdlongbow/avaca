@@ -188,6 +188,7 @@
   "dataTransferBusy": "別のデータ転送が進行中です。",
   "dataTransferFailed": "データ転送に失敗しました。既存データは変更されていません。",
   "otherSettings": "その他",
+  "scrapeSources": "取得元",
   "softwareUpdate": "ソフトウェア更新",
   "softwareUpdateDescription": "AVACA の最新バージョンを確認してインストールします。",
   "currentVersion": "現在のバージョン",

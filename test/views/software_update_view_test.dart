@@ -74,50 +74,55 @@ void main() {
     await tester.tap(find.text('Other'));
     await tester.pumpAndSettle();
     expect(find.text('Software update'), findsOneWidget);
+    expect(find.text('Scrape sources'), findsOneWidget);
 
     await tester.tap(find.text('Software update'));
     await tester.pumpAndSettle();
 
     expect(find.text('Current version'), findsOneWidget);
-    expect(find.text('0.8.0+1'), findsOneWidget);
+    expect(find.text('0.8.0'), findsOneWidget);
+    expect(find.text('0.8.0+1'), findsNothing);
     expect(find.text('Latest version'), findsOneWidget);
     expect(find.text('Check for updates automatically'), findsOneWidget);
     expect(find.byKey(const ValueKey('software-update-check')), findsOneWidget);
   });
 
-  testWidgets('manual check opens a dialog whose Update now action starts install', (
-    tester,
-  ) async {
-    final installer = _FakeInstaller();
-    final controller = await _buildController(installer: installer);
-    addTearDown(controller.dispose);
+  testWidgets(
+    'manual check opens a dialog whose Update now action starts install',
+    (tester) async {
+      final installer = _FakeInstaller();
+      final controller = await _buildController(installer: installer);
+      addTearDown(controller.dispose);
 
-    await tester.pumpWidget(_SettingsHarness(controller: controller));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Other'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Software update'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('software-update-check')));
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(_SettingsHarness(controller: controller));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Other'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Software update'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('software-update-check')));
+      await tester.pumpAndSettle();
 
-    expect(find.byType(AlertDialog), findsOneWidget);
-    expect(find.text('Update available'), findsNWidgets(2));
-    expect(find.byKey(const ValueKey('software-update-now')), findsOneWidget);
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(find.text('Update available'), findsNWidgets(2));
+      expect(find.text('Current version: 0.8.0'), findsOneWidget);
+      expect(find.text('Current version: 0.8.0+1'), findsNothing);
+      expect(find.byKey(const ValueKey('software-update-now')), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('software-update-now')));
-    await tester.runAsync(() async {
-      for (var attempt = 0; attempt < 20 && !installer.called; attempt++) {
-        await Future<void>.delayed(const Duration(milliseconds: 20));
-      }
-    });
-    await tester.pumpAndSettle();
-    expect(
-      installer.called,
-      isTrue,
-      reason: 'status=${controller.status}, error=${controller.error}',
-    );
-  });
+      await tester.tap(find.byKey(const ValueKey('software-update-now')));
+      await tester.runAsync(() async {
+        for (var attempt = 0; attempt < 20 && !installer.called; attempt++) {
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+        }
+      });
+      await tester.pumpAndSettle();
+      expect(
+        installer.called,
+        isTrue,
+        reason: 'status=${controller.status}, error=${controller.error}',
+      );
+    },
+  );
 }
 
 Future<SoftwareUpdateController> _buildController({

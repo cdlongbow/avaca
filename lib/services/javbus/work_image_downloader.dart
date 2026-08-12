@@ -100,47 +100,41 @@ class WorkImageDownloader {
     }
 
     if (urls.source == WorkImageSource.dmm) {
-      final fallbackUri = _policy
-          .urlsFor(code: code, studio: studio, dmmLeadingOne: true)
-          .forVariant(variant);
-      final fallback = await _transport.get(fallbackUri);
-      if (_isValid(fallback)) {
-        return DownloadedWorkImage(
-          bytes: Uint8List.fromList(fallback.bodyBytes),
-          sourceUri: fallbackUri,
-        );
+      final fallbackUris = <Uri>{
+        _policy
+            .urlsFor(code: code, studio: studio, dmmLeadingOne: true)
+            .forVariant(variant),
+        _policy
+            .urlsFor(
+              code: code,
+              studio: studio,
+              dmmLeadingOne: true,
+              dmmTrailingV: true,
+            )
+            .forVariant(variant),
+        _policy
+            .urlsFor(
+              code: code,
+              studio: studio,
+              dmmLeadingOne: true,
+              dmmTrailingH2: true,
+            )
+            .forVariant(variant),
+      }..remove(primaryUri);
+
+      for (final fallbackUri in fallbackUris) {
+        final fallback = await _transport.get(fallbackUri);
+        if (_isValid(fallback)) {
+          return DownloadedWorkImage(
+            bytes: Uint8List.fromList(fallback.bodyBytes),
+            sourceUri: fallbackUri,
+          );
+        }
       }
-      final trailingVUri = _policy
-          .urlsFor(
-            code: code,
-            studio: studio,
-            dmmLeadingOne: true,
-            dmmTrailingV: true,
-          )
-          .forVariant(variant);
-      final trailingV = await _transport.get(trailingVUri);
-      if (_isValid(trailingV)) {
-        return DownloadedWorkImage(
-          bytes: Uint8List.fromList(trailingV.bodyBytes),
-          sourceUri: trailingVUri,
-        );
-      }
-      final trailingH2Uri = _policy
-          .urlsFor(
-            code: code,
-            studio: studio,
-            dmmLeadingOne: true,
-            dmmTrailingH2: true,
-          )
-          .forVariant(variant);
-      final trailingH2 = await _transport.get(trailingH2Uri);
-      if (_isValid(trailingH2)) {
-        return DownloadedWorkImage(
-          bytes: Uint8List.fromList(trailingH2.bodyBytes),
-          sourceUri: trailingH2Uri,
-        );
-      }
-      throw WorkImageDownloadException(trailingH2Uri);
+
+      throw WorkImageDownloadException(
+        fallbackUris.isEmpty ? primaryUri : fallbackUris.last,
+      );
     }
 
     throw WorkImageDownloadException(primaryUri);

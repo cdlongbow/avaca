@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:avaca/l10n/app_localizations.dart';
+import '../components/aligned_app_bar_back_button.dart';
 import '../components/adaptive_page_layout.dart';
 import '../components/app_snackbar.dart';
 import '../controllers/detail_controller.dart';
@@ -382,15 +383,9 @@ class _DetailViewState extends State<DetailView> {
             appBar: AppBar(
               centerTitle: true,
               backgroundColor: colorScheme.surfaceContainerHighest,
-              leading: controller.isEditing
-                  ? IconButton(
-                      tooltip: MaterialLocalizations.of(
-                        context,
-                      ).backButtonTooltip,
-                      icon: const Icon(Icons.arrow_back),
-                      onPressed: _cancelEditMode,
-                    )
-                  : null,
+              leading: AlignedAppBarBackButton(
+                onPressed: controller.isEditing ? _cancelEditMode : null,
+              ),
               title: _buildAppBarTitle(),
               actions: controller.isEditing
                   ? [

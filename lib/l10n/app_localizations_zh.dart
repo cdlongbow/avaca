@@ -514,6 +514,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get otherSettings => '其他';
 
   @override
+  String get scrapeSources => '刮削來源';
+
+  @override
   String get softwareUpdate => '軟體更新';
 
   @override
@@ -1093,6 +1096,9 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get otherSettings => '其他';
 
   @override
+  String get scrapeSources => '刮削来源';
+
+  @override
   String get softwareUpdate => '软件更新';
 
   @override
@@ -1670,6 +1676,9 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get otherSettings => '其他';
+
+  @override
+  String get scrapeSources => '刮削來源';
 
   @override
   String get softwareUpdate => '軟體更新';

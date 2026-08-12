@@ -25,6 +25,28 @@ void main() {
       expect(urls.source, WorkImageSource.dmm);
     });
 
+    test('builds the h_346 DMM URLs for REBD codes', () {
+      final cases = {
+        'REBD-975': 'h_346rebd00975',
+        'REBD-1048': 'h_346rebd01048',
+      };
+
+      for (final entry in cases.entries) {
+        final urls = policy.urlsFor(code: entry.key);
+        expect(
+          urls.card.toString(),
+          'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
+          '${entry.value}/${entry.value}ps.jpg',
+        );
+        expect(
+          urls.detail.toString(),
+          'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
+          '${entry.value}/${entry.value}pl.jpg',
+        );
+        expect(urls.source, WorkImageSource.dmm);
+      }
+    });
+
     test('ignores V T and VT edition suffixes in DMM image codes', () {
       final cases = {
         'STARS-859-V': 'stars00859',
@@ -173,6 +195,24 @@ void main() {
       'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
           '1stars00685h2/1stars00685h2pl.jpg',
     ]);
+  });
+
+  test('REBD does not repeat its special DMM URL as fallbacks', () async {
+    final transport = _FakeBinaryTransport([
+      const BinaryResponse(statusCode: 404, bodyBytes: []),
+    ]);
+    final downloader = WorkImageDownloader(transport: transport);
+
+    await expectLater(
+      downloader.fetch(code: 'REBD-975', variant: WorkImageVariant.card),
+      throwsA(isA<WorkImageDownloadException>()),
+    );
+    expect(transport.requested, hasLength(1));
+    expect(
+      transport.requested.single.toString(),
+      'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
+      'h_346rebd00975/h_346rebd00975ps.jpg',
+    );
   });
 
   test('MGStage failure does not guess a DMM URL', () async {

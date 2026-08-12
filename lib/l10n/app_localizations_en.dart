@@ -532,6 +532,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get otherSettings => 'Other';
 
   @override
+  String get scrapeSources => 'Scrape sources';
+
+  @override
   String get softwareUpdate => 'Software update';
 
   @override

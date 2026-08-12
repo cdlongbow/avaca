@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../components/adaptive_page_layout.dart';
+import '../components/aligned_app_bar_back_button.dart';
 import '../components/app_snackbar.dart';
 import '../controllers/works_controller.dart';
 import '../core/database.dart';
@@ -288,18 +289,7 @@ class _WorksViewState extends State<WorksView> {
 
           child: Scaffold(
             appBar: AppBar(
-              leading: IconButton(
-                // The bundled CJK font makes the title's visual center sit
-                // slightly below the Material icon's visual center.
-                icon: Transform.translate(
-                  offset: const Offset(0, 2),
-                  child: const Icon(Icons.arrow_back),
-                ),
-
-                tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-
-                onPressed: _handleBack,
-              ),
+              leading: AlignedAppBarBackButton(onPressed: _handleBack),
 
               title: Text(_buildTitle(context)),
 

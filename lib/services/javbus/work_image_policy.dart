@@ -49,8 +49,9 @@ class WorkImagePolicy {
         : dmmTrailingV
         ? 'v'
         : '';
-    final imageCode =
-        '${dmmLeadingOne ? '1' : ''}${parts.prefix}$paddedNumber$suffix';
+    final imageCode = parts.prefix == 'rebd'
+        ? 'h_346${parts.prefix}$paddedNumber'
+        : '${dmmLeadingOne ? '1' : ''}${parts.prefix}$paddedNumber$suffix';
     final base =
         'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
         '$imageCode/$imageCode';

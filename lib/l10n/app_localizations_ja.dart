@@ -516,6 +516,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get otherSettings => 'その他';
 
   @override
+  String get scrapeSources => '取得元';
+
+  @override
   String get softwareUpdate => 'ソフトウェア更新';
 
   @override
@@ -1097,6 +1100,9 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
 
   @override
   String get otherSettings => 'その他';
+
+  @override
+  String get scrapeSources => '取得元';
 
   @override
   String get softwareUpdate => 'ソフトウェア更新';

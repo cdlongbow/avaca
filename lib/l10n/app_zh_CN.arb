@@ -189,6 +189,7 @@
   "dataTransferBusy": "已有另一个数据传输作业正在进行。",
   "dataTransferFailed": "数据传输失败，现有资料未变更。",
   "otherSettings": "其他",
+  "scrapeSources": "刮削来源",
   "softwareUpdate": "软件更新",
   "softwareUpdateDescription": "检查并安装 AVACA 的最新版本。",
   "currentVersion": "当前版本",

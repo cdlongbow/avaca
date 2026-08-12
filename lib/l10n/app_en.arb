@@ -189,6 +189,7 @@
   "dataTransferBusy": "Another data transfer is already in progress.",
   "dataTransferFailed": "Data transfer failed. Existing data was not changed.",
   "otherSettings": "Other",
+  "scrapeSources": "Scrape sources",
   "softwareUpdate": "Software update",
   "softwareUpdateDescription": "Check for and install the latest AVACA version.",
   "currentVersion": "Current version",
