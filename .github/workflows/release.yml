@@ -17,7 +17,7 @@ env:
 
 jobs:
   metadata:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       tag: ${{ steps.version.outputs.tag }}
       version: ${{ steps.version.outputs.version }}
@@ -52,7 +52,7 @@ jobs:
   android:
     name: Android ARMv8-A APK
     needs: metadata
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out tagged source
         uses: actions/checkout@v4
@@ -135,7 +135,7 @@ jobs:
   windows:
     name: Windows x64 portable bundle
     needs: metadata
-    runs-on: windows-latest
+    runs-on: windows-2022
     steps:
       - name: Check out tagged source
         uses: actions/checkout@v4
@@ -151,6 +151,28 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
+
+      - name: Verify Windows native toolchain
+        shell: pwsh
+        run: |
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+          $requiredComponent = 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64'
+          if (-not (Test-Path -LiteralPath $vswhere -PathType Leaf)) {
+            throw "Visual Studio Locator is missing: $vswhere"
+          }
+
+          $installationPath = [string](& $vswhere -latest -products '*' -requires $requiredComponent -property installationPath | Select-Object -First 1)
+          if ([string]::IsNullOrWhiteSpace($installationPath)) {
+            throw "Visual Studio with MSVC x64 tools was not found."
+          }
+
+          $installationVersion = [string](& $vswhere -latest -products '*' -requires $requiredComponent -property installationVersion | Select-Object -First 1)
+          $vcvars = Join-Path $installationPath 'VC\Auxiliary\Build\vcvars64.bat'
+          if (-not (Test-Path -LiteralPath $vcvars -PathType Leaf)) {
+            throw "The x64 MSVC environment script is missing: $vcvars"
+          }
+
+          Write-Host "Using Visual Studio $($installationVersion.Trim()) at $($installationPath.Trim())"
 
       - name: Build Windows release bundle
         run: >
@@ -202,7 +224,7 @@ jobs:
       - metadata
       - android
       - windows
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
