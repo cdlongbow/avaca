@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.8.0 - 2026-08-13
+
+- Added Settings > Other > Software update with current/latest version
+  details, automatic checks, manual checks, and an update-now dialog.
+- Added stable GitHub Release downloads with exact versioned asset names and
+  SHA-256 verification for Android ARM64 and Windows x64 portable builds.
+- Added Android system package installation and a Windows portable updater
+  that replaces only the application bundle while preserving user data.
+- Added post-update cache cleanup, rollback safeguards, Works code search, and
+  responsive UI coverage for the updated settings and works flows.
+- Added release checks for asset naming, checksums, and Android version
+  metadata, including monotonically increasing versionCode values.
+
 ## 0.7.10 - 2026-08-12
 
 - Added tag-driven GitHub release packaging for versioned ARMv8-A Android APK

@@ -29,12 +29,6 @@ class AddController extends ChangeNotifier {
 
   Map<String, Object> get imageState => Map.unmodifiable(_imageState);
 
-  // 保留外部呼叫入口，目前 Flutter 版本不需要保存裁切器實例。
-  void setCropper(Object? cropper) {}
-
-  // 保留外部呼叫入口，目前尺寸由 Flutter 版面系統自行處理。
-  void windowResized(Object? event) {}
-
   // 選擇圖片，成功後開啟裁切流程。
   Future<void> pickImage(BuildContext context) async {
     final result = await file_picker.FilePicker.pickFiles(
@@ -116,7 +110,7 @@ class AddController extends ChangeNotifier {
     BuildContext context,
     String nameValue,
   ) async {
-    final name = _normalizeName(nameValue);
+    final name = nameValue.trim();
 
     if (name.isEmpty) {
       AppSnackBar.showError(
@@ -170,14 +164,6 @@ class AddController extends ChangeNotifier {
       '/',
       (route) => false,
     );
-  }
-
-  String _normalizeName(String nameValue) {
-    if (nameValue.isEmpty) {
-      return '';
-    }
-
-    return nameValue.trim();
   }
 
   String _buildSafeName(String name) {

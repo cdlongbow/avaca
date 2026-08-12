@@ -341,6 +341,15 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get searchWorks => '作品を検索';
+
+  @override
+  String get workCodeSearchHint => '品番を入力して検索...';
+
+  @override
+  String get noMatchingWorks => '一致する作品がありません';
+
+  @override
   String get scrapeWorks => '作品情報を取得';
 
   @override
@@ -356,10 +365,10 @@ class AppLocalizationsJa extends AppLocalizations {
   String get maxActressCountLabel => 'この人数を超える女優の作品は取得しない';
 
   @override
-  String get maxActressCountHint => '空欄の場合は制限なし';
+  String get maxActressCountHint => '0 は制限なし';
 
   @override
-  String get maxActressCountInvalid => '1以上の整数を入力してください';
+  String get maxActressCountInvalid => '0以上の整数を入力してください';
 
   @override
   String get scrapeAvatarUnavailable => '利用可能な女優画像が見つかりませんでした。';
@@ -502,6 +511,80 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get dataTransferFailed => 'データ転送に失敗しました。既存データは変更されていません。';
+
+  @override
+  String get otherSettings => 'その他';
+
+  @override
+  String get softwareUpdate => 'ソフトウェア更新';
+
+  @override
+  String get softwareUpdateDescription => 'AVACA の最新バージョンを確認してインストールします。';
+
+  @override
+  String get currentVersion => '現在のバージョン';
+
+  @override
+  String get latestVersion => '最新バージョン';
+
+  @override
+  String get autoCheckUpdates => '更新を自動的に確認';
+
+  @override
+  String get checkForUpdates => '更新を確認';
+
+  @override
+  String get checkingForUpdates => '更新を確認中…';
+
+  @override
+  String get downloadingUpdate => '更新をダウンロード中…';
+
+  @override
+  String get verifyingUpdate => '更新を検証中…';
+
+  @override
+  String get installingUpdate => 'インストールを開始中…';
+
+  @override
+  String get updateAvailable => '新しいバージョンがあります';
+
+  @override
+  String get upToDate => 'AVACA は最新です。';
+
+  @override
+  String get updateNow => '今すぐ更新';
+
+  @override
+  String get updateLater => '後で';
+
+  @override
+  String get updateUnavailable => 'このデバイスに対応する更新ファイルがありません。';
+
+  @override
+  String get updateCheckFailed => '更新を確認できませんでした。後でもう一度お試しください。';
+
+  @override
+  String get updateDownloadFailed => '更新のダウンロードに失敗しました。既存データは変更されていません。';
+
+  @override
+  String get updateIntegrityFailed => '更新ファイルの検証に失敗したため、更新を停止しました。';
+
+  @override
+  String get updateNotSupported => 'このデバイスでは自動更新に対応していません。';
+
+  @override
+  String get updateInstallPermissionRequired =>
+      '先に AVACA に提供元不明のアプリのインストールを許可してください。';
+
+  @override
+  String get updatePortableFolderNotWritable =>
+      'portable アプリフォルダーに書き込めないため、更新を停止しました。';
+
+  @override
+  String get updateInstallerFailed => '更新プログラムを開始できませんでした。現在のバージョンを保持しています。';
+
+  @override
+  String get updateDataPreserved => 'データと設定は保持されます。';
 }
 
 /// The translations for Japanese, as used in Japan (`ja_JP`).
@@ -841,6 +924,15 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
   }
 
   @override
+  String get searchWorks => '作品を検索';
+
+  @override
+  String get workCodeSearchHint => '品番を入力して検索...';
+
+  @override
+  String get noMatchingWorks => '一致する作品がありません';
+
+  @override
   String get scrapeWorks => '作品情報を取得';
 
   @override
@@ -856,10 +948,10 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
   String get maxActressCountLabel => 'この人数を超える女優の作品は取得しない';
 
   @override
-  String get maxActressCountHint => '空欄の場合は制限なし';
+  String get maxActressCountHint => '0 は制限なし';
 
   @override
-  String get maxActressCountInvalid => '1以上の整数を入力してください';
+  String get maxActressCountInvalid => '0以上の整数を入力してください';
 
   @override
   String get scrapeAvatarUnavailable => '利用可能な女優画像が見つかりませんでした。';
@@ -1002,4 +1094,78 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
 
   @override
   String get dataTransferFailed => 'データ転送に失敗しました。既存データは変更されていません。';
+
+  @override
+  String get otherSettings => 'その他';
+
+  @override
+  String get softwareUpdate => 'ソフトウェア更新';
+
+  @override
+  String get softwareUpdateDescription => 'AVACA の最新バージョンを確認してインストールします。';
+
+  @override
+  String get currentVersion => '現在のバージョン';
+
+  @override
+  String get latestVersion => '最新バージョン';
+
+  @override
+  String get autoCheckUpdates => '更新を自動的に確認';
+
+  @override
+  String get checkForUpdates => '更新を確認';
+
+  @override
+  String get checkingForUpdates => '更新を確認中…';
+
+  @override
+  String get downloadingUpdate => '更新をダウンロード中…';
+
+  @override
+  String get verifyingUpdate => '更新を検証中…';
+
+  @override
+  String get installingUpdate => 'インストールを開始中…';
+
+  @override
+  String get updateAvailable => '新しいバージョンがあります';
+
+  @override
+  String get upToDate => 'AVACA は最新です。';
+
+  @override
+  String get updateNow => '今すぐ更新';
+
+  @override
+  String get updateLater => '後で';
+
+  @override
+  String get updateUnavailable => 'このデバイスに対応する更新ファイルがありません。';
+
+  @override
+  String get updateCheckFailed => '更新を確認できませんでした。後でもう一度お試しください。';
+
+  @override
+  String get updateDownloadFailed => '更新のダウンロードに失敗しました。既存データは変更されていません。';
+
+  @override
+  String get updateIntegrityFailed => '更新ファイルの検証に失敗したため、更新を停止しました。';
+
+  @override
+  String get updateNotSupported => 'このデバイスでは自動更新に対応していません。';
+
+  @override
+  String get updateInstallPermissionRequired =>
+      '先に AVACA に提供元不明のアプリのインストールを許可してください。';
+
+  @override
+  String get updatePortableFolderNotWritable =>
+      'portable アプリフォルダーに書き込めないため、更新を停止しました。';
+
+  @override
+  String get updateInstallerFailed => '更新プログラムを開始できませんでした。現在のバージョンを保持しています。';
+
+  @override
+  String get updateDataPreserved => 'データと設定は保持されます。';
 }

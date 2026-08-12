@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:avaca/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -6,10 +7,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'core/config.dart';
 import 'core/database.dart';
 import 'core/keyboard_dismiss_navigator_observer.dart';
+import 'controllers/software_update_controller.dart';
+import 'services/update_cache_service.dart';
+import 'services/update_startup_marker.dart';
 import 'views/add_view.dart';
 import 'views/detail_view.dart';
 import 'views/home_view.dart';
 import 'views/settings_view.dart';
+import 'views/software_update_view.dart';
 import 'views/works_view.dart';
 
 Future<void> main() async {
@@ -17,14 +22,22 @@ Future<void> main() async {
 
   final db = AppDatabase();
   await db.init();
+  await markWindowsStartupSuccess();
 
-  runApp(AvacaApp(db: db));
+  runApp(AvacaApp(db: db, enableAutomaticUpdateCheck: true));
 }
 
 class AvacaApp extends StatefulWidget {
-  const AvacaApp({super.key, required this.db});
+  const AvacaApp({
+    super.key,
+    required this.db,
+    this.softwareUpdateController,
+    this.enableAutomaticUpdateCheck = false,
+  });
 
   final AppDatabase db;
+  final SoftwareUpdateController? softwareUpdateController;
+  final bool enableAutomaticUpdateCheck;
 
   @override
   State<AvacaApp> createState() => _AvacaAppState();
@@ -38,11 +51,26 @@ class _AvacaAppState extends State<AvacaApp> {
   Map<String, Color>? _customColors;
   Locale? _locale;
   bool _ready = false;
+  late final SoftwareUpdateController _softwareUpdateController;
+  late final bool _ownsSoftwareUpdateController;
+  final UpdateCacheService _updateCacheService = UpdateCacheService();
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+  bool _automaticUpdateStarted = false;
 
   @override
   void initState() {
     super.initState();
+    _ownsSoftwareUpdateController = widget.softwareUpdateController == null;
+    _softwareUpdateController =
+        widget.softwareUpdateController ??
+        SoftwareUpdateController.forApp(db: widget.db);
     _restoreThemeState();
+  }
+
+  @override
+  void dispose() {
+    if (_ownsSoftwareUpdateController) _softwareUpdateController.dispose();
+    super.dispose();
   }
 
   // 啟動時讀取上次儲存的主題與語言設定。
@@ -79,6 +107,39 @@ class _AvacaAppState extends State<AvacaApp> {
       _locale = _localeFromString(localeString);
       _ready = true;
     });
+
+    if (widget.enableAutomaticUpdateCheck) {
+      unawaited(_initializeAndCheckForUpdates());
+    }
+  }
+
+  Future<void> _initializeAndCheckForUpdates() async {
+    await _softwareUpdateController.initialize();
+    final current = _softwareUpdateController.currentVersion;
+    if (current != null) {
+      try {
+        await _updateCacheService.clearAfterVersionChange(current.version);
+      } catch (_) {
+        // Cache eviction is best-effort and must not block startup updates.
+      }
+    }
+    if (!mounted || !_softwareUpdateController.autoCheckUpdates) return;
+    if (_automaticUpdateStarted) return;
+    _automaticUpdateStarted = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final result = await _softwareUpdateController.check(automatic: true);
+      if (!mounted || !result.hasUpdate) return;
+      final overlayContext = _navigatorKey.currentState?.overlay?.context;
+      if (overlayContext == null || !overlayContext.mounted) return;
+      await showSoftwareUpdateDialog(
+        overlayContext,
+        _softwareUpdateController,
+        result,
+        automatic: true,
+      );
+    });
   }
 
   @override
@@ -105,6 +166,7 @@ class _AvacaAppState extends State<AvacaApp> {
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      navigatorKey: _navigatorKey,
       locale: _locale,
       themeMode: _themeMode,
       theme: lightTheme,
@@ -199,6 +261,7 @@ class _AvacaAppState extends State<AvacaApp> {
       return _page(
         SettingsView(
           db: widget.db,
+          softwareUpdateController: _softwareUpdateController,
           onThemeChanged: (mode, pureBlack, custom) {
             setState(() {
               _themeMode = mode;

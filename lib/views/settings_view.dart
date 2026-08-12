@@ -8,10 +8,12 @@ import 'package:avaca/l10n/app_localizations.dart';
 import '../components/adaptive_page_layout.dart';
 import '../controllers/data_transfer_controller.dart';
 import '../controllers/settings_controller.dart';
+import '../controllers/software_update_controller.dart';
 import '../core/database.dart';
 import '../core/layout.dart';
 import '../models/data_transfer_models.dart';
 import '../services/data_transfer_service.dart';
+import 'software_update_view.dart';
 
 class _SettingsInteractionTheme extends StatelessWidget {
   const _SettingsInteractionTheme({required this.child});
@@ -160,6 +162,7 @@ class SettingsView extends StatefulWidget {
     required this.onThemeChanged,
     required this.onLocaleChanged,
     this.transferController,
+    this.softwareUpdateController,
   });
 
   final AppDatabase db;
@@ -171,6 +174,7 @@ class SettingsView extends StatefulWidget {
   onThemeChanged;
   final void Function(Locale? locale) onLocaleChanged;
   final DataTransferController? transferController;
+  final SoftwareUpdateController? softwareUpdateController;
 
   @override
   State<SettingsView> createState() => _SettingsViewState();
@@ -187,6 +191,8 @@ class _SettingsViewState extends State<SettingsView> {
   late final SettingsController controller;
   late final DataTransferController dataTransferController;
   late final bool _ownsDataTransferController;
+  late final SoftwareUpdateController updateController;
+  late final bool _ownsSoftwareUpdateController;
 
   @override
   void initState() {
@@ -196,6 +202,10 @@ class _SettingsViewState extends State<SettingsView> {
     dataTransferController =
         widget.transferController ??
         DataTransferController(service: DataTransferService(db: widget.db));
+    _ownsSoftwareUpdateController = widget.softwareUpdateController == null;
+    updateController =
+        widget.softwareUpdateController ??
+        SoftwareUpdateController.forApp(db: widget.db);
     // 載入目前儲存的外觀設定
     controller.loadFromPrefs();
     controller.loadCustomTheme();
@@ -207,6 +217,7 @@ class _SettingsViewState extends State<SettingsView> {
   void dispose() {
     controller.removeListener(_onControllerChanged);
     if (_ownsDataTransferController) dataTransferController.dispose();
+    if (_ownsSoftwareUpdateController) updateController.dispose();
     super.dispose();
   }
 
@@ -290,6 +301,18 @@ class _SettingsViewState extends State<SettingsView> {
                 titleBuilder: (context) =>
                     AppLocalizations.of(context).settingsDataTransferTitle,
                 bodyBuilder: _buildDataTransferSettings,
+              ),
+            ),
+            const SizedBox(height: 8),
+            _categoryCard(
+              tokens: tokens,
+              feedbackId: 'category-other',
+              icon: Icons.more_horiz,
+              title: AppLocalizations.of(context).otherSettings,
+              onTap: () => _openCategory(
+                titleBuilder: (context) =>
+                    AppLocalizations.of(context).otherSettings,
+                bodyBuilder: _buildOtherSettings,
               ),
             ),
           ],
@@ -412,6 +435,29 @@ class _SettingsViewState extends State<SettingsView> {
           ],
         );
       },
+    );
+  }
+
+  Widget _buildOtherSettings(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+    return ListView(
+      padding: EdgeInsets.zero,
+      children: [
+        _dataTransferActionCard(
+          context: context,
+          feedbackId: 'other-software-update',
+          icon: Icons.system_update_alt_outlined,
+          title: localizations.softwareUpdate,
+          subtitle: localizations.softwareUpdateDescription,
+          enabled: true,
+          onTap: () => _openCategory(
+            titleBuilder: (context) =>
+                AppLocalizations.of(context).softwareUpdate,
+            bodyBuilder: (context) =>
+                SoftwareUpdateView(controller: updateController),
+          ),
+        ),
+      ],
     );
   }
 

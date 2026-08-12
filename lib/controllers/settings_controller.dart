@@ -32,11 +32,6 @@ class SettingsController extends ChangeNotifier {
 
   WorksPageSize get worksPageSize => _worksPageSize;
 
-  /// 提供 UI 使用的主題選項（分層用）
-  List<String> getThemeModeOptions() {
-    return ['system', 'light', 'dark', 'custom'];
-  }
-
   /// 提供 UI 使用的語言選項（分層用）
   List<String> getLocaleOptions() {
     return ['system', 'zh_TW', 'zh_CN', 'ja_JP', 'en'];
@@ -69,15 +64,6 @@ class SettingsController extends ChangeNotifier {
     _worksPageSize = _worksPageSizeFromString(worksPageSize);
 
     notifyListeners();
-  }
-
-  // 提供設定頁目前需要顯示的外觀與語言狀態。
-  Map<String, Object> getAppearanceState() {
-    return {
-      'theme_mode': _themeModeString,
-      'is_pure_black': isPureBlack,
-      'locale': _localeString,
-    };
   }
 
   // 更新主題模式，並將選擇結果寫入裝置儲存。

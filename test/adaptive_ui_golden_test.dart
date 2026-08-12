@@ -231,6 +231,22 @@ void main() {
       );
     });
 
+    testWidgets('Works search state golden', (tester) async {
+      await pumpGoldenApp(
+        tester,
+        WorksView(db: GoldenFixtureDatabase(), actressId: 1),
+        size: _compactViewport,
+      );
+      await tester.tap(find.byKey(const Key('works-overflow-menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('works-search-menu-item')));
+      await tester.pumpAndSettle();
+      await expectLater(
+        find.byType(Scaffold),
+        matchesGoldenFile('goldens/compact/works-search.png'),
+      );
+    });
+
     testWidgets('Settings expanded control state golden', (tester) async {
       await pumpGoldenApp(
         tester,
@@ -273,7 +289,9 @@ void main() {
         ),
         size: _compactViewport,
       );
-      await tester.tap(find.byKey(const Key('works-scrape-action')));
+      await tester.tap(find.byKey(const Key('works-overflow-menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('works-scrape-menu-item')));
       await tester.pumpAndSettle();
       await tester.tap(find.byType(FilledButton).last);
       await tester.pump();

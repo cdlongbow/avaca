@@ -23,6 +23,8 @@ typedef WorksScrapeExecutor =
       void Function(WorksScrapeProgress progress) onProgress,
     );
 
+enum _WorksMenuAction { search, scrape }
+
 class WorksView extends StatefulWidget {
   const WorksView({
     super.key,
@@ -45,8 +47,11 @@ class _WorksViewState extends State<WorksView> {
   late final Future<void> initFuture;
 
   final selectedWorkIds = <int>{};
+  final searchTextController = TextEditingController();
+  final searchFocusNode = FocusNode();
 
   var deletionBusy = false;
+  var searchOpen = false;
   late final SettingsController settingsController;
 
   @override
@@ -73,6 +78,9 @@ class _WorksViewState extends State<WorksView> {
     settingsController.removeListener(_handleSettingsChanged);
 
     settingsController.dispose();
+
+    searchTextController.dispose();
+    searchFocusNode.dispose();
 
     controller.dispose();
 
@@ -108,7 +116,41 @@ class _WorksViewState extends State<WorksView> {
       return;
     }
 
+    if (searchOpen) {
+      _closeSearch();
+
+      return;
+    }
+
     Navigator.of(context).pop();
+  }
+
+  void _openSearch() {
+    if (searchOpen || !mounted) {
+      return;
+    }
+
+    setState(() => searchOpen = true);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && searchOpen) {
+        searchFocusNode.requestFocus();
+      }
+    });
+  }
+
+  void _closeSearch() {
+    if (!searchOpen) {
+      return;
+    }
+
+    searchFocusNode.unfocus();
+    searchTextController.clear();
+    controller.changeSearch('');
+
+    if (mounted) {
+      setState(() => searchOpen = false);
+    }
   }
 
   void _toggleSelection(Map<String, Object?> work) {
@@ -234,18 +276,25 @@ class _WorksViewState extends State<WorksView> {
 
       builder: (context, snapshot) {
         return PopScope(
-          canPop: !isSelecting && !deletionBusy,
+          canPop: !isSelecting && !searchOpen && !deletionBusy,
 
           onPopInvokedWithResult: (didPop, result) {
             if (!didPop && isSelecting) {
               _clearSelection();
+            } else if (!didPop && searchOpen) {
+              _closeSearch();
             }
           },
 
           child: Scaffold(
             appBar: AppBar(
               leading: IconButton(
-                icon: const Icon(Icons.arrow_back),
+                // The bundled CJK font makes the title's visual center sit
+                // slightly below the Material icon's visual center.
+                icon: Transform.translate(
+                  offset: const Offset(0, 2),
+                  child: const Icon(Icons.arrow_back),
+                ),
 
                 tooltip: MaterialLocalizations.of(context).backButtonTooltip,
 
@@ -266,24 +315,136 @@ class _WorksViewState extends State<WorksView> {
                     icon: const Icon(Icons.delete_outline),
                   )
                 else
-                  IconButton(
-                    key: const Key('works-scrape-action'),
-
-                    tooltip: AppLocalizations.of(context).scrapeWorks,
-
-                    onPressed: controller.status == WorksLoadStatus.loaded
-                        ? _openScrapeSettings
-                        : null,
-
-                    icon: const Icon(Icons.manage_search),
-                  ),
+                  _buildOverflowMenu(),
               ],
             ),
 
-            body: _buildBody(context),
+            body: AdaptivePageLayout(
+              padding: EdgeInsets.zero,
+              compactBuilder: (context, tokens) =>
+                  _buildWorksContent(context, tokens),
+              expandedBuilder: (context, tokens) =>
+                  _buildWorksContent(context, tokens),
+            ),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildOverflowMenu() {
+    final l10n = AppLocalizations.of(context);
+    final enabled = controller.status == WorksLoadStatus.loaded;
+
+    return PopupMenuButton<_WorksMenuAction>(
+      key: const Key('works-overflow-menu'),
+      icon: const Icon(Icons.more_vert),
+      onSelected: (action) {
+        switch (action) {
+          case _WorksMenuAction.search:
+            _openSearch();
+          case _WorksMenuAction.scrape:
+            _openScrapeSettings();
+        }
+      },
+      itemBuilder: (context) => [
+        PopupMenuItem<_WorksMenuAction>(
+          key: const Key('works-search-menu-item'),
+          value: _WorksMenuAction.search,
+          enabled: enabled,
+          child: Row(
+            children: [
+              const Icon(Icons.search),
+              const SizedBox(width: 12),
+              Text(l10n.searchWorks),
+            ],
+          ),
+        ),
+        PopupMenuItem<_WorksMenuAction>(
+          key: const Key('works-scrape-menu-item'),
+          value: _WorksMenuAction.scrape,
+          enabled: enabled,
+          child: Row(
+            children: [
+              const Icon(Icons.manage_search),
+              const SizedBox(width: 12),
+              Text(l10n.scrapeWorks),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWorksContent(BuildContext context, AppLayoutTokens tokens) {
+    return Column(
+      children: [
+        _buildSearchBar(tokens),
+        Expanded(child: _buildBody(context, tokens)),
+      ],
+    );
+  }
+
+  Widget _buildSearchBar(AppLayoutTokens tokens) {
+    final isOpen = searchOpen;
+    final l10n = AppLocalizations.of(context);
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.decelerate,
+      height: isOpen ? 55 : 0,
+      margin: EdgeInsets.only(
+        left: tokens.gridPadding.left + 5,
+        right: tokens.gridPadding.right + 5,
+        top: isOpen ? tokens.gridGap : 0,
+        bottom: isOpen ? tokens.gridGap : 0,
+      ),
+      child: Material(
+        color: Theme.of(context).colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(30),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(30),
+          onTap: searchFocusNode.requestFocus,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              children: [
+                const Icon(Icons.search),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextField(
+                    key: const Key('works-search-field'),
+                    controller: searchTextController,
+                    focusNode: searchFocusNode,
+                    decoration: InputDecoration(
+                      hintText: l10n.workCodeSearchHint,
+                      isDense: true,
+                      filled: false,
+                      fillColor: Colors.transparent,
+                      hoverColor: Colors.transparent,
+                      contentPadding: EdgeInsets.zero,
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      disabledBorder: InputBorder.none,
+                      errorBorder: InputBorder.none,
+                      focusedErrorBorder: InputBorder.none,
+                    ),
+                    onChanged: controller.changeSearch,
+                  ),
+                ),
+                IconButton(
+                  key: const Key('works-search-close'),
+                  tooltip: l10n.close,
+                  onPressed: _closeSearch,
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -298,7 +459,7 @@ class _WorksViewState extends State<WorksView> {
     return AppLocalizations.of(context).works;
   }
 
-  Widget _buildBody(BuildContext context) {
+  Widget _buildBody(BuildContext context, AppLayoutTokens tokens) {
     return switch (controller.status) {
       WorksLoadStatus.loading => const Center(
         child: CircularProgressIndicator(),
@@ -312,24 +473,28 @@ class _WorksViewState extends State<WorksView> {
         child: Text(AppLocalizations.of(context).dataNotFound),
       ),
 
-      WorksLoadStatus.loaded =>
-        controller.works.isEmpty
-            ? Center(child: Text(AppLocalizations.of(context).noWorks))
-            : _buildAdaptiveWorksGrid(),
+      WorksLoadStatus.loaded => _buildLoadedBody(context, tokens),
     };
   }
 
-  Widget _buildAdaptiveWorksGrid() {
-    return AdaptivePageLayout(
-      padding: EdgeInsets.zero,
+  Widget _buildLoadedBody(BuildContext context, AppLayoutTokens tokens) {
+    if (controller.works.isEmpty) {
+      return Center(child: Text(AppLocalizations.of(context).noWorks));
+    }
 
-      compactBuilder: (context, tokens) => _buildWorksGrid(tokens),
+    final visibleWorks = controller.visibleWorks;
 
-      expandedBuilder: (context, tokens) => _buildWorksGrid(tokens),
-    );
+    if (visibleWorks.isEmpty) {
+      return Center(child: Text(AppLocalizations.of(context).noMatchingWorks));
+    }
+
+    return _buildWorksGrid(tokens, visibleWorks);
   }
 
-  Widget _buildWorksGrid(AppLayoutTokens tokens) {
+  Widget _buildWorksGrid(
+    AppLayoutTokens tokens,
+    List<Map<String, Object?>> works,
+  ) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isSmall = settingsController.worksPageSize == WorksPageSize.small;
@@ -345,13 +510,13 @@ class _WorksViewState extends State<WorksView> {
               ? tokens.workCardSmallMaxWidth
               : tokens.workCardMaxWidth,
 
-          itemCount: controller.works.length,
+          itemCount: works.length,
 
           // Works cards should use the available width naturally. The
           // generic geometry still protects other grids with their own
           // maxUsefulColumns values, but a fixed 4/6 cap leaves artificial
           // rails on wide Works pages when there are enough items.
-          maxUsefulColumns: controller.works.length,
+          maxUsefulColumns: works.length,
         );
 
         return Align(
@@ -383,10 +548,10 @@ class _WorksViewState extends State<WorksView> {
                 childAspectRatio: 0.54,
               ),
 
-              itemCount: controller.works.length,
+              itemCount: works.length,
 
               itemBuilder: (context, index) {
-                final work = controller.works[index];
+                final work = works[index];
 
                 final workId = work['id'];
 
@@ -819,7 +984,7 @@ class _ScrapeSettingsDialogState extends State<_ScrapeSettingsDialog> {
     replaceImage = widget.initial.replaceActressImage;
     fillMissingOnly = widget.initial.fillMissingOnly;
     maxActressCountController.text =
-        widget.initial.maxActressCount?.toString() ?? '';
+        widget.initial.maxActressCount?.toString() ?? '0';
     prefixes.addAll(widget.initial.excludedPrefixes);
   }
 
@@ -902,37 +1067,40 @@ class _ScrapeSettingsDialogState extends State<_ScrapeSettingsDialog> {
                   },
                 ),
                 const SizedBox(key: Key('scrape-settings-gap-fill'), height: 8),
-                Row(
+                ListTile(
                   key: const Key('scrape-max-actress-count-row'),
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(child: Text(l10n.maxActressCountLabel)),
-                    const SizedBox(width: 16),
-                    SizedBox(
-                      width: 150,
-                      child: TextFormField(
-                        key: const Key('scrape-max-actress-count-input'),
-                        controller: maxActressCountController,
-                        keyboardType: TextInputType.number,
-                        textAlign: TextAlign.end,
-                        decoration: InputDecoration(
-                          hintText: l10n.maxActressCountHint,
-                          isDense: true,
-                        ),
-                        autovalidateMode: AutovalidateMode.onUserInteraction,
-                        validator: (value) {
-                          final cleaned = value?.trim() ?? '';
-                          if (cleaned.isEmpty) {
-                            return null;
-                          }
-                          final parsed = int.tryParse(cleaned);
-                          return parsed != null && parsed > 0
-                              ? null
-                              : l10n.maxActressCountInvalid;
-                        },
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: Text(l10n.maxActressCountLabel),
+                  trailing: SizedBox(
+                    width: 48,
+                    child: TextFormField(
+                      key: const Key('scrape-max-actress-count-input'),
+                      controller: maxActressCountController,
+                      keyboardType: TextInputType.number,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                      decoration: InputDecoration(
+                        hintText: l10n.maxActressCountHint,
+                        isDense: true,
+                        contentPadding: const EdgeInsets.only(bottom: 2),
+                        border: const UnderlineInputBorder(),
+                        enabledBorder: const UnderlineInputBorder(),
+                        focusedBorder: const UnderlineInputBorder(),
                       ),
+                      autovalidateMode: AutovalidateMode.onUserInteraction,
+                      validator: (value) {
+                        final cleaned = value?.trim() ?? '';
+                        if (cleaned.isEmpty) {
+                          return null;
+                        }
+                        final parsed = int.tryParse(cleaned);
+                        return parsed != null && parsed >= 0
+                            ? null
+                            : l10n.maxActressCountInvalid;
+                      },
                     ),
-                  ],
+                  ),
                 ),
                 const SizedBox(key: Key('scrape-settings-gap-max'), height: 8),
                 ListTile(
@@ -983,7 +1151,7 @@ class _ScrapeSettingsDialogState extends State<_ScrapeSettingsDialog> {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          IconButton.filledTonal(
+                          IconButton(
                             key: const Key('scrape-prefix-add'),
                             tooltip: l10n.addPrefix,
                             onPressed: _addPrefix,
@@ -1026,14 +1194,17 @@ class _ScrapeSettingsDialogState extends State<_ScrapeSettingsDialog> {
             if (!(formKey.currentState?.validate() ?? false)) {
               return;
             }
+            final maxActressCount = int.tryParse(
+              maxActressCountController.text.trim(),
+            );
             Navigator.of(context).pop(
               WorkScrapeOptions(
                 syncDetails: syncDetails,
                 replaceActressImage: replaceImage,
                 fillMissingOnly: fillMissingOnly,
-                maxActressCount: int.tryParse(
-                  maxActressCountController.text.trim(),
-                ),
+                maxActressCount: maxActressCount == null || maxActressCount == 0
+                    ? null
+                    : maxActressCount,
                 excludedPrefixes: List.unmodifiable(prefixes),
               ),
             );

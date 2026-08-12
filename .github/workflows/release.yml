@@ -113,6 +113,25 @@ jobs:
           --build-name "${{ needs.metadata.outputs.version }}"
           --build-number "${{ github.run_number }}"
 
+      - name: Verify Android version metadata
+        shell: bash
+        env:
+          EXPECTED_VERSION: ${{ needs.metadata.outputs.version }}
+          EXPECTED_VERSION_CODE: ${{ github.run_number }}
+        run: |
+          set -euo pipefail
+
+          apk="build/app/outputs/flutter-apk/app-release.apk"
+          aapt="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)"
+          if [[ -z "$aapt" || ! -x "$aapt" ]]; then
+            echo "Unable to locate Android aapt for version verification." >&2
+            exit 1
+          fi
+
+          package_line="$("$aapt" dump badging "$apk" | grep -m 1 '^package:')"
+          grep -F "versionCode='$EXPECTED_VERSION_CODE'" <<< "$package_line"
+          grep -F "versionName='$EXPECTED_VERSION'" <<< "$package_line"
+
       - name: Name and hash APK
         shell: bash
         run: |
@@ -209,7 +228,7 @@ jobs:
           Compress-Archive -Path (Join-Path $packageRoot '*') -DestinationPath $zipPath -CompressionLevel Optimal
 
           $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $zipPath).Hash.ToLowerInvariant()
-          Set-Content -LiteralPath "$zipPath.sha256" -Value "$hash  $zipName" -Encoding ascii
+          Set-Content -LiteralPath "$zipPath.sha256" -Value "$hash  $zipName" -NoNewline -Encoding ascii
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
@@ -228,6 +247,11 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Check out tagged release notes
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.metadata.outputs.tag }}
+
       - name: Download Android artifact
         uses: actions/download-artifact@v4
         with:
@@ -244,11 +268,30 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -f "dist/avaca-${{ needs.metadata.outputs.version }}-arm64-v8a.apk"
-          test -f "dist/avaca-${{ needs.metadata.outputs.version }}-arm64-v8a.apk.sha256"
-          test -f "dist/avaca-${{ needs.metadata.outputs.version }}.zip"
-          test -f "dist/avaca-${{ needs.metadata.outputs.version }}.zip.sha256"
-          find dist -maxdepth 1 -type f -print
+
+          expected_files=(
+            "avaca-${{ needs.metadata.outputs.version }}-arm64-v8a.apk"
+            "avaca-${{ needs.metadata.outputs.version }}-arm64-v8a.apk.sha256"
+            "avaca-${{ needs.metadata.outputs.version }}.zip"
+            "avaca-${{ needs.metadata.outputs.version }}.zip.sha256"
+          )
+          mapfile -t expected_sorted < <(printf '%s\n' "${expected_files[@]}" | sort)
+          mapfile -t actual_sorted < <(find dist -maxdepth 1 -type f -printf '%f\n' | sort)
+
+          if [[ "${actual_sorted[*]}" != "${expected_sorted[*]}" ]]; then
+            echo 'Release assets do not match the required naming contract.' >&2
+            echo 'Expected:' >&2
+            printf '  %s\n' "${expected_sorted[@]}" >&2
+            echo 'Actual:' >&2
+            printf '  %s\n' "${actual_sorted[@]}" >&2
+            exit 1
+          fi
+
+          for checksum in "${expected_sorted[@]}"; do
+            if [[ "$checksum" == *.sha256 ]]; then
+              (cd dist && sha256sum --check --strict "$checksum")
+            fi
+          done
 
       - name: Create or update GitHub Release
         env:
@@ -259,11 +302,23 @@ jobs:
           set -euo pipefail
           tag="${{ needs.metadata.outputs.tag }}"
           version="${{ needs.metadata.outputs.version }}"
+          notes_file="$GITHUB_WORKSPACE/docs/release-notes-0.8.0.md"
+          create_notes_args=(--generate-notes)
+          if [[ "$version" == '0.8.0' && -f "$notes_file" ]]; then
+            create_notes_args=(--notes-file "$notes_file")
+          fi
 
           if gh release view "$tag" --repo "$GH_REPO" >/dev/null 2>&1; then
-            gh release edit "$tag" \
-              --repo "$GH_REPO" \
-              --title "AVACA $version"
+            if [[ "$version" == '0.8.0' && -f "$notes_file" ]]; then
+              gh release edit "$tag" \
+                --repo "$GH_REPO" \
+                --title "AVACA $version" \
+                --notes-file "$notes_file"
+            else
+              gh release edit "$tag" \
+                --repo "$GH_REPO" \
+                --title "AVACA $version"
+            fi
             gh release upload "$tag" \
               --repo "$GH_REPO" \
               "dist/avaca-$version-arm64-v8a.apk" \
@@ -279,5 +334,5 @@ jobs:
               "dist/avaca-$version.zip" \
               "dist/avaca-$version.zip.sha256" \
               --title "AVACA $version" \
-              --generate-notes
+              "${create_notes_args[@]}"
           fi

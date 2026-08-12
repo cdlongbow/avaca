@@ -344,6 +344,15 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get searchWorks => 'Search works';
+
+  @override
+  String get workCodeSearchHint => 'Enter a work code to search...';
+
+  @override
+  String get noMatchingWorks => 'No matching works';
+
+  @override
   String get scrapeWorks => 'Scrape works';
 
   @override
@@ -360,10 +369,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Do not scrape works with more actresses than this';
 
   @override
-  String get maxActressCountHint => 'Leave blank for no limit';
+  String get maxActressCountHint => '0 means no limit';
 
   @override
-  String get maxActressCountInvalid => 'Enter an integer of 1 or greater';
+  String get maxActressCountInvalid => 'Enter an integer of 0 or greater';
 
   @override
   String get scrapeAvatarUnavailable => 'No usable actress image was found.';
@@ -518,4 +527,85 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get dataTransferFailed =>
       'Data transfer failed. Existing data was not changed.';
+
+  @override
+  String get otherSettings => 'Other';
+
+  @override
+  String get softwareUpdate => 'Software update';
+
+  @override
+  String get softwareUpdateDescription =>
+      'Check for and install the latest AVACA version.';
+
+  @override
+  String get currentVersion => 'Current version';
+
+  @override
+  String get latestVersion => 'Latest version';
+
+  @override
+  String get autoCheckUpdates => 'Check for updates automatically';
+
+  @override
+  String get checkForUpdates => 'Check for updates';
+
+  @override
+  String get checkingForUpdates => 'Checking for updates…';
+
+  @override
+  String get downloadingUpdate => 'Downloading update…';
+
+  @override
+  String get verifyingUpdate => 'Verifying update…';
+
+  @override
+  String get installingUpdate => 'Starting installation…';
+
+  @override
+  String get updateAvailable => 'Update available';
+
+  @override
+  String get upToDate => 'AVACA is up to date.';
+
+  @override
+  String get updateNow => 'Update now';
+
+  @override
+  String get updateLater => 'Later';
+
+  @override
+  String get updateUnavailable =>
+      'No update file is available for this device.';
+
+  @override
+  String get updateCheckFailed =>
+      'Could not check for updates. Try again later.';
+
+  @override
+  String get updateDownloadFailed =>
+      'The update download failed. Existing data was not changed.';
+
+  @override
+  String get updateIntegrityFailed =>
+      'The update file failed verification. The update was stopped.';
+
+  @override
+  String get updateNotSupported =>
+      'Automatic updates are not supported on this device.';
+
+  @override
+  String get updateInstallPermissionRequired =>
+      'Allow AVACA to install apps from this source first.';
+
+  @override
+  String get updatePortableFolderNotWritable =>
+      'The portable app folder is not writable. The update was stopped.';
+
+  @override
+  String get updateInstallerFailed =>
+      'The updater could not start. The current version was kept.';
+
+  @override
+  String get updateDataPreserved => 'Your data and settings will be preserved.';
 }

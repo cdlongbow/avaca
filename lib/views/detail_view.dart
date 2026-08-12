@@ -527,7 +527,8 @@ class _DetailViewState extends State<DetailView> {
         children: [
           Row(
             children: [
-              Expanded(
+              SizedBox(
+                width: 96,
                 child: OutlinedButton(
                   key: const Key('detail-works-button'),
                   onPressed: _openWorks,
@@ -536,10 +537,13 @@ class _DetailViewState extends State<DetailView> {
                 ),
               ),
               const SizedBox(width: 12),
-              Text(
-                '${controller.workCount}',
-                key: const Key('detail-works-count'),
-                style: Theme.of(context).textTheme.titleMedium,
+              Expanded(
+                child: Text(
+                  '${controller.workCount}',
+                  key: const Key('detail-works-count'),
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
               ),
             ],
           ),

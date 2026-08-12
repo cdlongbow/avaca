@@ -15,6 +15,39 @@ class WorksController extends ChangeNotifier {
   List<Map<String, Object?>> works = const [];
   WorksLoadStatus status = WorksLoadStatus.loading;
   Object? loadError;
+  String _searchQuery = '';
+
+  String get searchQuery => _searchQuery;
+
+  List<Map<String, Object?>> get visibleWorks {
+    final rawQuery = _searchQuery.trim();
+
+    if (rawQuery.isEmpty) {
+      return works;
+    }
+
+    final query = _canonicalizeWorkCode(rawQuery);
+
+    if (query.isEmpty) {
+      return const [];
+    }
+
+    return works
+        .where((work) {
+          final code = work['code']?.toString() ?? '';
+          return _canonicalizeWorkCode(code).contains(query);
+        })
+        .toList(growable: false);
+  }
+
+  void changeSearch(String value) {
+    if (_searchQuery == value) {
+      return;
+    }
+
+    _searchQuery = value;
+    notifyListeners();
+  }
 
   Future<void> init() async {
     try {
@@ -42,5 +75,12 @@ class WorksController extends ChangeNotifier {
   Future<void> reloadWorks() async {
     works = await db.getWorksForActress(actressId);
     notifyListeners();
+  }
+
+  static String _canonicalizeWorkCode(String value) {
+    // Ignore the separators commonly used in work codes, but keep every
+    // other character so a CJK query remains a real query instead of turning
+    // into an empty string and showing all works.
+    return value.toUpperCase().replaceAll(RegExp(r'[\s\-_./]+'), '');
   }
 }

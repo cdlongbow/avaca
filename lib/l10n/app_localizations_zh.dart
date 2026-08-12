@@ -340,6 +340,15 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get searchWorks => '搜尋作品';
+
+  @override
+  String get workCodeSearchHint => '輸入番號搜尋...';
+
+  @override
+  String get noMatchingWorks => '找不到符合的作品';
+
+  @override
   String get scrapeWorks => '刮削作品';
 
   @override
@@ -355,10 +364,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get maxActressCountLabel => '多於此數量的女優不刮削';
 
   @override
-  String get maxActressCountHint => '留空表示不限制';
+  String get maxActressCountHint => '0 表示不限制';
 
   @override
-  String get maxActressCountInvalid => '請輸入大於等於 1 的整數';
+  String get maxActressCountInvalid => '請輸入大於等於 0 的整數';
 
   @override
   String get scrapeAvatarUnavailable => '找不到可用的女優頭像。';
@@ -500,6 +509,78 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get dataTransferFailed => '資料傳輸失敗，未變更既有資料。';
+
+  @override
+  String get otherSettings => '其他';
+
+  @override
+  String get softwareUpdate => '軟體更新';
+
+  @override
+  String get softwareUpdateDescription => '檢查並安裝 AVACA 的最新版本。';
+
+  @override
+  String get currentVersion => '目前版本';
+
+  @override
+  String get latestVersion => '最新版本';
+
+  @override
+  String get autoCheckUpdates => '自動檢查更新';
+
+  @override
+  String get checkForUpdates => '檢查更新';
+
+  @override
+  String get checkingForUpdates => '正在檢查更新…';
+
+  @override
+  String get downloadingUpdate => '正在下載更新…';
+
+  @override
+  String get verifyingUpdate => '正在驗證更新…';
+
+  @override
+  String get installingUpdate => '正在啟動安裝…';
+
+  @override
+  String get updateAvailable => '有新版本可用';
+
+  @override
+  String get upToDate => '目前已是最新版本。';
+
+  @override
+  String get updateNow => '立即更新';
+
+  @override
+  String get updateLater => '稍後';
+
+  @override
+  String get updateUnavailable => '此版本沒有此裝置的更新檔。';
+
+  @override
+  String get updateCheckFailed => '檢查更新失敗，請稍後再試。';
+
+  @override
+  String get updateDownloadFailed => '更新下載失敗，原有資料未變更。';
+
+  @override
+  String get updateIntegrityFailed => '更新檔驗證失敗，已停止更新。';
+
+  @override
+  String get updateNotSupported => '此裝置不支援自動更新。';
+
+  @override
+  String get updateInstallPermissionRequired => '請先允許 AVACA 安裝未知來源的應用程式。';
+
+  @override
+  String get updatePortableFolderNotWritable => 'portable 程式資料夾無法寫入，已停止更新。';
+
+  @override
+  String get updateInstallerFailed => '更新程式無法啟動，原有版本仍保留。';
+
+  @override
+  String get updateDataPreserved => '使用者資料與設定會保留。';
 }
 
 /// The translations for Chinese, as used in China (`zh_CN`).
@@ -838,6 +919,15 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   }
 
   @override
+  String get searchWorks => '搜索作品';
+
+  @override
+  String get workCodeSearchHint => '输入番号搜索...';
+
+  @override
+  String get noMatchingWorks => '找不到匹配的作品';
+
+  @override
   String get scrapeWorks => '刮削作品';
 
   @override
@@ -853,10 +943,10 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get maxActressCountLabel => '多于此数量的女优不刮削';
 
   @override
-  String get maxActressCountHint => '留空表示不限制';
+  String get maxActressCountHint => '0 表示不限制';
 
   @override
-  String get maxActressCountInvalid => '请输入大于等于 1 的整数';
+  String get maxActressCountInvalid => '请输入大于等于 0 的整数';
 
   @override
   String get scrapeAvatarUnavailable => '找不到可用的女优头像。';
@@ -998,6 +1088,78 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get dataTransferFailed => '数据传输失败，现有资料未变更。';
+
+  @override
+  String get otherSettings => '其他';
+
+  @override
+  String get softwareUpdate => '软件更新';
+
+  @override
+  String get softwareUpdateDescription => '检查并安装 AVACA 的最新版本。';
+
+  @override
+  String get currentVersion => '当前版本';
+
+  @override
+  String get latestVersion => '最新版本';
+
+  @override
+  String get autoCheckUpdates => '自动检查更新';
+
+  @override
+  String get checkForUpdates => '检查更新';
+
+  @override
+  String get checkingForUpdates => '正在检查更新…';
+
+  @override
+  String get downloadingUpdate => '正在下载更新…';
+
+  @override
+  String get verifyingUpdate => '正在验证更新…';
+
+  @override
+  String get installingUpdate => '正在启动安装…';
+
+  @override
+  String get updateAvailable => '有新版本可用';
+
+  @override
+  String get upToDate => '当前已经是最新版本。';
+
+  @override
+  String get updateNow => '立即更新';
+
+  @override
+  String get updateLater => '稍后';
+
+  @override
+  String get updateUnavailable => '此版本没有适用于此设备的更新文件。';
+
+  @override
+  String get updateCheckFailed => '检查更新失败，请稍后再试。';
+
+  @override
+  String get updateDownloadFailed => '更新下载失败，现有资料未变更。';
+
+  @override
+  String get updateIntegrityFailed => '更新文件验证失败，已停止更新。';
+
+  @override
+  String get updateNotSupported => '此设备不支持自动更新。';
+
+  @override
+  String get updateInstallPermissionRequired => '请先允许 AVACA 安装未知来源的应用。';
+
+  @override
+  String get updatePortableFolderNotWritable => 'portable 程序文件夹无法写入，已停止更新。';
+
+  @override
+  String get updateInstallerFailed => '更新程序无法启动，原有版本仍会保留。';
+
+  @override
+  String get updateDataPreserved => '用户资料与设置会保留。';
 }
 
 /// The translations for Chinese, as used in Taiwan (`zh_TW`).
@@ -1336,6 +1498,15 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   }
 
   @override
+  String get searchWorks => '搜尋作品';
+
+  @override
+  String get workCodeSearchHint => '輸入番號搜尋...';
+
+  @override
+  String get noMatchingWorks => '找不到符合的作品';
+
+  @override
   String get scrapeWorks => '刮削作品';
 
   @override
@@ -1351,10 +1522,10 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get maxActressCountLabel => '多於此數量的女優不刮削';
 
   @override
-  String get maxActressCountHint => '留空表示不限制';
+  String get maxActressCountHint => '0 表示不限制';
 
   @override
-  String get maxActressCountInvalid => '請輸入大於等於 1 的整數';
+  String get maxActressCountInvalid => '請輸入大於等於 0 的整數';
 
   @override
   String get scrapeAvatarUnavailable => '找不到可用的女優頭像。';
@@ -1496,4 +1667,76 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get dataTransferFailed => '資料傳輸失敗，未變更既有資料。';
+
+  @override
+  String get otherSettings => '其他';
+
+  @override
+  String get softwareUpdate => '軟體更新';
+
+  @override
+  String get softwareUpdateDescription => '檢查並安裝 AVACA 的最新版本。';
+
+  @override
+  String get currentVersion => '目前版本';
+
+  @override
+  String get latestVersion => '最新版本';
+
+  @override
+  String get autoCheckUpdates => '自動檢查更新';
+
+  @override
+  String get checkForUpdates => '檢查更新';
+
+  @override
+  String get checkingForUpdates => '正在檢查更新…';
+
+  @override
+  String get downloadingUpdate => '正在下載更新…';
+
+  @override
+  String get verifyingUpdate => '正在驗證更新…';
+
+  @override
+  String get installingUpdate => '正在啟動安裝…';
+
+  @override
+  String get updateAvailable => '有新版本可用';
+
+  @override
+  String get upToDate => '目前已是最新版本。';
+
+  @override
+  String get updateNow => '立即更新';
+
+  @override
+  String get updateLater => '稍後';
+
+  @override
+  String get updateUnavailable => '此版本沒有此裝置的更新檔。';
+
+  @override
+  String get updateCheckFailed => '檢查更新失敗，請稍後再試。';
+
+  @override
+  String get updateDownloadFailed => '更新下載失敗，原有資料未變更。';
+
+  @override
+  String get updateIntegrityFailed => '更新檔驗證失敗，已停止更新。';
+
+  @override
+  String get updateNotSupported => '此裝置不支援自動更新。';
+
+  @override
+  String get updateInstallPermissionRequired => '請先允許 AVACA 安裝未知來源的應用程式。';
+
+  @override
+  String get updatePortableFolderNotWritable => 'portable 程式資料夾無法寫入，已停止更新。';
+
+  @override
+  String get updateInstallerFailed => '更新程式無法啟動，原有版本仍保留。';
+
+  @override
+  String get updateDataPreserved => '使用者資料與設定會保留。';
 }

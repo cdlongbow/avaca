@@ -69,24 +69,6 @@ class DetailController extends ChangeNotifier {
     }
   }
 
-  // 保留舊流程需要的入口，目前 Flutter 版本不需要保存 cropper 實例。
-  void setCropper(Object? cropper) {
-    // Flutter 版本不需要保存 cropper 實例。
-  }
-
-  // Flutter 版面尺寸由 widget tree 自行重建處理。
-  void windowResized(Object? event) {
-    // Flutter cropper 會在畫面重建時重新計算尺寸。
-  }
-
-  Map<String, Object?> getActressData() {
-    return Map.unmodifiable(actressData);
-  }
-
-  List<String> getCurrentAttrs() {
-    return List.unmodifiable(currentAttrs);
-  }
-
   List<String> getAttrOptions(BuildContext context) {
     return [
       AppLocalizations.of(context).attrCensored,
@@ -208,18 +190,6 @@ class DetailController extends ChangeNotifier {
     notifyListeners();
 
     return _buildImageState(newImgPath);
-  }
-
-  // 裁切完成後更新照片狀態，並提示使用者仍需儲存。
-  Map<String, Object> notifyCropDone(BuildContext context, String newImgPath) {
-    final state = onCropDone(newImgPath);
-
-    AppSnackBar.showSuccess(
-      context,
-      AppLocalizations.of(context).photoCroppedRememberSave,
-    );
-
-    return state;
   }
 
   // 移除目前照片路徑。

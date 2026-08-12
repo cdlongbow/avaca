@@ -7,6 +7,7 @@ import 'package:avaca/services/works_scrape_service.dart';
 import 'package:avaca/views/detail_view.dart';
 import 'package:avaca/views/works_view.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -66,6 +67,18 @@ class _WorksFeatureDatabase extends AppDatabase {
         'card_image_path': '',
         'detail_image_path': '',
       },
+      {
+        'id': 4,
+        'code': 'SONE409',
+        'title': '第四部測試作品',
+        'release_date': '2026-04-12',
+        'duration_minutes': 110,
+        'studio': '',
+        'publisher': '',
+        'series': '',
+        'card_image_path': '',
+        'detail_image_path': '',
+      },
     ];
   }
 
@@ -94,7 +107,7 @@ class _WideWorksFeatureDatabase extends _WorksFeatureDatabase {
   @override
   Future<List<Map<String, Object?>>> getWorksForActress(int actressId) async {
     final works = [...await super.getWorksForActress(actressId)];
-    for (var id = 4; id <= 12; id++) {
+    for (var id = 5; id <= 12; id++) {
       works.add({
         'id': id,
         'code': 'WIDE-$id',
@@ -179,6 +192,103 @@ void main() {
 
     expect(second.right, lessThan(third.left));
 
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('works overflow menu contains search and scrape actions', (
+    tester,
+  ) async {
+    await _pumpWorks(tester);
+
+    expect(find.byKey(const Key('works-overflow-menu')), findsOneWidget);
+    expect(find.byKey(const Key('works-scrape-action')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('works-overflow-menu')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('works-search-menu-item')), findsOneWidget);
+    expect(find.byKey(const Key('works-scrape-menu-item')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('works-search-menu-item')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('works-search-field')), findsOneWidget);
+    expect(find.byKey(const Key('works-search-close')), findsOneWidget);
+    expect(find.byKey(const Key('works-search-clear')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('work code search ignores case and separators', (tester) async {
+    await _pumpWorks(tester);
+
+    await tester.tap(find.byKey(const Key('works-overflow-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('works-search-menu-item')));
+    await tester.pumpAndSettle();
+
+    final searchField = find.byKey(const Key('works-search-field'));
+
+    for (final query in ['SONE-409', 'sone-409', 'SONE409', 'sone409']) {
+      await tester.enterText(searchField, query);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('work-card-4')), findsOneWidget);
+      expect(find.byKey(const Key('work-card-1')), findsNothing);
+      expect(find.byKey(const Key('work-card-2')), findsNothing);
+      expect(find.byKey(const Key('work-card-3')), findsNothing);
+    }
+
+    expect(find.byKey(const Key('works-search-close')), findsOneWidget);
+    expect(find.byKey(const Key('works-search-clear')), findsNothing);
+
+    await tester.enterText(searchField, 'not-a-real-code');
+    await tester.pumpAndSettle();
+
+    expect(find.text('找不到符合的作品'), findsOneWidget);
+    expect(find.byKey(const Key('work-card-4')), findsNothing);
+
+    await tester.enterText(searchField, '中文');
+    await tester.pumpAndSettle();
+
+    expect(find.text('找不到符合的作品'), findsOneWidget);
+    expect(find.byKey(const Key('work-card-4')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('works-search-close')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('works-search-field')).hitTestable(),
+      findsNothing,
+    );
+    expect(find.byKey(const Key('work-card-1')), findsOneWidget);
+    expect(find.byKey(const Key('work-card-4')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('back closes work search before leaving the page', (
+    tester,
+  ) async {
+    await _pumpWorks(tester);
+
+    await tester.tap(find.byKey(const Key('works-overflow-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('works-search-menu-item')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('works-search-field')),
+      'SONE409',
+    );
+    await tester.pumpAndSettle();
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(find.byType(WorksView), findsOneWidget);
+    expect(
+      find.byKey(const Key('works-search-field')).hitTestable(),
+      findsNothing,
+    );
+    expect(find.byKey(const Key('work-card-1')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -352,7 +462,7 @@ void main() {
 
     expect(find.byKey(const Key('works-delete-action')), findsNothing);
 
-    expect(find.byKey(const Key('works-scrape-action')), findsOneWidget);
+    expect(find.byKey(const Key('works-overflow-menu')), findsOneWidget);
 
     expect(find.text('已刪除 1 部作品'), findsOneWidget);
 
@@ -365,9 +475,7 @@ void main() {
     (tester) async {
       await _pumpWorks(tester);
 
-      await tester.tap(find.byKey(const Key('works-scrape-action')));
-
-      await tester.pumpAndSettle();
+      await _openWorksScrapeSettings(tester);
 
       final switchTiles = tester
           .widgetList<SwitchListTile>(find.byType(SwitchListTile))
@@ -411,7 +519,33 @@ void main() {
         ),
       );
 
-      expect(maxCountEditable.textAlign, TextAlign.end);
+      expect(maxCountEditable.textAlign, TextAlign.center);
+      expect(maxCountEditable.controller.text, '0');
+
+      final inputDecorator = tester.widget<InputDecorator>(
+        find.descendant(
+          of: maxCountFinder,
+          matching: find.byType(InputDecorator),
+        ),
+      );
+      expect(inputDecorator.decoration.border, isA<UnderlineInputBorder>());
+      expect(tester.getRect(maxCountFinder).width, closeTo(48, 0.01));
+
+      final rowTextStyle = Theme.of(
+        tester.element(find.text('多於此數量的女優不刮削')),
+      ).textTheme.bodyMedium;
+      expect(maxCountEditable.style.fontSize, rowTextStyle?.fontSize);
+
+      final maxLabelRenderObject = tester.renderObject<RenderParagraph>(
+        find.text('多於此數量的女優不刮削'),
+      );
+      final syncLabelRenderObject = tester.renderObject<RenderParagraph>(
+        find.text('同步詳細資料'),
+      );
+      expect(
+        maxLabelRenderObject.text.style?.fontSize,
+        syncLabelRenderObject.text.style?.fontSize,
+      );
 
       final spacingKeys = <String>[
         'scrape-settings-gap-title',
@@ -477,6 +611,11 @@ void main() {
 
       expect(find.byKey(const Key('scrape-prefix-add')), findsOneWidget);
 
+      final addButton = tester.widget<IconButton>(
+        find.byKey(const Key('scrape-prefix-add')),
+      );
+      expect(addButton.style?.backgroundColor, isNull);
+
       await tester.enterText(
         find.byKey(const Key('scrape-prefix-input')),
 
@@ -498,9 +637,7 @@ void main() {
   ) async {
     await _pumpWorks(tester);
 
-    await tester.tap(find.byKey(const Key('works-scrape-action')));
-
-    await tester.pumpAndSettle();
+    await _openWorksScrapeSettings(tester);
 
     await tester.tap(find.byKey(const Key('scrape-prefix-section')));
 
@@ -575,9 +712,7 @@ void main() {
       },
     );
 
-    await tester.tap(find.byKey(const Key('works-scrape-action')));
-
-    await tester.pumpAndSettle();
+    await _openWorksScrapeSettings(tester);
 
     await tester.tap(find.byKey(const Key('scrape-prefix-section')));
 
@@ -618,14 +753,23 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('actress-count limit rejects zero and keeps settings open', (
-    tester,
-  ) async {
-    await _pumpWorks(tester);
+  testWidgets('actress-count limit accepts zero as unlimited', (tester) async {
+    WorkScrapeOptions? received;
 
-    await tester.tap(find.byKey(const Key('works-scrape-action')));
+    await _pumpWorks(
+      tester,
+      scrapeExecutor: (options, token, onProgress) async {
+        received = options;
+        return const WorksScrapeResult(
+          saved: 0,
+          excluded: 0,
+          failed: 0,
+          cancelled: false,
+        );
+      },
+    );
 
-    await tester.pumpAndSettle();
+    await _openWorksScrapeSettings(tester);
 
     await tester.enterText(
       find.byKey(const Key('scrape-max-actress-count-input')),
@@ -637,9 +781,9 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('請輸入大於等於 1 的整數'), findsOneWidget);
-
-    expect(find.text('刮削設定'), findsOneWidget);
+    expect(received, isNotNull);
+    expect(received!.maxActressCount, isNull);
+    expect(find.text('刮削設定'), findsNothing);
 
     expect(tester.takeException(), isNull);
   });
@@ -647,9 +791,7 @@ void main() {
   testWidgets('actress-count limit rejects decimal input', (tester) async {
     await _pumpWorks(tester);
 
-    await tester.tap(find.byKey(const Key('works-scrape-action')));
-
-    await tester.pumpAndSettle();
+    await _openWorksScrapeSettings(tester);
 
     await tester.enterText(
       find.byKey(const Key('scrape-max-actress-count-input')),
@@ -661,7 +803,7 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('請輸入大於等於 1 的整數'), findsOneWidget);
+    expect(find.text('請輸入大於等於 0 的整數'), findsOneWidget);
 
     expect(find.text('刮削設定'), findsOneWidget);
 
@@ -688,9 +830,7 @@ void main() {
           ),
     );
 
-    await tester.tap(find.byKey(const Key('works-scrape-action')));
-
-    await tester.pumpAndSettle();
+    await _openWorksScrapeSettings(tester);
 
     await tester.tap(find.text('開始刮削'));
 
@@ -736,9 +876,7 @@ void main() {
       scrapeExecutor: (options, token, onProgress) => result.future,
     );
 
-    await tester.tap(find.byKey(const Key('works-scrape-action')));
-
-    await tester.pumpAndSettle();
+    await _openWorksScrapeSettings(tester);
 
     await tester.tap(find.text('開始刮削'));
 
@@ -829,6 +967,13 @@ Future<void> _pumpWorks(
       ),
     ),
   );
+  await tester.pumpAndSettle();
+}
+
+Future<void> _openWorksScrapeSettings(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('works-overflow-menu')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const Key('works-scrape-menu-item')));
   await tester.pumpAndSettle();
 }
 

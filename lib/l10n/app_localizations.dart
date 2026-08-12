@@ -745,6 +745,24 @@ abstract class AppLocalizations {
   /// **'{actressName}演出的作品'**
   String actressWorksTitle(String actressName);
 
+  /// No description provided for @searchWorks.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'搜尋作品'**
+  String get searchWorks;
+
+  /// No description provided for @workCodeSearchHint.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'輸入番號搜尋...'**
+  String get workCodeSearchHint;
+
+  /// No description provided for @noMatchingWorks.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'找不到符合的作品'**
+  String get noMatchingWorks;
+
   /// No description provided for @scrapeWorks.
   ///
   /// In zh_TW, this message translates to:
@@ -778,13 +796,13 @@ abstract class AppLocalizations {
   /// No description provided for @maxActressCountHint.
   ///
   /// In zh_TW, this message translates to:
-  /// **'留空表示不限制'**
+  /// **'0 表示不限制'**
   String get maxActressCountHint;
 
   /// No description provided for @maxActressCountInvalid.
   ///
   /// In zh_TW, this message translates to:
-  /// **'請輸入大於等於 1 的整數'**
+  /// **'請輸入大於等於 0 的整數'**
   String get maxActressCountInvalid;
 
   /// No description provided for @scrapeAvatarUnavailable.
@@ -1044,6 +1062,150 @@ abstract class AppLocalizations {
   /// In zh_TW, this message translates to:
   /// **'資料傳輸失敗，未變更既有資料。'**
   String get dataTransferFailed;
+
+  /// No description provided for @otherSettings.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'其他'**
+  String get otherSettings;
+
+  /// No description provided for @softwareUpdate.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'軟體更新'**
+  String get softwareUpdate;
+
+  /// No description provided for @softwareUpdateDescription.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'檢查並安裝 AVACA 的最新版本。'**
+  String get softwareUpdateDescription;
+
+  /// No description provided for @currentVersion.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'目前版本'**
+  String get currentVersion;
+
+  /// No description provided for @latestVersion.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'最新版本'**
+  String get latestVersion;
+
+  /// No description provided for @autoCheckUpdates.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'自動檢查更新'**
+  String get autoCheckUpdates;
+
+  /// No description provided for @checkForUpdates.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'檢查更新'**
+  String get checkForUpdates;
+
+  /// No description provided for @checkingForUpdates.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'正在檢查更新…'**
+  String get checkingForUpdates;
+
+  /// No description provided for @downloadingUpdate.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'正在下載更新…'**
+  String get downloadingUpdate;
+
+  /// No description provided for @verifyingUpdate.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'正在驗證更新…'**
+  String get verifyingUpdate;
+
+  /// No description provided for @installingUpdate.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'正在啟動安裝…'**
+  String get installingUpdate;
+
+  /// No description provided for @updateAvailable.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'有新版本可用'**
+  String get updateAvailable;
+
+  /// No description provided for @upToDate.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'目前已是最新版本。'**
+  String get upToDate;
+
+  /// No description provided for @updateNow.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'立即更新'**
+  String get updateNow;
+
+  /// No description provided for @updateLater.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'稍後'**
+  String get updateLater;
+
+  /// No description provided for @updateUnavailable.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'此版本沒有此裝置的更新檔。'**
+  String get updateUnavailable;
+
+  /// No description provided for @updateCheckFailed.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'檢查更新失敗，請稍後再試。'**
+  String get updateCheckFailed;
+
+  /// No description provided for @updateDownloadFailed.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'更新下載失敗，原有資料未變更。'**
+  String get updateDownloadFailed;
+
+  /// No description provided for @updateIntegrityFailed.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'更新檔驗證失敗，已停止更新。'**
+  String get updateIntegrityFailed;
+
+  /// No description provided for @updateNotSupported.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'此裝置不支援自動更新。'**
+  String get updateNotSupported;
+
+  /// No description provided for @updateInstallPermissionRequired.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'請先允許 AVACA 安裝未知來源的應用程式。'**
+  String get updateInstallPermissionRequired;
+
+  /// No description provided for @updatePortableFolderNotWritable.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'portable 程式資料夾無法寫入，已停止更新。'**
+  String get updatePortableFolderNotWritable;
+
+  /// No description provided for @updateInstallerFailed.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'更新程式無法啟動，原有版本仍保留。'**
+  String get updateInstallerFailed;
+
+  /// No description provided for @updateDataPreserved.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'使用者資料與設定會保留。'**
+  String get updateDataPreserved;
 }
 
 class _AppLocalizationsDelegate
