@@ -11,7 +11,8 @@
 - Added post-update cache cleanup, rollback safeguards, Works code search, and
   responsive UI coverage for the updated settings and works flows.
 - Added release checks for asset naming, checksums, and Android version
-  metadata, including monotonically increasing versionCode values.
+  metadata, with Android versionCode values starting at 30 and increasing per
+  release.
 
 ## 0.7.10 - 2026-08-12
 

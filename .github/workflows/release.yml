@@ -21,6 +21,7 @@ jobs:
     outputs:
       tag: ${{ steps.version.outputs.tag }}
       version: ${{ steps.version.outputs.version }}
+      version_code: ${{ steps.version.outputs.version_code }}
     steps:
       - name: Check out tagged source
         uses: actions/checkout@v4
@@ -46,8 +47,15 @@ jobs:
             exit 1
           fi
 
+          version_code=$((GITHUB_RUN_NUMBER + 25))
+          if (( version_code < 30 )); then
+            echo "Android versionCode must start at 30; calculated $version_code." >&2
+            exit 1
+          fi
+
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "version_code=$version_code" >> "$GITHUB_OUTPUT"
 
   android:
     name: Android ARMv8-A APK
@@ -111,13 +119,13 @@ jobs:
           --release
           --target-platform android-arm64
           --build-name "${{ needs.metadata.outputs.version }}"
-          --build-number "${{ github.run_number }}"
+          --build-number "${{ needs.metadata.outputs.version_code }}"
 
       - name: Verify Android version metadata
         shell: bash
         env:
           EXPECTED_VERSION: ${{ needs.metadata.outputs.version }}
-          EXPECTED_VERSION_CODE: ${{ github.run_number }}
+          EXPECTED_VERSION_CODE: ${{ needs.metadata.outputs.version_code }}
         run: |
           set -euo pipefail
 
@@ -198,7 +206,7 @@ jobs:
           flutter build windows
           --release
           --build-name "${{ needs.metadata.outputs.version }}"
-          --build-number "${{ github.run_number }}"
+          --build-number "${{ needs.metadata.outputs.version_code }}"
 
       - name: Package versioned portable archive
         shell: pwsh

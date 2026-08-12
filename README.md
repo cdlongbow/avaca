@@ -42,7 +42,8 @@ Actions 會驗證 tag 與 `pubspec.yaml` 版本一致，並且只建立以下四
 例如 `v0.8.0` 的資產名稱必須是
 `avaca-0.8.0-arm64-v8a.apk`、`avaca-0.8.0-arm64-v8a.apk.sha256`、
 `avaca-0.8.0.zip` 和 `avaca-0.8.0.zip.sha256`。Android 的
-`versionCode` 由 workflow 使用 `github.run_number`，正式發布時必須比上一版大。
+`versionCode` 由 workflow 使用 `GITHUB_RUN_NUMBER + 25`，從 30 開始；正式發布時
+必須比上一版大。
 
 Android release signing 使用 GitHub Actions secrets，不會把 keystore 或
 密碼提交到 repository。需要設定：

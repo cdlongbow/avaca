@@ -10,7 +10,10 @@
 - Tag 的 `X.Y.Z` 必須與 `pubspec.yaml` 的版本完全一致。
 - 只發布正式版，不使用 draft 或 prerelease 資產。
 - Android 的 `versionName` 使用 `X.Y.Z`。
-- Android 的 `versionCode` 使用 GitHub Actions 的 `github.run_number`，而且每個正式發布的 APK 都必須比上一個正式發布的 APK 使用更大的整數。Android 不接受較小或重複的 `versionCode` 作為更新。
+- Android 的 `versionCode` 使用 `GITHUB_RUN_NUMBER + 25`，從 30 開始；本次
+  `v0.8.0` 的下一次 workflow run 為 run #5，因此 APK 的 `versionCode` 是
+  30。之後每個正式發布的 APK 都必須比上一個正式發布的 APK 使用更大的整數。
+  Android 不接受較小或重複的 `versionCode` 作為更新。
 - 同一個 Tag 重新執行 workflow 會保留同一個 `github.run_number`，只能更新同一個 GitHub Release；要發布新版本，必須使用新的 `vX.Y.Z` Tag。
 
 ## GitHub Release 資產檔名
