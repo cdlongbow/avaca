@@ -3,6 +3,15 @@ import 'package:avaca/services/minnano/minnano_transport.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('connection check requests the Minnano homepage', () async {
+    final transport = _RecordingMinnanoTransport();
+    final client = MinnanoClient(transport: transport);
+
+    await client.checkConnection();
+
+    expect(transport.requested, [Uri.parse('https://www.minnano-av.com/')]);
+  });
+
   test('uses the real search form and actress.php pagination shape', () async {
     final transport = _RecordingMinnanoTransport();
     final client = MinnanoClient(transport: transport);
@@ -44,6 +53,9 @@ final class _RecordingMinnanoTransport implements MinnanoTransport {
   @override
   Future<String> get(Uri uri) async {
     requested.add(uri);
+    if (uri.path == '/') {
+      return '<html><body>ok</body></html>';
+    }
     if (uri.path == '/search_result.php') {
       return '<a href="actress618082.html">小湊よつ葉</a>';
     }

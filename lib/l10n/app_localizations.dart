@@ -1129,6 +1129,54 @@ abstract class AppLocalizations {
   /// **'無法儲存刮削來源設定。'**
   String get scrapeSourceSaveFailed;
 
+  /// No description provided for @scrapeSourceConnectionTitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'網站連線狀態'**
+  String get scrapeSourceConnectionTitle;
+
+  /// No description provided for @scrapeSourceConnectionSubtitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'查看已加入的刮削網站，並在這裡測試連線與完成驗證。'**
+  String get scrapeSourceConnectionSubtitle;
+
+  /// No description provided for @scrapeSourceRetest.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'重新測試連線'**
+  String get scrapeSourceRetest;
+
+  /// No description provided for @scrapeSourceTesting.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'測試中…'**
+  String get scrapeSourceTesting;
+
+  /// No description provided for @scrapeSourceNotTested.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'尚未測試'**
+  String get scrapeSourceNotTested;
+
+  /// No description provided for @scrapeSourceConnected.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'連線成功'**
+  String get scrapeSourceConnected;
+
+  /// No description provided for @scrapeSourceConnectionFailed.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'連線失敗'**
+  String get scrapeSourceConnectionFailed;
+
+  /// No description provided for @scrapeSourceVerificationRequired.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'需要驗證'**
+  String get scrapeSourceVerificationRequired;
+
   /// No description provided for @scrapePartial.
   ///
   /// In zh_TW, this message translates to:

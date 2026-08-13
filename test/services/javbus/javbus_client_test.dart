@@ -143,6 +143,17 @@ void main() {
     );
   });
 
+  test('connection check requests the JavBus homepage', () async {
+    final transport = _FakeTransport({
+      'https://www.javbus.com/': '<html><body>ok</body></html>',
+    });
+    final client = JavBusClient(transport: transport);
+
+    await client.checkConnection();
+
+    expect(transport.requested, ['https://www.javbus.com/']);
+  });
+
   test(
     'HTTP transport retries a bounded number of transient failures',
     () async {

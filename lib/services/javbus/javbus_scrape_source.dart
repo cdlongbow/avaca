@@ -86,11 +86,13 @@ final class JavBusScrapeSource implements ScrapeSource {
   @override
   bool acceptsImageUri(Uri uri) {
     final port = uri.hasPort ? uri.port : 443;
+    final imagePath = uri.path.toLowerCase();
     return uri.scheme == 'https' &&
         uri.userInfo.isEmpty &&
         uri.host.toLowerCase() == 'www.javbus.com' &&
         port == 443 &&
-        !uri.path.toLowerCase().endsWith('/nowprinting.gif');
+        imagePath.startsWith('/pics/actress/') &&
+        !imagePath.endsWith('/nowprinting.gif');
   }
 
   @override

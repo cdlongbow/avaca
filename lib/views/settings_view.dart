@@ -8,6 +8,7 @@ import 'package:avaca/l10n/app_localizations.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../components/aligned_app_bar_back_button.dart';
 import '../components/adaptive_page_layout.dart';
+import '../components/javbus_verification_dialog.dart';
 import '../controllers/data_transfer_controller.dart';
 import '../controllers/settings_controller.dart';
 import '../controllers/software_update_controller.dart';
@@ -16,9 +17,24 @@ import '../core/layout.dart';
 import '../models/data_transfer_models.dart';
 import '../models/scrape_source_settings.dart';
 import '../services/data_transfer_service.dart';
+import '../services/javbus/javbus_client.dart';
+import '../services/javbus/javbus_verification.dart';
+import '../services/minnano/minnano_client.dart';
+import '../services/minnano/minnano_transport.dart';
+import '../services/scrape/scrape_source_registry.dart';
 import 'software_update_view.dart';
 
 typedef ExternalUrlLauncher = Future<bool> Function(Uri uri);
+typedef ScrapeSourceConnectionTester =
+    Future<void> Function(ScrapeSourceId source);
+
+enum _ScrapeSourceConnectionStatus {
+  notTested,
+  testing,
+  connected,
+  failed,
+  verificationRequired,
+}
 
 Future<bool> _launchExternalUrl(Uri uri) {
   return launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -173,6 +189,7 @@ class SettingsView extends StatefulWidget {
     this.transferController,
     this.softwareUpdateController,
     this.externalUrlLauncher = _launchExternalUrl,
+    this.scrapeSourceConnectionTester,
   });
 
   final AppDatabase db;
@@ -186,6 +203,7 @@ class SettingsView extends StatefulWidget {
   final DataTransferController? transferController;
   final SoftwareUpdateController? softwareUpdateController;
   final ExternalUrlLauncher externalUrlLauncher;
+  final ScrapeSourceConnectionTester? scrapeSourceConnectionTester;
 
   @override
   State<SettingsView> createState() => _SettingsViewState();
@@ -353,10 +371,16 @@ class _SettingsViewState extends State<SettingsView> {
         clipBehavior: Clip.antiAlias,
         color: colorScheme.surfaceContainerHighest,
         elevation: 0,
-        shape: _outlinedCardShape(context),
+        shape: _settingsCardShape(),
         child: ListTile(leading: Icon(icon), title: Text(title), onTap: onTap),
       ),
     );
+  }
+
+  RoundedRectangleBorder _settingsCardShape({
+    double radius = _settingsCardRadius,
+  }) {
+    return RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius));
   }
 
   RoundedRectangleBorder _outlinedCardShape(
@@ -505,7 +529,65 @@ class _SettingsViewState extends State<SettingsView> {
   }
 
   Widget _buildScrapeSourcesSettings(BuildContext context) {
-    return _ScrapeSourcesSettingsBody(database: widget.db);
+    return _ScrapeSourcesSettingsBody(
+      database: widget.db,
+      connectionTester:
+          widget.scrapeSourceConnectionTester ?? _checkScrapeSourceConnection,
+    );
+  }
+
+  Future<void> _checkScrapeSourceConnection(ScrapeSourceId source) async {
+    switch (source) {
+      case ScrapeSourceId.javbus:
+        String? initialCookies;
+        try {
+          initialCookies = await widget.db.getSetting('javbus_cookies');
+        } catch (_) {
+          initialCookies = null;
+        }
+
+        final transport = HttpJavBusTransport(
+          initialCookieHeader: initialCookies,
+          verificationHandler: _showJavBusVerification,
+        );
+        final client = JavBusClient(transport: transport);
+        try {
+          await client.checkConnection();
+        } finally {
+          if (transport.cookieHeader.isNotEmpty) {
+            try {
+              await widget.db.setSetting(
+                'javbus_cookies',
+                transport.cookieHeader,
+              );
+            } catch (_) {
+              // Cookie 儲存失敗不應遮蔽原始連線結果。
+            }
+          }
+          client.close();
+        }
+      case ScrapeSourceId.minnanoAv:
+        final client = MinnanoClient(transport: HttpMinnanoTransport());
+        try {
+          await client.checkConnection();
+        } finally {
+          client.close();
+        }
+    }
+  }
+
+  Future<Map<String, String>?> _showJavBusVerification(
+    JavBusVerificationChallenge challenge,
+  ) {
+    if (!mounted) {
+      return Future.value(null);
+    }
+
+    return showDialog<Map<String, String>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => JavBusVerificationDialog(challenge: challenge),
+    );
   }
 
   Widget _buildAboutSettings(BuildContext context) {
@@ -560,7 +642,7 @@ class _SettingsViewState extends State<SettingsView> {
         clipBehavior: Clip.antiAlias,
         color: colorScheme.surfaceContainerHighest,
         elevation: 0,
-        shape: _outlinedCardShape(context),
+        shape: _settingsCardShape(),
         child: ListTile(
           enabled: enabled,
           minVerticalPadding: 12,
@@ -754,7 +836,7 @@ class _SettingsViewState extends State<SettingsView> {
     final current = controller.themeModeString;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final colorScheme = Theme.of(context).colorScheme;
-    final shape = _outlinedCardShape(context);
+    final shape = _settingsCardShape();
 
     return _SettingsTapFeedback(
       id: 'theme-mode',
@@ -839,7 +921,7 @@ class _SettingsViewState extends State<SettingsView> {
   Widget _languageSelector(BuildContext context) {
     final current = controller.localeString;
     final colorScheme = Theme.of(context).colorScheme;
-    final shape = _outlinedCardShape(context);
+    final shape = _settingsCardShape();
 
     return _SettingsTapFeedback(
       id: 'language',
@@ -880,7 +962,7 @@ class _SettingsViewState extends State<SettingsView> {
   Widget _worksPageSizeSelector(BuildContext context) {
     final current = controller.worksPageSize;
     final colorScheme = Theme.of(context).colorScheme;
-    final shape = _outlinedCardShape(context);
+    final shape = _settingsCardShape();
 
     return _SettingsTapFeedback(
       id: 'works-page-size',
@@ -1062,9 +1144,13 @@ class _TransferProgressIndicator extends StatelessWidget {
 }
 
 class _ScrapeSourcesSettingsBody extends StatefulWidget {
-  const _ScrapeSourcesSettingsBody({required this.database});
+  const _ScrapeSourcesSettingsBody({
+    required this.database,
+    required this.connectionTester,
+  });
 
   final AppDatabase database;
+  final ScrapeSourceConnectionTester connectionTester;
 
   @override
   State<_ScrapeSourcesSettingsBody> createState() =>
@@ -1077,6 +1163,11 @@ class _ScrapeSourcesSettingsBodyState
   ScrapeSourceSettings? _settings;
   Future<void> _saveQueue = Future<void>.value();
   int _selectionVersion = 0;
+  final _connectionStatuses = <ScrapeSourceId, _ScrapeSourceConnectionStatus>{
+    for (final source in ScrapeSourceRegistry.aggregatePriority)
+      source: _ScrapeSourceConnectionStatus.notTested,
+  };
+  bool _isTestingConnections = false;
 
   @override
   void initState() {
@@ -1132,6 +1223,57 @@ class _ScrapeSourcesSettingsBodyState
     }
   }
 
+  Future<void> _testConnections() async {
+    if (_isTestingConnections) {
+      return;
+    }
+
+    setState(() {
+      _isTestingConnections = true;
+      for (final source in _connectionStatuses.keys) {
+        _connectionStatuses[source] = _ScrapeSourceConnectionStatus.testing;
+      }
+    });
+
+    try {
+      for (final source in ScrapeSourceRegistry.aggregatePriority) {
+        if (!mounted) {
+          return;
+        }
+
+        try {
+          await widget.connectionTester(source);
+          if (!mounted) {
+            return;
+          }
+          setState(() {
+            _connectionStatuses[source] =
+                _ScrapeSourceConnectionStatus.connected;
+          });
+        } on JavBusVerificationCancelledException {
+          if (!mounted) {
+            return;
+          }
+          setState(() {
+            _connectionStatuses[source] =
+                _ScrapeSourceConnectionStatus.verificationRequired;
+          });
+        } on Object {
+          if (!mounted) {
+            return;
+          }
+          setState(() {
+            _connectionStatuses[source] = _ScrapeSourceConnectionStatus.failed;
+          });
+        }
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isTestingConnections = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<ScrapeSourceSettings>(
@@ -1153,6 +1295,8 @@ class _ScrapeSourcesSettingsBodyState
           key: const PageStorageKey('scrape-source-settings-scroll'),
           padding: EdgeInsets.zero,
           children: [
+            _connectionStatusSelector(context),
+            const SizedBox(height: 12),
             _sourceSelector<ScrapeSourceId>(
               key: const PageStorageKey('scrape-actress-source'),
               title: localizations.scrapeSourceDetailsTitle,
@@ -1185,6 +1329,105 @@ class _ScrapeSourcesSettingsBodyState
     );
   }
 
+  Widget _connectionStatusSelector(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 0,
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        key: const PageStorageKey('scrape-source-connection-status'),
+        title: Text(localizations.scrapeSourceConnectionTitle),
+        subtitle: Text(localizations.scrapeSourceConnectionSubtitle),
+        backgroundColor: colorScheme.surfaceContainer,
+        collapsedBackgroundColor: colorScheme.surfaceContainer,
+        shape: const Border(),
+        collapsedShape: const Border(),
+        clipBehavior: Clip.antiAlias,
+        children: [
+          for (final source in ScrapeSourceRegistry.aggregatePriority)
+            _connectionStatusTile(context, source),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+            child: SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                key: const ValueKey('scrape-source-retest-button'),
+                onPressed: _isTestingConnections ? null : _testConnections,
+                icon: _isTestingConnections
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.refresh),
+                label: Text(
+                  _isTestingConnections
+                      ? localizations.scrapeSourceTesting
+                      : localizations.scrapeSourceRetest,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _connectionStatusTile(BuildContext context, ScrapeSourceId source) {
+    final localizations = AppLocalizations.of(context);
+    final status =
+        _connectionStatuses[source] ?? _ScrapeSourceConnectionStatus.notTested;
+    final (label, icon, color) = switch (status) {
+      _ScrapeSourceConnectionStatus.notTested => (
+        localizations.scrapeSourceNotTested,
+        Icons.help_outline,
+        Theme.of(context).colorScheme.onSurfaceVariant,
+      ),
+      _ScrapeSourceConnectionStatus.testing => (
+        localizations.scrapeSourceTesting,
+        Icons.sync,
+        Theme.of(context).colorScheme.primary,
+      ),
+      _ScrapeSourceConnectionStatus.connected => (
+        localizations.scrapeSourceConnected,
+        Icons.check_circle_outline,
+        Theme.of(context).colorScheme.tertiary,
+      ),
+      _ScrapeSourceConnectionStatus.failed => (
+        localizations.scrapeSourceConnectionFailed,
+        Icons.error_outline,
+        Theme.of(context).colorScheme.error,
+      ),
+      _ScrapeSourceConnectionStatus.verificationRequired => (
+        localizations.scrapeSourceVerificationRequired,
+        Icons.verified_user_outlined,
+        Theme.of(context).colorScheme.primary,
+      ),
+    };
+
+    return ListTile(
+      key: ValueKey('scrape-source-status-${source.name}'),
+      title: Text(_sourceLabel(localizations, source)),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 20, color: color),
+          const SizedBox(width: 6),
+          Text(label, style: TextStyle(color: color)),
+        ],
+      ),
+    );
+  }
+
+  String _sourceLabel(AppLocalizations localizations, ScrapeSourceId source) {
+    return switch (source) {
+      ScrapeSourceId.minnanoAv => localizations.scrapeSourceMinnanoAv,
+      ScrapeSourceId.javbus => localizations.scrapeSourceJavBus,
+    };
+  }
+
   Widget _sourceSelector<T>({
     required Key key,
     required String title,
@@ -1192,12 +1435,19 @@ class _ScrapeSourcesSettingsBodyState
     required List<(T, String)> options,
     required ValueChanged<T?> onChanged,
   }) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Card(
       margin: EdgeInsets.zero,
       elevation: 0,
       clipBehavior: Clip.antiAlias,
       child: ExpansionTile(
         key: key,
+        backgroundColor: colorScheme.surfaceContainer,
+        collapsedBackgroundColor: colorScheme.surfaceContainer,
+        shape: const Border(),
+        collapsedShape: const Border(),
+        clipBehavior: Clip.antiAlias,
         title: Text(title),
         children: [
           RadioGroup<T>(

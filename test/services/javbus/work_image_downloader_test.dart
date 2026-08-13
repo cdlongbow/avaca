@@ -36,6 +36,18 @@ void main() {
       );
     });
 
+    test('uses one image identity for leading-one START aliases', () {
+      final alias = policy.urlsFor(code: '1start00408');
+      final canonical = policy.urlsFor(code: 'START-408');
+
+      expect(alias.card, canonical.card);
+      expect(alias.detail, canonical.detail);
+      expect(
+        policy.fileNameFor(code: '1start00408', variant: WorkImageVariant.card),
+        'start00408ps.jpg',
+      );
+    });
+
     test('builds the h_346 DMM URLs for REBD codes', () {
       final cases = {
         'REBD-975': 'h_346rebd00975',

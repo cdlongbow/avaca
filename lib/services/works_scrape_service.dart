@@ -206,29 +206,42 @@ class WorksScrapeService {
       if (!requestedWorkIds.contains(settings.actressDetailsSource))
         settings.actressDetailsSource,
     ];
+    // Start every selected source before awaiting any source result.  The
+    // source implementations keep their own request traversal sequential so
+    // mutable cookies/verification state remain isolated per source stream.
+    final collectionTasks = <Future<_SourceCollectionOutcome>>[];
     for (final sourceId in sourceIdsToCollect) {
-      if (_isCancelled(cancellationToken)) {
-        break;
-      }
       final source = sources[sourceId];
-      if (source == null) {
-        sourceResults[sourceId] = ScrapeSourceRunResult(
-          source: sourceId,
-          state: ScrapeSourceRunState.unavailable,
-          error: 'Source is not configured.',
-        );
-        continue;
-      }
-      final collected = await _collectSource(
-        source: source,
-        queries: queries,
-        cancellationToken: cancellationToken,
-        includeWorks: requestedWorkIds.contains(sourceId),
+      collectionTasks.add(
+        source == null
+            ? Future.value(
+                _SourceCollectionOutcome(
+                  result: ScrapeSourceRunResult(
+                    source: sourceId,
+                    state: ScrapeSourceRunState.unavailable,
+                    error: 'Source is not configured.',
+                  ),
+                ),
+              )
+            : _collectSourceSafely(
+                source: source,
+                queries: queries,
+                cancellationToken: cancellationToken,
+                includeWorks: requestedWorkIds.contains(sourceId),
+              ),
       );
-      collectedById[sourceId] = collected;
+    }
+    final collectionOutcomes = await Future.wait(collectionTasks);
+    for (var index = 0; index < sourceIdsToCollect.length; index++) {
+      final sourceId = sourceIdsToCollect[index];
+      final outcome = collectionOutcomes[index];
+      final collected = outcome.collected;
+      if (collected != null) {
+        collectedById[sourceId] = collected;
+      }
       if (requestedWorkIds.contains(sourceId) ||
           sourceId == settings.actressDetailsSource) {
-        sourceResults[sourceId] = collected.result;
+        sourceResults[sourceId] = outcome.result;
       }
     }
 
@@ -271,6 +284,15 @@ class WorksScrapeService {
     if (detailsSource != null &&
         detailsCollection != null &&
         detailsCollection.pages.isNotEmpty) {
+      if (_isCancelled(cancellationToken)) {
+        return WorksScrapeResult(
+          saved: 0,
+          excluded: 0,
+          failed: 0,
+          cancelled: true,
+          sourceResults: Map.unmodifiable(sourceResults),
+        );
+      }
       final details = _mergeActressPages(
         detailsCollection.pages.values.toList(growable: false),
         source: detailsSource,
@@ -280,7 +302,18 @@ class WorksScrapeService {
         details: details,
         source: detailsSource,
         options: options,
+        cancellationToken: cancellationToken,
       );
+      if (_isCancelled(cancellationToken)) {
+        return WorksScrapeResult(
+          saved: 0,
+          excluded: 0,
+          failed: 0,
+          cancelled: true,
+          actressImageStatus: actressImageStatus,
+          sourceResults: Map.unmodifiable(sourceResults),
+        );
+      }
     }
 
     final exclusions = PrefixExclusion(options.excludedPrefixes);
@@ -295,45 +328,66 @@ class WorksScrapeService {
     var current = 0;
     final resolvedGroups = <String, _ResolvedWorkGroup>{};
 
+    final detailQueues = <Future<_DetailQueueResult>>[];
+    for (final sourceId in requestedWorkIds) {
+      final sourceGroups = groups.groups
+          .where(
+            (group) => group.candidates.any(
+              (candidate) => candidate.source.id == sourceId,
+            ),
+          )
+          .toList(growable: false);
+      if (sourceGroups.isEmpty) {
+        continue;
+      }
+      final source = sources[sourceId];
+      if (source == null) {
+        detailQueues.add(
+          Future.value(_DetailQueueResult(failedGroups: sourceGroups.toSet())),
+        );
+        continue;
+      }
+      // One queue per source: queues overlap across sites, while each queue
+      // preserves the source transport's request order.
+      detailQueues.add(
+        _fetchDetailsForSourceSafely(
+          source: source,
+          groups: sourceGroups,
+          cancellationToken: cancellationToken,
+        ),
+      );
+    }
+    final detailResults = await Future.wait(detailQueues);
+    if (_isCancelled(cancellationToken)) {
+      return WorksScrapeResult(
+        saved: 0,
+        excluded: excluded,
+        failed: failed,
+        cancelled: true,
+        actressImageStatus: actressImageStatus,
+        partialSuccess: true,
+        sourceResults: Map.unmodifiable(sourceResults),
+      );
+    }
+
+    final fetchedByGroup = <_WorkGroup, List<_FetchedWorkDetail>>{};
+    final failedGroups = <_WorkGroup>{};
+    for (final detailResult in detailResults) {
+      failedGroups.addAll(detailResult.failedGroups);
+      for (final fetched in detailResult.fetched) {
+        fetchedByGroup
+            .putIfAbsent(fetched.group, () => <_FetchedWorkDetail>[])
+            .add(fetched);
+      }
+    }
+
     for (final group in groups.groups) {
       if (_isCancelled(cancellationToken)) {
         break;
       }
       current++;
-      final fetched = <ScrapeWorkDetails>[];
-      var hadSourceFailure = false;
-      for (final candidate in group.candidates) {
-        if (_isCancelled(cancellationToken)) {
-          break;
-        }
-        try {
-          final source = sources[candidate.source.id];
-          if (source == null) {
-            hadSourceFailure = true;
-            continue;
-          }
-          final details = await source.fetchWorkDetails(candidate.summary);
-          final code = canonicalizeWorkCode(details.code);
-          if (code == null ||
-              (group.expectedCode != null && code != group.expectedCode)) {
-            hadSourceFailure = true;
-            continue;
-          }
-          fetched.add(
-            _withCanonicalCode(
-              details,
-              code,
-              fallbackTitle: candidate.summary.title,
-              fallbackReleaseDate: candidate.summary.releaseDate,
-            ),
-          );
-        } catch (_) {
-          hadSourceFailure = true;
-        }
-      }
-      if (_isCancelled(cancellationToken)) {
-        break;
-      }
+      final fetched = fetchedByGroup[group] ?? const <_FetchedWorkDetail>[];
+      final hadSourceFailure = failedGroups.contains(group);
       if (fetched.isEmpty) {
         failed++;
         _notify(
@@ -347,7 +401,12 @@ class WorksScrapeService {
         );
         continue;
       }
-      final code = canonicalizeWorkCode(fetched.first.code);
+      fetched.sort(
+        (left, right) => _sourcePriority(
+          left.sourceId,
+        ).compareTo(_sourcePriority(right.sourceId)),
+      );
+      final code = canonicalizeWorkCode(fetched.first.details.code);
       if (code == null) {
         failed++;
         continue;
@@ -356,11 +415,16 @@ class WorksScrapeService {
       if (existing == null) {
         resolvedGroups[code] = _ResolvedWorkGroup(
           code: code,
-          details: fetched,
+          details: fetched.map((item) => item.details).toList(),
           hadSourceFailure: hadSourceFailure,
         );
       } else {
-        existing.details.addAll(fetched);
+        existing.details.addAll(fetched.map((item) => item.details));
+        existing.details.sort(
+          (left, right) => _sourcePriority(
+            left.source,
+          ).compareTo(_sourcePriority(right.source)),
+        );
         existing.hadSourceFailure =
             existing.hadSourceFailure || hadSourceFailure;
       }
@@ -472,10 +536,16 @@ class WorksScrapeService {
         lastError = error;
         continue;
       }
+      if (_isCancelled(cancellationToken)) {
+        break;
+      }
       final queryKey = query.trim().toLowerCase();
       for (final actress in results.where(
         (result) => result.name.trim().toLowerCase() == queryKey,
       )) {
+        if (_isCancelled(cancellationToken)) {
+          break;
+        }
         matched = true;
         final uriKey = actress.uri.toString();
         if (completedUris.contains(uriKey)) {
@@ -484,6 +554,9 @@ class WorksScrapeService {
         matches[uriKey] = actress;
         try {
           final page = await source.fetchActressPage(actress);
+          if (_isCancelled(cancellationToken)) {
+            break;
+          }
           pages[uriKey] = page;
           if (!includeWorks) {
             traversed = true;
@@ -496,6 +569,9 @@ class WorksScrapeService {
               firstPage: page,
               isCancelled: () => _isCancelled(cancellationToken),
             );
+            if (_isCancelled(cancellationToken)) {
+              break;
+            }
             summaries.addAll(sourceWorks);
             traversed = true;
             completedUris.add(uriKey);
@@ -527,6 +603,97 @@ class WorksScrapeService {
         error: lastError,
       ),
     );
+  }
+
+  Future<_SourceCollectionOutcome> _collectSourceSafely({
+    required ScrapeSource source,
+    required List<String> queries,
+    required WorksScrapeCancellationToken? cancellationToken,
+    required bool includeWorks,
+  }) async {
+    try {
+      final collected = await _collectSource(
+        source: source,
+        queries: queries,
+        cancellationToken: cancellationToken,
+        includeWorks: includeWorks,
+      );
+      return _SourceCollectionOutcome(
+        collected: collected,
+        result: collected.result,
+      );
+    } catch (error) {
+      return _SourceCollectionOutcome(
+        result: ScrapeSourceRunResult(
+          source: source.id,
+          state: _isCancelled(cancellationToken)
+              ? ScrapeSourceRunState.cancelled
+              : ScrapeSourceRunState.failed,
+          error: error,
+        ),
+      );
+    }
+  }
+
+  Future<_DetailQueueResult> _fetchDetailsForSourceSafely({
+    required ScrapeSource source,
+    required List<_WorkGroup> groups,
+    required WorksScrapeCancellationToken? cancellationToken,
+  }) async {
+    try {
+      return await _fetchDetailsForSource(
+        source: source,
+        groups: groups,
+        cancellationToken: cancellationToken,
+      );
+    } catch (_) {
+      return _DetailQueueResult(failedGroups: groups.toSet());
+    }
+  }
+
+  Future<_DetailQueueResult> _fetchDetailsForSource({
+    required ScrapeSource source,
+    required List<_WorkGroup> groups,
+    required WorksScrapeCancellationToken? cancellationToken,
+  }) async {
+    final fetched = <_FetchedWorkDetail>[];
+    final failedGroups = <_WorkGroup>{};
+    for (final group in groups) {
+      if (_isCancelled(cancellationToken)) {
+        break;
+      }
+      final candidates = group.candidates.where(
+        (candidate) => candidate.source.id == source.id,
+      );
+      if (candidates.isEmpty) {
+        continue;
+      }
+      final candidate = candidates.first;
+      try {
+        final details = await source.fetchWorkDetails(candidate.summary);
+        final code = canonicalizeWorkCode(details.code);
+        if (code == null ||
+            (group.expectedCode != null && code != group.expectedCode)) {
+          failedGroups.add(group);
+          continue;
+        }
+        fetched.add(
+          _FetchedWorkDetail(
+            group: group,
+            sourceId: source.id,
+            details: _withCanonicalCode(
+              details,
+              code,
+              fallbackTitle: candidate.summary.title,
+              fallbackReleaseDate: candidate.summary.releaseDate,
+            ),
+          ),
+        );
+      } catch (_) {
+        failedGroups.add(group);
+      }
+    }
+    return _DetailQueueResult(fetched: fetched, failedGroups: failedGroups);
   }
 
   _WorkGroups _buildWorkGroups(
@@ -614,6 +781,7 @@ class WorksScrapeService {
     required ScrapedActressDetails details,
     required ScrapeSource source,
     required WorkScrapeOptions options,
+    required WorksScrapeCancellationToken? cancellationToken,
   }) async {
     return db.runManagedImageLifecycle(
       () => _syncActressUnlocked(
@@ -621,6 +789,7 @@ class WorksScrapeService {
         details: details,
         source: source,
         options: options,
+        cancellationToken: cancellationToken,
       ),
     );
   }
@@ -630,6 +799,7 @@ class WorksScrapeService {
     required ScrapedActressDetails details,
     required ScrapeSource source,
     required WorkScrapeOptions options,
+    required WorksScrapeCancellationToken? cancellationToken,
   }) async {
     String? imagePath;
     String? previousImagePath;
@@ -641,9 +811,15 @@ class WorksScrapeService {
         avatar != null &&
         source.acceptsImageUri(avatar)) {
       try {
+        if (_isCancelled(cancellationToken)) {
+          return imageStatus;
+        }
         previousImagePath = (await db.getActressById(
           actressId,
         ))?['img_path']?.toString();
+        if (_isCancelled(cancellationToken)) {
+          return imageStatus;
+        }
         final version = DateTime.now().microsecondsSinceEpoch;
         imagePath = await actressImageDownloader.download(
           avatar,
@@ -658,6 +834,13 @@ class WorksScrapeService {
         imagePath = null;
         imageStatus = ActressImageSyncStatus.downloadFailed;
       }
+    }
+
+    if (_isCancelled(cancellationToken)) {
+      if (imagePath != null) {
+        await _deleteManagedActressImage(imagePath);
+      }
+      return imageStatus;
     }
 
     if (!options.syncDetails && imagePath == null) {
@@ -676,6 +859,12 @@ class WorksScrapeService {
       waist: options.syncDetails ? details.waist : null,
       hip: options.syncDetails ? details.hip : null,
     );
+    if (_isCancelled(cancellationToken)) {
+      if (imagePath != null) {
+        await _deleteManagedActressImage(imagePath);
+      }
+      return imageStatus;
+    }
     final updated = await db.syncActressDetails(
       actressId: actressId,
       details: syncDetails,
@@ -692,6 +881,20 @@ class WorksScrapeService {
       await _deletePreviousManagedAvatar(previousImagePath, imagePath);
     }
     return imageStatus;
+  }
+
+  Future<void> _deleteManagedActressImage(String imagePath) async {
+    final managedDirectory = path.normalize(
+      path.absolute(path.join(imageDirectory, 'actresses')),
+    );
+    final image = path.normalize(path.absolute(imagePath));
+    if (!path.isWithin(managedDirectory, image)) {
+      return;
+    }
+    final file = File(image);
+    if (file.existsSync()) {
+      await file.delete();
+    }
   }
 
   Future<void> _deletePreviousManagedAvatar(
@@ -740,6 +943,24 @@ class WorksScrapeService {
     if (_isCancelled(cancellationToken)) {
       throw const _ScrapeCancelled();
     }
+    final canonicalCode = canonicalizeWorkCode(details.code);
+    if (canonicalCode == null) {
+      throw ArgumentError('Work code must not be empty.');
+    }
+    final existingWorks = await db.getWorksForActress(actressId);
+    final aliasCodes = existingWorks
+        .map((row) => row['code']?.toString())
+        .whereType<String>()
+        .where(
+          (code) =>
+              canonicalizeWorkCode(code) == canonicalCode &&
+              code.trim().toUpperCase() != canonicalCode,
+        )
+        .toSet();
+    await db.mergeWorkCodeAliases(
+      canonicalCode: canonicalCode,
+      aliasCodes: aliasCodes,
+    );
     var work = details.toWork();
     final workId = await db.upsertActressWork(
       actressId: actressId,
@@ -783,6 +1004,9 @@ class WorksScrapeService {
       currentPath: currentDetail,
       missingOnly: missingOnly,
     );
+    if (_isCancelled(cancellationToken)) {
+      throw const _ScrapeCancelled();
+    }
     work = details.toWork(cardImagePath: cardPath, detailImagePath: detailPath);
     await db.upsertActressWork(
       actressId: actressId,
@@ -803,21 +1027,10 @@ class WorksScrapeService {
         File(currentPath).existsSync()) {
       return currentPath;
     }
-    final uriDownloader = imageUriDownloader;
-    if (uriDownloader != null) {
-      for (final uri in details.imageUris) {
-        final source = sources[details.source];
-        if (source == null || !source.acceptsImageUri(uri)) {
-          continue;
-        }
-        try {
-          return await uriDownloader.download(uri: uri, targetPath: targetPath);
-        } catch (_) {
-          // Continue to the next source image and then use the legacy image
-          // policy as a compatibility fallback.
-        }
-      }
-    }
+    // Work images must come only from the explicit WorkImagePolicy hosts
+    // (DMM/MGStage).  Source pages such as JavBus and Minnano AV are metadata
+    // and avatar sources only; never use their jacket/gallery URI as a work
+    // image or as a fallback here.
     try {
       await workImageDownloader.downloadToFile(
         code: details.code,
@@ -914,6 +1127,11 @@ class WorksScrapeService {
     );
   }
 
+  int _sourcePriority(ScrapeSourceId sourceId) {
+    final index = ScrapeSourceRegistry.aggregatePriority.indexOf(sourceId);
+    return index < 0 ? ScrapeSourceRegistry.aggregatePriority.length : index;
+  }
+
   bool _isCancelled(WorksScrapeCancellationToken? token) =>
       token?.isCancelled ?? false;
 
@@ -953,11 +1171,40 @@ final class _CollectedSource {
   final ScrapeSourceRunResult result;
 }
 
+final class _SourceCollectionOutcome {
+  const _SourceCollectionOutcome({this.collected, required this.result});
+
+  final _CollectedSource? collected;
+  final ScrapeSourceRunResult result;
+}
+
 final class _WorkCandidate {
   const _WorkCandidate({required this.source, required this.summary});
 
   final ScrapeSource source;
   final ScrapeWorkSummary summary;
+}
+
+final class _FetchedWorkDetail {
+  const _FetchedWorkDetail({
+    required this.group,
+    required this.sourceId,
+    required this.details,
+  });
+
+  final _WorkGroup group;
+  final ScrapeSourceId sourceId;
+  final ScrapeWorkDetails details;
+}
+
+final class _DetailQueueResult {
+  const _DetailQueueResult({
+    this.fetched = const [],
+    this.failedGroups = const {},
+  });
+
+  final List<_FetchedWorkDetail> fetched;
+  final Set<_WorkGroup> failedGroups;
 }
 
 final class _WorkGroup {

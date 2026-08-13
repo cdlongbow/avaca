@@ -1,4 +1,5 @@
 import 'work_code.dart';
+import '../scrape/work_code_canonicalizer.dart';
 
 enum WorkImageSource { dmm, mgstage }
 
@@ -107,7 +108,7 @@ class WorkImagePolicy {
     final match = RegExp(
       r'^([a-z0-9_]+)-?(\d+)$',
       caseSensitive: false,
-    ).firstMatch(canonicalizeJavBusWorkCode(code));
+    ).firstMatch(canonicalizeWorkCode(canonicalizeJavBusWorkCode(code)) ?? '');
     if (match == null) {
       throw FormatException('Unsupported work code: $code');
     }

@@ -2,6 +2,7 @@ import 'package:avaca/core/config.dart';
 import 'package:avaca/core/database.dart';
 import 'package:avaca/l10n/app_localizations.dart';
 import 'package:avaca/models/scrape_source_settings.dart';
+import 'package:avaca/services/javbus/javbus_verification.dart';
 import 'package:avaca/views/settings_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
@@ -29,8 +30,8 @@ void main() {
     expect(find.byIcon(Icons.palette_outlined), findsOneWidget);
     expect(find.byIcon(Icons.language), findsOneWidget);
     expect(find.byIcon(Icons.chevron_right), findsNothing);
-    _expectOutlinedCategoryCard(tester, 'Theme & Colors');
-    _expectOutlinedCategoryCard(tester, 'Interface');
+    _expectBorderlessCategoryCard(tester, 'Theme & Colors');
+    _expectBorderlessCategoryCard(tester, 'Interface');
     expect(find.text('Theme Mode'), findsNothing);
     expect(find.text('Language'), findsNothing);
     expect(find.text('Pure Black AMOLED'), findsNothing);
@@ -84,6 +85,18 @@ void main() {
 
     expect(find.text('Actress details source'), findsOneWidget);
     expect(find.text('Works source'), findsOneWidget);
+    _expectBorderlessExpansionTile(
+      tester,
+      'Actress details source',
+      expectedShape: const Border(),
+      expectAnimationStyle: false,
+    );
+    _expectBorderlessExpansionTile(
+      tester,
+      'Works source',
+      expectedShape: const Border(),
+      expectAnimationStyle: false,
+    );
 
     await tester.tap(find.byKey(const PageStorageKey('scrape-actress-source')));
     await tester.pumpAndSettle();
@@ -139,6 +152,54 @@ void main() {
     expect(reopenedSettings.worksSource, WorksSourceSelection.all);
   });
 
+  testWidgets('scrape source connections can be retested and verified', (
+    tester,
+  ) async {
+    final testedSources = <ScrapeSourceId>[];
+
+    await _pumpSettings(
+      tester,
+      scrapeSourceConnectionTester: (source) async {
+        testedSources.add(source);
+        if (source == ScrapeSourceId.javbus) {
+          throw const JavBusVerificationCancelledException();
+        }
+      },
+    );
+
+    await tester.tap(find.text('Other'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Scrape sources'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const PageStorageKey('scrape-source-connection-status')),
+    );
+    await tester.pumpAndSettle();
+    _expectBorderlessExpansionTile(
+      tester,
+      'Scrape source connections',
+      expectedShape: const Border(),
+      expectAnimationStyle: false,
+    );
+
+    expect(
+      find.byKey(const ValueKey('scrape-source-status-minnanoAv')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('scrape-source-status-javbus')),
+      findsOneWidget,
+    );
+    expect(find.text('Not tested'), findsNWidgets(2));
+
+    await tester.tap(find.byKey(const ValueKey('scrape-source-retest-button')));
+    await tester.pumpAndSettle();
+
+    expect(testedSources, [ScrapeSourceId.minnanoAv, ScrapeSourceId.javbus]);
+    expect(find.text('Connected'), findsOneWidget);
+    expect(find.text('Verification required'), findsOneWidget);
+  });
+
   testWidgets('all visible settings text uses the bundled variable font', (
     tester,
   ) async {
@@ -175,7 +236,7 @@ void main() {
       expect(find.widgetWithText(AppBar, 'Theme & Colors'), findsOneWidget);
       expect(find.byIcon(Icons.arrow_back), findsOneWidget);
       expect(find.text('Theme Mode'), findsOneWidget);
-      _expectStyledExpansionTile(tester, 'Theme Mode');
+      _expectBorderlessExpansionTile(tester, 'Theme Mode');
       expect(find.text('Follow System'), findsNothing);
       expect(find.text('Dark'), findsNothing);
       expect(find.text('Pure Black AMOLED'), findsNothing);
@@ -363,7 +424,7 @@ void main() {
 
     expect(find.widgetWithText(AppBar, 'Interface'), findsOneWidget);
     expect(find.text('Language'), findsOneWidget);
-    _expectStyledExpansionTile(tester, 'Language');
+    _expectBorderlessExpansionTile(tester, 'Language');
     expect(find.text('Follow System'), findsNothing);
     expect(find.text('Traditional Chinese (Taiwan)'), findsNothing);
     expect(find.text('Simplified Chinese'), findsNothing);
@@ -645,7 +706,7 @@ void main() {
   });
 }
 
-void _expectOutlinedCategoryCard(WidgetTester tester, String label) {
+void _expectBorderlessCategoryCard(WidgetTester tester, String label) {
   final cardFinder = find.ancestor(
     of: find.text(label),
     matching: find.byType(Card),
@@ -660,14 +721,15 @@ void _expectOutlinedCategoryCard(WidgetTester tester, String label) {
 
   final roundedShape = shape! as RoundedRectangleBorder;
   expect(roundedShape.borderRadius, BorderRadius.circular(12));
-  expect(roundedShape.side.width, 1);
-  expect(
-    roundedShape.side.color,
-    Theme.of(tester.element(cardFinder)).colorScheme.outline,
-  );
+  expect(roundedShape.side, BorderSide.none);
 }
 
-void _expectStyledExpansionTile(WidgetTester tester, String label) {
+void _expectBorderlessExpansionTile(
+  WidgetTester tester,
+  String label, {
+  ShapeBorder? expectedShape,
+  bool expectAnimationStyle = true,
+}) {
   final tileFinder = find.widgetWithText(ExpansionTile, label);
 
   expect(tileFinder, findsOneWidget);
@@ -677,14 +739,26 @@ void _expectStyledExpansionTile(WidgetTester tester, String label) {
   expect(tile.trailing, isNull);
   expect(tile.showTrailingIcon, isTrue);
   expect(tile.clipBehavior, Clip.antiAlias);
-  _expectOutlinedShape(tester, tileFinder, tile.shape);
-  _expectOutlinedShape(tester, tileFinder, tile.collapsedShape);
+  if (expectedShape != null) {
+    expect(tile.shape, expectedShape);
+    expect(tile.collapsedShape, expectedShape);
+  } else {
+    expect(tile.shape, isA<RoundedRectangleBorder>());
+    expect(tile.collapsedShape, isA<RoundedRectangleBorder>());
+    expect((tile.shape! as RoundedRectangleBorder).side, BorderSide.none);
+    expect(
+      (tile.collapsedShape! as RoundedRectangleBorder).side,
+      BorderSide.none,
+    );
+  }
 
-  final animationStyle = tile.expansionAnimationStyle;
-  expect(animationStyle, isNotNull);
-  expect(animationStyle!.duration, const Duration(milliseconds: 180));
-  expect(animationStyle.curve, Curves.easeOutCubic);
-  expect(animationStyle.reverseCurve, Curves.easeInCubic);
+  if (expectAnimationStyle) {
+    final animationStyle = tile.expansionAnimationStyle;
+    expect(animationStyle, isNotNull);
+    expect(animationStyle!.duration, const Duration(milliseconds: 180));
+    expect(animationStyle.curve, Curves.easeOutCubic);
+    expect(animationStyle.reverseCurve, Curves.easeInCubic);
+  }
 }
 
 void _expectSecondaryExpansionTile(WidgetTester tester, Finder tileFinder) {
@@ -755,31 +829,17 @@ void _expectLocalFeedbackDot(
   expect((decoration as BoxDecoration).shape, BoxShape.circle);
 }
 
-void _expectOutlinedShape(
-  WidgetTester tester,
-  Finder tileFinder,
-  ShapeBorder? shape,
-) {
-  expect(shape, isA<RoundedRectangleBorder>());
-
-  final roundedShape = shape! as RoundedRectangleBorder;
-  expect(roundedShape.borderRadius, BorderRadius.circular(12));
-  expect(roundedShape.side.width, 1);
-  expect(
-    roundedShape.side.color,
-    Theme.of(tester.element(tileFinder)).colorScheme.outline,
-  );
-}
-
 Future<void> _pumpSettings(
   WidgetTester tester, {
   TextScaler textScaler = TextScaler.noScaling,
   ExternalUrlLauncher? externalUrlLauncher,
+  ScrapeSourceConnectionTester? scrapeSourceConnectionTester,
 }) async {
   await tester.pumpWidget(
     _SettingsHarness(
       textScaler: textScaler,
       externalUrlLauncher: externalUrlLauncher,
+      scrapeSourceConnectionTester: scrapeSourceConnectionTester,
     ),
   );
   await tester.pumpAndSettle();
@@ -789,10 +849,12 @@ class _SettingsHarness extends StatefulWidget {
   const _SettingsHarness({
     this.textScaler = TextScaler.noScaling,
     this.externalUrlLauncher,
+    this.scrapeSourceConnectionTester,
   });
 
   final TextScaler textScaler;
   final ExternalUrlLauncher? externalUrlLauncher;
+  final ScrapeSourceConnectionTester? scrapeSourceConnectionTester;
 
   @override
   State<_SettingsHarness> createState() => _SettingsHarnessState();
@@ -827,6 +889,7 @@ class _SettingsHarnessState extends State<_SettingsHarness> {
           setState(() => _locale = locale);
         },
         externalUrlLauncher: widget.externalUrlLauncher ?? (_) async => true,
+        scrapeSourceConnectionTester: widget.scrapeSourceConnectionTester,
       ),
     );
   }

@@ -562,6 +562,31 @@ class AppLocalizationsEn extends AppLocalizations {
   String get scrapeSourceSaveFailed => 'Could not save scrape source settings.';
 
   @override
+  String get scrapeSourceConnectionTitle => 'Scrape source connections';
+
+  @override
+  String get scrapeSourceConnectionSubtitle =>
+      'View the added scrape websites, test their connections, and complete verification here.';
+
+  @override
+  String get scrapeSourceRetest => 'Retest connections';
+
+  @override
+  String get scrapeSourceTesting => 'Testing…';
+
+  @override
+  String get scrapeSourceNotTested => 'Not tested';
+
+  @override
+  String get scrapeSourceConnected => 'Connected';
+
+  @override
+  String get scrapeSourceConnectionFailed => 'Connection failed';
+
+  @override
+  String get scrapeSourceVerificationRequired => 'Verification required';
+
+  @override
   String get scrapePartial => 'Some sources or records could not be processed.';
 
   @override

@@ -829,6 +829,119 @@ class AppDatabase {
     });
   }
 
+  /// Merge legacy work rows that are known aliases of [canonicalCode].
+  ///
+  /// The canonical row is retained (or the first alias is renamed when it is
+  /// the only available row).  All actress relations are moved to that row;
+  /// legacy image paths are queued for managed cleanup instead of being
+  /// copied into the canonical work.
+  Future<int> mergeWorkCodeAliases({
+    required String canonicalCode,
+    required Iterable<String> aliasCodes,
+  }) async {
+    final canonical = canonicalCode.trim().toUpperCase();
+    if (canonical.isEmpty) {
+      throw ArgumentError('Canonical work code must not be empty.');
+    }
+    final aliases = <String>{};
+    for (final alias in aliasCodes) {
+      final value = alias.trim();
+      if (value.isEmpty || value.toUpperCase() == canonical) {
+        continue;
+      }
+      aliases.add(value.toUpperCase());
+    }
+    if (aliases.isEmpty) {
+      return 0;
+    }
+
+    return runManagedImageLifecycle(() async {
+      final db = await database;
+      final merged = await db.transaction<int>((transaction) async {
+        final canonicalRows = await transaction.query(
+          'works',
+          columns: ['id'],
+          where: 'code = ? COLLATE NOCASE',
+          whereArgs: [canonical],
+          limit: 1,
+        );
+        var canonicalId = canonicalRows.isEmpty
+            ? null
+            : canonicalRows.single['id'] as int;
+        var count = 0;
+
+        for (final alias in aliases) {
+          final aliasRows = await transaction.query(
+            'works',
+            columns: ['id', 'card_image_path', 'detail_image_path'],
+            where: 'code = ? COLLATE NOCASE',
+            whereArgs: [alias],
+            limit: 1,
+          );
+          if (aliasRows.isEmpty) {
+            continue;
+          }
+          final aliasRow = aliasRows.single;
+          final aliasId = aliasRow['id'] as int;
+          if (canonicalId == aliasId) {
+            continue;
+          }
+
+          final oldImagePaths = [
+            aliasRow['card_image_path']?.toString(),
+            aliasRow['detail_image_path']?.toString(),
+          ].where((value) => value != null && value.trim().isNotEmpty);
+          for (final oldImagePath in oldImagePaths) {
+            await transaction.insert(
+              'pending_file_deletions',
+              {'path': oldImagePath},
+              conflictAlgorithm: ConflictAlgorithm.ignore,
+            );
+          }
+
+          if (canonicalId == null) {
+            await transaction.rawUpdate(
+              '''
+              UPDATE works
+              SET code = ?, card_image_path = NULL, detail_image_path = NULL,
+                  modified_at = CURRENT_TIMESTAMP
+              WHERE id = ?
+              ''',
+              [canonical, aliasId],
+            );
+            canonicalId = aliasId;
+            count++;
+            continue;
+          }
+
+          await transaction.rawInsert(
+            '''
+            INSERT OR IGNORE INTO actress_works (actress_id, work_id)
+            SELECT actress_id, ? FROM actress_works WHERE work_id = ?
+            ''',
+            [canonicalId, aliasId],
+          );
+          await transaction.delete(
+            'actress_works',
+            where: 'work_id = ?',
+            whereArgs: [aliasId],
+          );
+          await transaction.delete(
+            'works',
+            where: 'id = ?',
+            whereArgs: [aliasId],
+          );
+          count++;
+        }
+        return count;
+      });
+      if (merged > 0) {
+        await _flushPendingFileDeletions(db);
+      }
+      return merged;
+    });
+  }
+
   Future<int> _upsertWork(
     DatabaseExecutor executor,
     Work work, {

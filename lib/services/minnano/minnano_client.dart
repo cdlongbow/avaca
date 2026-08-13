@@ -22,6 +22,10 @@ final class MinnanoClient {
   final Uri _baseUri;
   final int maxPages;
 
+  Future<void> checkConnection() async {
+    await _transport.get(_baseUri);
+  }
+
   Future<List<ScrapeSearchResult>> searchActresses(String name) async {
     final trimmed = name.trim();
     if (trimmed.isEmpty) {
@@ -93,8 +97,7 @@ final class MinnanoClient {
         uri.userInfo.isEmpty &&
         uri.host.toLowerCase() == _baseUri.host.toLowerCase() &&
         port == 443 &&
-        (path.startsWith('/p_actress_125_125/') ||
-            path.startsWith('/p_package/'));
+        path.startsWith('/p_actress_125_125/');
   }
 
   void close() {

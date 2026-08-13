@@ -546,6 +546,30 @@ class AppLocalizationsJa extends AppLocalizations {
   String get scrapeSourceSaveFailed => '取得元の設定を保存できませんでした。';
 
   @override
+  String get scrapeSourceConnectionTitle => '取得元の接続状態';
+
+  @override
+  String get scrapeSourceConnectionSubtitle => '追加済みの取得元を確認し、ここで接続テストと確認を行います。';
+
+  @override
+  String get scrapeSourceRetest => '接続を再テスト';
+
+  @override
+  String get scrapeSourceTesting => 'テスト中…';
+
+  @override
+  String get scrapeSourceNotTested => '未テスト';
+
+  @override
+  String get scrapeSourceConnected => '接続成功';
+
+  @override
+  String get scrapeSourceConnectionFailed => '接続失敗';
+
+  @override
+  String get scrapeSourceVerificationRequired => '確認が必要';
+
+  @override
   String get scrapePartial => '一部の取得元または作品を処理できませんでした。';
 
   @override
@@ -1163,6 +1187,30 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
 
   @override
   String get scrapeSourceSaveFailed => '取得元の設定を保存できませんでした。';
+
+  @override
+  String get scrapeSourceConnectionTitle => '取得元の接続状態';
+
+  @override
+  String get scrapeSourceConnectionSubtitle => '追加済みの取得元を確認し、ここで接続テストと確認を行います。';
+
+  @override
+  String get scrapeSourceRetest => '接続を再テスト';
+
+  @override
+  String get scrapeSourceTesting => 'テスト中…';
+
+  @override
+  String get scrapeSourceNotTested => '未テスト';
+
+  @override
+  String get scrapeSourceConnected => '接続成功';
+
+  @override
+  String get scrapeSourceConnectionFailed => '接続失敗';
+
+  @override
+  String get scrapeSourceVerificationRequired => '確認が必要';
 
   @override
   String get scrapePartial => '一部の取得元または作品を処理できませんでした。';

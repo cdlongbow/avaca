@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.8.3 - 2026-08-13
+
+- Parallelized all-source work scraping so Minnano AV and JavBus search in
+  parallel, then merge results by canonical work code.
+- Normalized equivalent work-code spellings such as `1start00408` and
+  `start-408` to the same work while preserving deterministic Minnano AV ->
+  JavBus field priority.
+- Improved scrape cancellation, source failure reporting, image handling, and
+  completion/result dialogs with explicit confirmation before dismissal.
+- Added coverage for cross-source deduplication, cancellation cleanup, image
+  source policy, verification dialogs, and responsive UI behavior.
+
 ## 0.8.2 - 2026-08-13
 
 - Added Minnano AV (`https://www.minnano-av.com/`) as a scraping source for

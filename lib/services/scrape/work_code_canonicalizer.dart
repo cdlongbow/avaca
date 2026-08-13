@@ -21,7 +21,21 @@ String? canonicalizeWorkCode(String? raw) {
   normalized = normalized.replaceAll(RegExp(r'\s+'), '');
   normalized = normalized.replaceAll(RegExp(r'-+'), '-');
   normalized = normalized.replaceAll(RegExp(r'^-+|-+$'), '');
-  return normalized.isEmpty ? null : normalized;
+  if (normalized.isEmpty) {
+    return null;
+  }
+
+  // DMM-style START codes are sometimes exposed with a leading `1` and
+  // zero-padded digits (for example, 1START00408).  That is an alias for
+  // START-408, not a different work.  Keep this deliberately narrow: do not
+  // split comma-separated codes or apply the rule to unrelated prefixes.
+  final startMatch = RegExp(r'^1?START-?0*(\d+)$').firstMatch(normalized);
+  if (startMatch != null) {
+    final number = startMatch.group(1)!.replaceFirst(RegExp(r'^0+'), '');
+    return 'START-${number.isEmpty ? '0' : number}';
+  }
+
+  return normalized;
 }
 
 int _fullWidthToAscii(int rune) {

@@ -544,6 +544,30 @@ class AppLocalizationsZh extends AppLocalizations {
   String get scrapeSourceSaveFailed => '無法儲存刮削來源設定。';
 
   @override
+  String get scrapeSourceConnectionTitle => '網站連線狀態';
+
+  @override
+  String get scrapeSourceConnectionSubtitle => '查看已加入的刮削網站，並在這裡測試連線與完成驗證。';
+
+  @override
+  String get scrapeSourceRetest => '重新測試連線';
+
+  @override
+  String get scrapeSourceTesting => '測試中…';
+
+  @override
+  String get scrapeSourceNotTested => '尚未測試';
+
+  @override
+  String get scrapeSourceConnected => '連線成功';
+
+  @override
+  String get scrapeSourceConnectionFailed => '連線失敗';
+
+  @override
+  String get scrapeSourceVerificationRequired => '需要驗證';
+
+  @override
   String get scrapePartial => '部分來源或作品無法處理。';
 
   @override
@@ -1159,6 +1183,30 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get scrapeSourceSaveFailed => '无法保存刮削来源设置。';
 
   @override
+  String get scrapeSourceConnectionTitle => '网站连接状态';
+
+  @override
+  String get scrapeSourceConnectionSubtitle => '查看已加入的刮削网站，并在这里测试连接与完成验证。';
+
+  @override
+  String get scrapeSourceRetest => '重新测试连接';
+
+  @override
+  String get scrapeSourceTesting => '测试中…';
+
+  @override
+  String get scrapeSourceNotTested => '尚未测试';
+
+  @override
+  String get scrapeSourceConnected => '连接成功';
+
+  @override
+  String get scrapeSourceConnectionFailed => '连接失败';
+
+  @override
+  String get scrapeSourceVerificationRequired => '需要验证';
+
+  @override
   String get scrapePartial => '部分来源或作品无法处理。';
 
   @override
@@ -1772,6 +1820,30 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get scrapeSourceSaveFailed => '無法儲存刮削來源設定。';
+
+  @override
+  String get scrapeSourceConnectionTitle => '網站連線狀態';
+
+  @override
+  String get scrapeSourceConnectionSubtitle => '查看已加入的刮削網站，並在這裡測試連線與完成驗證。';
+
+  @override
+  String get scrapeSourceRetest => '重新測試連線';
+
+  @override
+  String get scrapeSourceTesting => '測試中…';
+
+  @override
+  String get scrapeSourceNotTested => '尚未測試';
+
+  @override
+  String get scrapeSourceConnected => '連線成功';
+
+  @override
+  String get scrapeSourceConnectionFailed => '連線失敗';
+
+  @override
+  String get scrapeSourceVerificationRequired => '需要驗證';
 
   @override
   String get scrapePartial => '部分來源或作品無法處理。';

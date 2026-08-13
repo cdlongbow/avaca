@@ -311,6 +311,13 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+
+      await expectLater(
+        find.byKey(const Key('scrape-result-dialog')),
+        matchesGoldenFile('goldens/compact/works-scrape-result.png'),
+      );
+      await tester.tap(find.byKey(const Key('scrape-result-done')));
+      await tester.pumpAndSettle();
     });
   });
 }

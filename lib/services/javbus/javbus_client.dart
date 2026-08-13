@@ -159,6 +159,10 @@ class JavBusClient {
   final Uri _baseUri;
   final int maxPages;
 
+  Future<void> checkConnection() async {
+    await _transport.get(_baseUri);
+  }
+
   Future<List<JavBusActressSearchResult>> searchActresses(String name) async {
     final uri = _baseUri.replace(
       pathSegments: [

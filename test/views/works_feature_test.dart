@@ -750,6 +750,14 @@ void main() {
 
     expect(find.text('刮削完成：儲存 1、排除 0、失敗 0'), findsOneWidget);
 
+    expect(find.byKey(const Key('scrape-result-dialog')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('scrape-result-done')));
+
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('scrape-result-dialog')), findsNothing);
+
     expect(tester.takeException(), isNull);
   });
 
@@ -838,6 +846,10 @@ void main() {
 
     expect(find.textContaining('女優頭像替換失敗，已保留原頭像'), findsOneWidget);
 
+    await tester.tap(find.byKey(const Key('scrape-result-done')));
+
+    await tester.pumpAndSettle();
+
     expect(tester.takeException(), isNull);
   });
 
@@ -908,6 +920,56 @@ void main() {
 
     expect(find.byType(WorksView), findsOneWidget);
 
+    expect(find.byKey(const Key('scrape-result-dialog')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('scrape-result-done')));
+
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('scrape-result-dialog')), findsNothing);
+
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('completed scrape result requires explicit Done dismissal', (
+    tester,
+  ) async {
+    await _pumpWorks(
+      tester,
+      scrapeExecutor: (options, token, onProgress) async =>
+          const WorksScrapeResult(
+            saved: 1,
+            excluded: 0,
+            failed: 0,
+            cancelled: false,
+          ),
+    );
+
+    await _openWorksScrapeSettings(tester);
+
+    await tester.tap(find.text('開始刮削'));
+
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('scrape-result-dialog')), findsOneWidget);
+
+    await tester.tapAt(const Offset(4, 4));
+
+    await tester.pump();
+
+    expect(find.byKey(const Key('scrape-result-dialog')), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+
+    await tester.pump();
+
+    expect(find.byKey(const Key('scrape-result-dialog')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('scrape-result-done')));
+
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('scrape-result-dialog')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

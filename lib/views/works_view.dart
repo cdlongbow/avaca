@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../components/adaptive_page_layout.dart';
 import '../components/aligned_app_bar_back_button.dart';
 import '../components/app_snackbar.dart';
+import '../components/javbus_verification_dialog.dart';
 import '../controllers/works_controller.dart';
 import '../core/database.dart';
 import '../core/layout.dart';
@@ -706,7 +707,7 @@ class _WorksViewState extends State<WorksView> {
     final completedResult = result;
 
     if (scrapeError != null || completedResult == null) {
-      AppSnackBar.showError(context, l10n.scrapeFailed);
+      await _showScrapeResultDialog(l10n.scrapeFailed);
 
       return;
     }
@@ -754,11 +755,19 @@ class _WorksViewState extends State<WorksView> {
       message = '$message ${l10n.scrapePartial}';
     }
 
-    if (cancelled || completedResult.partialSuccess || hasNoChanges) {
-      AppSnackBar.showInfo(context, message);
-    } else {
-      AppSnackBar.showSuccess(context, message);
+    await _showScrapeResultDialog(message);
+  }
+
+  Future<void> _showScrapeResultDialog(String message) async {
+    if (!mounted) {
+      return;
     }
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) =>
+          PopScope(canPop: false, child: _ScrapeResultDialog(message: message)),
+    );
   }
 
   Future<WorksScrapeResult> _defaultScrapeExecutor(
@@ -871,7 +880,7 @@ class _WorksViewState extends State<WorksView> {
 
       barrierDismissible: false,
 
-      builder: (context) => _JavBusVerificationDialog(challenge: challenge),
+      builder: (context) => JavBusVerificationDialog(challenge: challenge),
     );
   }
 }
@@ -1302,77 +1311,22 @@ class _ScrapeProgressDialog extends StatelessWidget {
   }
 }
 
-class _JavBusVerificationDialog extends StatefulWidget {
-  const _JavBusVerificationDialog({required this.challenge});
+class _ScrapeResultDialog extends StatelessWidget {
+  const _ScrapeResultDialog({required this.message});
 
-  final JavBusVerificationChallenge challenge;
-
-  @override
-  State<_JavBusVerificationDialog> createState() =>
-      _JavBusVerificationDialogState();
-}
-
-class _JavBusVerificationDialogState extends State<_JavBusVerificationDialog> {
-  final answers = <String, String>{};
+  final String message;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final complete = answers.length == widget.challenge.questions.length;
-
     return AlertDialog(
-      title: Text(l10n.javBusVerificationTitle),
-      content: SizedBox(
-        width: 560,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(l10n.javBusVerificationInstructions),
-              const SizedBox(height: 16),
-              for (final question in widget.challenge.questions) ...[
-                Text(
-                  question.prompt,
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                RadioGroup<String>(
-                  groupValue: answers[question.name],
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() => answers[question.name] = value);
-                    }
-                  },
-                  child: Column(
-                    children: [
-                      for (final option in question.options)
-                        RadioListTile<String>(
-                          dense: true,
-                          contentPadding: EdgeInsets.zero,
-                          value: option.value,
-                          title: Text(option.label),
-                        ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-              ],
-            ],
-          ),
-        ),
-      ),
+      key: const Key('scrape-result-dialog'),
+      content: Text(message, key: const Key('scrape-result-message')),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(l10n.cancel),
-        ),
         FilledButton(
-          onPressed: complete
-              ? () => Navigator.of(
-                  context,
-                ).pop(Map<String, String>.unmodifiable(answers))
-              : null,
-          child: Text(l10n.javBusVerificationSubmit),
+          key: const Key('scrape-result-done'),
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(l10n.done),
         ),
       ],
     );
