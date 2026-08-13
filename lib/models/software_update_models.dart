@@ -212,12 +212,14 @@ class DownloadedUpdate {
     required this.stagingDirectory,
     required this.release,
     required this.asset,
+    this.extractedDirectory,
   });
 
   final File file;
   final Directory stagingDirectory;
   final SoftwareRelease release;
   final ReleaseAsset asset;
+  final Directory? extractedDirectory;
 }
 
 class SoftwareInstallResult {

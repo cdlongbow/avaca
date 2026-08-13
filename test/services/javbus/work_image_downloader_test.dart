@@ -48,6 +48,21 @@ void main() {
       );
     });
 
+    test('uses one image identity for generic numeric-leading aliases', () {
+      final aliasPairs = [
+        ('1stzy00017', 'STZY-017'),
+        ('3DSVR-1947', 'DSVR-1947'),
+      ];
+
+      for (final (aliasCode, canonicalCode) in aliasPairs) {
+        final alias = policy.urlsFor(code: aliasCode);
+        final canonical = policy.urlsFor(code: canonicalCode);
+
+        expect(alias.card, canonical.card);
+        expect(alias.detail, canonical.detail);
+      }
+    });
+
     test('builds the h_346 DMM URLs for REBD codes', () {
       final cases = {
         'REBD-975': 'h_346rebd00975',

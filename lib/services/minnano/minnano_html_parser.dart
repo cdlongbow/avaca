@@ -71,20 +71,36 @@ final class MinnanoHtmlParser {
     final results = <ScrapeSearchResult>[];
     for (final anchor in document.querySelectorAll('a[href]')) {
       final href = _clean(anchor.attributes['href']);
-      if (href == null ||
-          !RegExp(
-            r'^/?actress[^/]*\.html$',
-            caseSensitive: false,
-          ).hasMatch(Uri.parse(href).path)) {
+      if (href == null || !_isActressPath(Uri.parse(href).path)) {
         continue;
       }
       final uri = pageUri.resolve(href);
-      if (!_isMinnanoPageUri(uri) || !seen.add(uri.toString())) {
+      if (!_isMinnanoActressUri(uri)) {
         continue;
       }
       final name = _beforeParenthesis(_clean(anchor.text));
-      if (name != null && name.isNotEmpty) {
+      if (name != null && name.isNotEmpty && seen.add(uri.toString())) {
         results.add(ScrapeSearchResult(name: name, uri: uri));
+      }
+    }
+
+    final canonicalHref = _clean(
+      document.querySelector('link[rel="canonical"]')?.attributes['href'],
+    );
+    if (canonicalHref != null) {
+      final canonicalUri = pageUri.resolve(canonicalHref);
+      if (_isMinnanoActressUri(canonicalUri)) {
+        final name = _beforeParenthesis(
+          _clean(
+            document.querySelector('h2')?.text ??
+                document.querySelector('h1')?.text,
+          ),
+        );
+        if (name != null &&
+            name.isNotEmpty &&
+            seen.add(canonicalUri.toString())) {
+          results.add(ScrapeSearchResult(name: name, uri: canonicalUri));
+        }
       }
     }
     return List.unmodifiable(results);
@@ -356,6 +372,17 @@ final class MinnanoHtmlParser {
         uri.userInfo.isEmpty &&
         uri.host.toLowerCase() == 'www.minnano-av.com' &&
         port == 443;
+  }
+
+  bool _isMinnanoActressUri(Uri uri) {
+    return _isMinnanoPageUri(uri) && _isActressPath(uri.path);
+  }
+
+  bool _isActressPath(String path) {
+    return RegExp(
+      r'^/?actress[^/]*\.html$',
+      caseSensitive: false,
+    ).hasMatch(path);
   }
 }
 

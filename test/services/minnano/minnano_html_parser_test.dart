@@ -62,4 +62,65 @@ void main() {
     expect(details.performerCount, 1);
     expect(details.imageUris.single.toString(), contains('/p_package/'));
   });
+
+  test('parses a direct actress profile from its canonical link', () {
+    const source = '''
+      <head>
+        <link rel="canonical" href="https://www.minnano-av.com/actress945093.html">
+      </head>
+      <body><h1>河北彩花（かわきたさいか / Kawakita Saika）</h1></body>
+    ''';
+
+    final results = MinnanoHtmlParser().parseActressSearchResults(
+      source,
+      pageUri: Uri.parse(
+        'https://www.minnano-av.com/search_result.php?search_scope=actress',
+      ),
+    );
+
+    expect(results, hasLength(1));
+    expect(results.single.name, '河北彩花');
+    expect(
+      results.single.uri.toString(),
+      'https://www.minnano-av.com/actress945093.html',
+    );
+  });
+
+  test('deduplicates canonical direct profiles already listed as anchors', () {
+    const source = '''
+      <head>
+        <link rel="canonical" href="/actress945093.html">
+      </head>
+      <body>
+        <h2>河北彩花（かわきたさいか）</h2>
+        <a href="/actress945093.html">河北彩花</a>
+      </body>
+    ''';
+
+    final results = MinnanoHtmlParser().parseActressSearchResults(
+      source,
+      pageUri: Uri.parse('https://www.minnano-av.com/search_result.php'),
+    );
+
+    expect(results, hasLength(1));
+    expect(results.single.name, '河北彩花');
+  });
+
+  test('does not create a result from an unsafe or non-actress canonical link', () {
+    const sources = [
+      '<link rel="canonical" href="/av195939.html"><h1>河北彩花</h1>',
+      '<link rel="canonical" href="http://www.minnano-av.com/actress945093.html"><h1>河北彩花</h1>',
+      '<link rel="canonical" href="https://example.com/actress945093.html"><h1>河北彩花</h1>',
+      '<link rel="canonical" href="/actress945093.html">',
+    ];
+
+    for (final source in sources) {
+      final results = MinnanoHtmlParser().parseActressSearchResults(
+        source,
+        pageUri: Uri.parse('https://www.minnano-av.com/search_result.php'),
+      );
+
+      expect(results, isEmpty, reason: source);
+    }
+  });
 }

@@ -25,14 +25,19 @@ String? canonicalizeWorkCode(String? raw) {
     return null;
   }
 
-  // DMM-style START codes are sometimes exposed with a leading `1` and
-  // zero-padded digits (for example, 1START00408).  That is an alias for
-  // START-408, not a different work.  Keep this deliberately narrow: do not
-  // split comma-separated codes or apply the rule to unrelated prefixes.
-  final startMatch = RegExp(r'^1?START-?0*(\d+)$').firstMatch(normalized);
-  if (startMatch != null) {
-    final number = startMatch.group(1)!.replaceFirst(RegExp(r'^0+'), '');
-    return 'START-${number.isEmpty ? '0' : number}';
+  // Scrapers can expose the same JAV code with a numeric alias prefix and
+  // without a separator (for example, 1START00023), while the canonical
+  // source format is PREFIX-NUMBER.  Match only those complete single-code
+  // shapes so complex prefixes such as FC2 or FC2-PPV_123 remain untouched.
+  final match =
+      RegExp(r'^\d+([A-Z]+)-?(\d+)$').firstMatch(normalized) ??
+      RegExp(r'^([A-Z]+)-(\d+)$').firstMatch(normalized);
+  if (match != null) {
+    final prefix = match.group(1)!;
+    final significantDigits = match.group(2)!.replaceFirst(RegExp(r'^0+'), '');
+    final number = (significantDigits.isEmpty ? '0' : significantDigits)
+        .padLeft(3, '0');
+    return '$prefix-$number';
   }
 
   return normalized;

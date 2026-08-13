@@ -1,6 +1,17 @@
 cmake_minimum_required(VERSION 3.14)
 project(runner LANGUAGES CXX)
 
+# Standalone helper used by the Windows portable updater. It is launched from
+# a temporary copy while AVACA exits, then replaces the portable directory and
+# relaunches the new executable.
+add_executable(avaca_update WIN32
+  "avaca_update.cpp"
+)
+
+apply_standard_settings(avaca_update)
+target_compile_definitions(avaca_update PRIVATE "NOMINMAX")
+target_link_libraries(avaca_update PRIVATE "shell32.lib")
+
 # Define the application target. To change its name, change BINARY_NAME in the
 # top-level CMakeLists.txt, not the value here, or `flutter run` will no longer
 # work.

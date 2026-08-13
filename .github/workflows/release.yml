@@ -224,15 +224,15 @@ jobs:
           $zipName = "avaca-$version.zip"
           $zipPath = Join-Path $dist $zipName
 
-          if (-not (Test-Path -LiteralPath (Join-Path $releaseDir 'avaca.exe'))) {
-            throw "Windows release bundle is missing avaca.exe: $releaseDir"
+          foreach ($requiredFile in @('avaca.exe', 'avaca_update.exe')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $releaseDir $requiredFile) -PathType Leaf)) {
+              throw "Windows release bundle is missing ${requiredFile}: $releaseDir"
+            }
           }
 
           Remove-Item -LiteralPath $packageRoot -Recurse -Force -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Force -Path $packageRoot, $dist | Out-Null
           Copy-Item -Path (Join-Path $releaseDir '*') -Destination $packageRoot -Recurse -Force
-          Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE 'scripts/update-portable.ps1') -Destination (Join-Path $packageRoot 'update-portable.ps1') -Force
-          Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE 'update.cmd') -Destination (Join-Path $packageRoot 'update.cmd') -Force
           Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE 'README.md') -Destination (Join-Path $packageRoot 'README.md') -Force
           Set-Content -LiteralPath (Join-Path $packageRoot 'version.txt') -Value $version -NoNewline -Encoding utf8
 

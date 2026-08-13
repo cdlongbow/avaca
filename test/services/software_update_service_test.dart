@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -152,6 +153,93 @@ void main() {
       final remaining = await tempRoot.list().toList();
       expect(remaining, isEmpty);
     });
+
+    test(
+      'prepares a verified Windows portable archive for the native helper',
+      () async {
+        final archive = Archive()
+          ..addFile(ArchiveFile.bytes('avaca.exe', [1, 2, 3]))
+          ..addFile(ArchiveFile.bytes('avaca_update.exe', [4, 5, 6]))
+          ..addFile(ArchiveFile.bytes('version.txt', utf8.encode('0.8.2')));
+        final bytes = Uint8List.fromList(ZipEncoder().encode(archive));
+        final checksum = sha256.convert(bytes).toString();
+        final tempRoot = await Directory.systemTemp.createTemp(
+          'avaca-windows-update-test-',
+        );
+        addTearDown(() => tempRoot.delete(recursive: true));
+        final client = MockClient((request) async {
+          if (request.url.path.endsWith('/releases/latest')) {
+            return http.Response(
+              jsonEncode(_windowsReleaseJson(checksum, bytes.length)),
+              200,
+            );
+          }
+          return http.Response.bytes(
+            bytes,
+            200,
+            headers: {'content-length': '${bytes.length}'},
+          );
+        });
+
+        final service = SoftwareUpdateService(
+          client: client,
+          versionProvider: _FakeVersionProvider(_windowsVersion('0.8.1')),
+          platformOverride: SoftwareUpdatePlatform.windows,
+          architectureOverride: 'x64',
+          temporaryDirectoryProvider: () async => tempRoot,
+        );
+        addTearDown(service.dispose);
+
+        final result = await service.checkForUpdates();
+        final downloaded = await service.download(result);
+        final extracted = downloaded.extractedDirectory;
+        expect(extracted, isNotNull);
+        expect(await File('${extracted!.path}/avaca.exe').exists(), isTrue);
+        expect(
+          await File('${extracted.path}/avaca_update.exe').exists(),
+          isTrue,
+        );
+        expect(
+          await File('${extracted.path}/version.txt').readAsString(),
+          '0.8.2',
+        );
+      },
+    );
+
+    test('rejects traversal paths in a Windows update archive', () async {
+      final archive = Archive()
+        ..addFile(ArchiveFile.bytes('../avaca.exe', [1, 2, 3]));
+      final bytes = Uint8List.fromList(ZipEncoder().encode(archive));
+      final checksum = sha256.convert(bytes).toString();
+      final tempRoot = await Directory.systemTemp.createTemp(
+        'avaca-windows-unsafe-update-test-',
+      );
+      addTearDown(() => tempRoot.delete(recursive: true));
+      final client = MockClient((request) async {
+        if (request.url.path.endsWith('/releases/latest')) {
+          return http.Response(
+            jsonEncode(_windowsReleaseJson(checksum, bytes.length)),
+            200,
+          );
+        }
+        return http.Response.bytes(bytes, 200);
+      });
+      final service = SoftwareUpdateService(
+        client: client,
+        versionProvider: _FakeVersionProvider(_windowsVersion('0.8.1')),
+        platformOverride: SoftwareUpdatePlatform.windows,
+        architectureOverride: 'x64',
+        temporaryDirectoryProvider: () async => tempRoot,
+      );
+      addTearDown(service.dispose);
+
+      final result = await service.checkForUpdates();
+      await expectLater(
+        service.download(result),
+        throwsA(isA<SoftwareUpdateException>()),
+      );
+      expect(await tempRoot.list().toList(), isEmpty);
+    });
   });
 }
 
@@ -162,6 +250,24 @@ AppVersionInfo _androidVersion(String version) {
     platform: SoftwareUpdatePlatform.android,
     architecture: 'arm64-v8a',
   );
+}
+
+AppVersionInfo _windowsVersion(String version) {
+  return AppVersionInfo(
+    version: version,
+    buildNumber: '1',
+    platform: SoftwareUpdatePlatform.windows,
+    architecture: 'x64',
+  );
+}
+
+Map<String, dynamic> _windowsReleaseJson(String checksum, int size) {
+  return {
+    'tag_name': 'v0.8.2',
+    'draft': false,
+    'prerelease': false,
+    'assets': [_asset('avaca-0.8.2.zip', size, digest: checksum)],
+  };
 }
 
 Map<String, dynamic> _releaseJson({

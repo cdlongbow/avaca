@@ -45,6 +45,28 @@ void main() {
       isTrue,
     );
   });
+
+  test(
+    'returns an actress when search redirects to a direct profile page',
+    () async {
+      final transport = _RecordingMinnanoTransport();
+      final client = MinnanoClient(transport: transport);
+
+      final matches = await client.searchActresses('河北彩花');
+
+      expect(matches, hasLength(1));
+      expect(matches.single.name, '河北彩花');
+      expect(
+        matches.single.uri,
+        Uri.parse('https://www.minnano-av.com/actress945093.html'),
+      );
+      expect(
+        transport.requested.first.queryParameters['search_scope'],
+        'actress',
+      );
+      expect(transport.requested.first.queryParameters['search_word'], '河北彩花');
+    },
+  );
 }
 
 final class _RecordingMinnanoTransport implements MinnanoTransport {
@@ -57,6 +79,12 @@ final class _RecordingMinnanoTransport implements MinnanoTransport {
       return '<html><body>ok</body></html>';
     }
     if (uri.path == '/search_result.php') {
+      if (uri.queryParameters['search_word'] == '河北彩花') {
+        return '''
+          <link rel="canonical" href="https://www.minnano-av.com/actress945093.html">
+          <h1>河北彩花（かわきたさいか）</h1>
+        ''';
+      }
       return '<a href="actress618082.html">小湊よつ葉</a>';
     }
     if (uri.path == '/actress618082.html') {

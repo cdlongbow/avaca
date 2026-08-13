@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.4 - 2026-08-14
+
+- Generalized work-code canonicalization so numeric-leading aliases and differently formatted prefixes resolve to the same canonical `LETTERS-NUMBER` code without merging different numeric cores.
+- Fixed Minnano AV actress scraping for direct profile pages such as 河北彩花 by resolving safe canonical actress links and preserving exact-name parsing.
+- Replaced the portable Windows script updater with a native `avaca_update.exe` helper, verified archive extraction, path traversal protection, rollback, and startup validation while preserving the user's AVACA data directory.
+- Added focused coverage for canonical work-code deduplication, Minnano direct profiles, and Windows update archive validation.
+
 ## 0.8.3 - 2026-08-13
 
 - Parallelized all-source work scraping so Minnano AV and JavBus search in

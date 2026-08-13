@@ -53,11 +53,13 @@ GitHub Release 自動產生的 source code archive 不屬於上述上傳資產�
 `avaca-X.Y.Z.zip` 解壓後必須包含完整 Windows Flutter bundle，以及：
 
 - `avaca.exe`
+- `avaca_update.exe`
 - `version.txt`，內容必須是 `X.Y.Z`
-- `update-portable.ps1`
-- `update.cmd`
 
-Windows updater 只會讀取符合 `avaca-X.Y.Z.zip` 的正式資產，並會驗證 ZIP 的 checksum、`avaca.exe` 和 `version.txt`。
+Windows updater 由 `avaca_update.exe` 提供。AVACA 會先下載並驗證符合
+`avaca-X.Y.Z.zip` 的正式資產，再將 ZIP 解壓到暫存資料夾；原生 helper 會等待
+舊程式退出、以同目錄重新命名完成替換、驗證新程式啟動，失敗時復原原本的
+portable bundle。資料庫與圖片位於 `%LOCALAPPDATA%\AVACA`，不在替換範圍內。
 
 ## 發布方式
 

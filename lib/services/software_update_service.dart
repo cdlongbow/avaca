@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as path;
@@ -49,6 +50,9 @@ class SoftwareUpdateService {
     'release-assets.githubusercontent.com',
   };
   static const _metadataLimit = 2 * 1024 * 1024;
+  static const _windowsMaxArchiveEntries = 4096;
+  static const _windowsMaxSingleEntryBytes = 512 * 1024 * 1024;
+  static const _windowsMaxTotalUncompressedBytes = 2 * 1024 * 1024 * 1024;
 
   final http.Client _client;
   final bool _ownsClient;
@@ -211,11 +215,21 @@ class SoftwareUpdateService {
         );
       }
 
+      final extractedDirectory =
+          result.current.platform == SoftwareUpdatePlatform.windows
+          ? await _prepareWindowsPortableArchive(
+              outputFile,
+              stagingDirectory,
+              release.version,
+            )
+          : null;
+
       return DownloadedUpdate(
         file: outputFile,
         stagingDirectory: stagingDirectory,
         release: release,
         asset: asset,
+        extractedDirectory: extractedDirectory,
       );
     } catch (error) {
       if (await stagingDirectory.exists()) {
@@ -231,6 +245,142 @@ class SoftwareUpdateService {
 
   void dispose() {
     if (_ownsClient) _client.close();
+  }
+
+  Future<Directory> _prepareWindowsPortableArchive(
+    File archiveFile,
+    Directory stagingDirectory,
+    SemanticVersion expectedVersion,
+  ) async {
+    try {
+      final bytes = await archiveFile.readAsBytes();
+      final decoder = ZipDecoder();
+      final archive = decoder.decodeBytes(bytes, verify: true);
+      final headers = decoder.directory.fileHeaders;
+      if (headers.length > _windowsMaxArchiveEntries) {
+        throw const SoftwareUpdateException(
+          UpdateFailureReason.integrity,
+          'The Windows update ZIP contains too many entries.',
+        );
+      }
+
+      var totalUncompressedBytes = 0;
+      for (final header in headers) {
+        if (header.uncompressedSize > _windowsMaxSingleEntryBytes) {
+          throw const SoftwareUpdateException(
+            UpdateFailureReason.integrity,
+            'A Windows update ZIP entry is too large.',
+          );
+        }
+        totalUncompressedBytes += header.uncompressedSize;
+        if (totalUncompressedBytes > _windowsMaxTotalUncompressedBytes) {
+          throw const SoftwareUpdateException(
+            UpdateFailureReason.integrity,
+            'The Windows update ZIP expands beyond the supported size.',
+          );
+        }
+        if (header.uncompressedSize > 0 &&
+            (header.compressedSize <= 0 ||
+                header.uncompressedSize > header.compressedSize * 200)) {
+          throw const SoftwareUpdateException(
+            UpdateFailureReason.integrity,
+            'The Windows update ZIP compression ratio is unsafe.',
+          );
+        }
+      }
+
+      final extractRoot = Directory(
+        path.join(stagingDirectory.path, 'portable'),
+      );
+      await extractRoot.create(recursive: true);
+      final names = <String>{};
+
+      for (final entry in archive.files) {
+        final rawName = entry.name;
+        final isDirectory = entry.isDirectory || rawName.endsWith('/');
+        final name = _validateWindowsArchivePath(
+          isDirectory ? rawName.substring(0, rawName.length - 1) : rawName,
+        );
+        if (!names.add(name)) {
+          throw const SoftwareUpdateException(
+            UpdateFailureReason.integrity,
+            'The Windows update ZIP contains duplicate entries.',
+          );
+        }
+        if (isDirectory) continue;
+        if (entry.isSymbolicLink) {
+          throw const SoftwareUpdateException(
+            UpdateFailureReason.integrity,
+            'The Windows update ZIP contains a symbolic link.',
+          );
+        }
+
+        final payload = entry.readBytes();
+        if (payload == null || payload.length != entry.size) {
+          throw const SoftwareUpdateException(
+            UpdateFailureReason.integrity,
+            'The Windows update ZIP contains a corrupt entry.',
+          );
+        }
+        final target = File(
+          path.joinAll(<String>[extractRoot.path, ...name.split('/')]),
+        );
+        await target.parent.create(recursive: true);
+        await target.writeAsBytes(payload, flush: true);
+      }
+
+      final executable = File(path.join(extractRoot.path, 'avaca.exe'));
+      final updater = File(path.join(extractRoot.path, 'avaca_update.exe'));
+      final versionFile = File(path.join(extractRoot.path, 'version.txt'));
+      if (!await executable.exists() ||
+          !await updater.exists() ||
+          !await versionFile.exists()) {
+        throw const SoftwareUpdateException(
+          UpdateFailureReason.integrity,
+          'The Windows update ZIP is missing required portable files.',
+        );
+      }
+      final actualVersion = (await versionFile.readAsString()).trim();
+      if (actualVersion != expectedVersion.toString()) {
+        throw SoftwareUpdateException(
+          UpdateFailureReason.integrity,
+          'The Windows update version $actualVersion does not match '
+          '${expectedVersion.toString()}.',
+        );
+      }
+      return extractRoot;
+    } on SoftwareUpdateException {
+      rethrow;
+    } on Object catch (error) {
+      throw SoftwareUpdateException(
+        UpdateFailureReason.integrity,
+        'The Windows update ZIP could not be prepared: $error',
+      );
+    }
+  }
+
+  String _validateWindowsArchivePath(String value) {
+    if (value.isEmpty ||
+        value.contains('\\') ||
+        value.contains('\u0000') ||
+        value.startsWith('/') ||
+        value.startsWith('//') ||
+        RegExp(r'^[A-Za-z]:').hasMatch(value)) {
+      throw const SoftwareUpdateException(
+        UpdateFailureReason.integrity,
+        'The Windows update ZIP contains an unsafe path.',
+      );
+    }
+    final segments = value.split('/');
+    if (segments.any(
+      (segment) => segment.isEmpty || segment == '.' || segment == '..',
+    )) {
+      throw const SoftwareUpdateException(
+        UpdateFailureReason.integrity,
+        'The Windows update ZIP contains a traversal path.',
+      );
+    }
+    return value;
   }
 
   Future<SoftwareRelease> _fetchLatestRelease() async {

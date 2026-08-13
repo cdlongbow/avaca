@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
 
 import '../models/software_update_models.dart';
+import 'update_startup_marker.dart';
 
 abstract class SoftwareUpdateInstaller {
   static SoftwareUpdateInstaller forCurrentPlatform({
@@ -73,34 +74,103 @@ class WindowsSoftwareUpdateInstaller implements SoftwareUpdateInstaller {
 
     final executable = File(Platform.resolvedExecutable);
     final installRoot = executable.parent;
-    final updater = File(path.join(installRoot.path, 'update.cmd'));
-    if (!await updater.exists()) {
+    final updater = File(path.join(installRoot.path, 'avaca_update.exe'));
+    final extractedDirectory = update.extractedDirectory;
+    if (!await updater.exists() || extractedDirectory == null) {
       return const SoftwareInstallResult(
         started: false,
-        message: 'This portable folder does not contain update.cmd.',
+        message: 'This portable folder does not contain avaca_update.exe.',
       );
     }
 
-    await onBeforeUpdate?.call();
-    final command =
-        '"${updater.path}" -ArchivePath "${update.file.path}" '
-        '-InstallRoot "${installRoot.path}" '
-        '-Version "${update.release.version}"';
-    final process = await Process.start(
-      'cmd.exe',
-      <String>['/d', '/c', command],
-      workingDirectory: Directory.systemTemp.path,
-      mode: ProcessStartMode.detached,
+    final handoffStage = Directory(
+      path.join(
+        installRoot.parent.path,
+        '.avaca-update-${DateTime.now().microsecondsSinceEpoch}-$pid',
+      ),
     );
-    if (process.pid <= 0) {
-      return const SoftwareInstallResult(
-        started: false,
-        message: 'The portable update helper could not be started.',
+    final helperDirectory = Directory(
+      path.join(
+        Directory.systemTemp.path,
+        'avaca-update-helper-${DateTime.now().microsecondsSinceEpoch}-$pid',
+      ),
+    );
+    final helperCopy = File(
+      path.join(helperDirectory.path, 'avaca_update.exe'),
+    );
+    final startupMarker = File(
+      path.join(installRoot.path, windowsUpdateStartupMarker),
+    );
+
+    try {
+      await _copyDirectoryContents(extractedDirectory, handoffStage);
+      await helperDirectory.create(recursive: true);
+      await updater.copy(helperCopy.path);
+      if (await startupMarker.exists()) {
+        await startupMarker.delete();
+      }
+      await onBeforeUpdate?.call();
+
+      final process = await Process.start(
+        helperCopy.path,
+        <String>[
+          '--install-root',
+          installRoot.path,
+          '--stage-root',
+          handoffStage.path,
+          '--parent-pid',
+          '$pid',
+          '--startup-marker',
+          startupMarker.path,
+        ],
+        workingDirectory: helperDirectory.path,
+        mode: ProcessStartMode.detached,
       );
+      if (process.pid <= 0) {
+        throw const ProcessException(
+          'avaca_update.exe',
+          <String>[],
+          'The portable update helper could not be started.',
+        );
+      }
+
+      if (await update.stagingDirectory.exists()) {
+        await update.stagingDirectory.delete(recursive: true);
+      }
+    } catch (_) {
+      if (await handoffStage.exists()) {
+        await handoffStage.delete(recursive: true);
+      }
+      if (await helperDirectory.exists()) {
+        await helperDirectory.delete(recursive: true);
+      }
+      rethrow;
     }
 
     if (exitAfterHandoff) exit(0);
     return const SoftwareInstallResult(started: true);
+  }
+
+  Future<void> _copyDirectoryContents(
+    Directory source,
+    Directory destination,
+  ) async {
+    await destination.create(recursive: true);
+    await for (final entity in source.list(followLinks: false)) {
+      final targetPath = path.join(
+        destination.path,
+        path.basename(entity.path),
+      );
+      if (entity is Directory) {
+        await _copyDirectoryContents(entity, Directory(targetPath));
+      } else if (entity is File) {
+        await entity.copy(targetPath);
+      } else {
+        throw const FileSystemException(
+          'The update package contains an unsupported file entry.',
+        );
+      }
+    }
   }
 }
 

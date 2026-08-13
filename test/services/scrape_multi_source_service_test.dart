@@ -518,6 +518,142 @@ void main() {
     },
   );
 
+  test(
+    'deduplicates numeric-leading aliases across sources for arbitrary prefixes',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'avaca_generic_alias_dedup_test_',
+      );
+      final database = AppDatabase.forTesting(
+        baseDir: directory.path,
+        databaseFactory: databaseFactoryFfi,
+      );
+      addTearDown(() async {
+        await database.close();
+        await directory.delete(recursive: true);
+      });
+      await database.init();
+      await database.addActress(name: '小湊よつ葉');
+      final actressId =
+          (await (await database.database).query('actresses')).single['id']
+              as int;
+      await database.upsertActressWork(
+        actressId: actressId,
+        work: const Work(code: '1STZY00017', title: 'legacy alias'),
+      );
+      await database.upsertActressWork(
+        actressId: actressId,
+        work: const Work(code: 'STZY-017', title: 'legacy canonical'),
+      );
+
+      final minnano = _FakeScrapeSource(
+        id: ScrapeSourceId.minnanoAv,
+        detailBirthDate: '1996-05-29',
+        works: [
+          ScrapeWorkSummary(
+            source: ScrapeSourceId.minnanoAv,
+            code: '1stzy00017',
+            title: 'STZY alias',
+            detailUri: Uri.parse('https://www.minnano-av.com/stzy017.html'),
+          ),
+          ScrapeWorkSummary(
+            source: ScrapeSourceId.minnanoAv,
+            code: '3DSVR-1947',
+            title: 'DSVR alias',
+            detailUri: Uri.parse('https://www.minnano-av.com/dsvr1947.html'),
+          ),
+        ],
+        detailsByCode: {
+          'STZY-017': const ScrapeWorkDetails(
+            source: ScrapeSourceId.minnanoAv,
+            code: '1stzy00017',
+            title: 'STZY 017',
+            performerCount: 1,
+          ),
+          'DSVR-1947': const ScrapeWorkDetails(
+            source: ScrapeSourceId.minnanoAv,
+            code: '3DSVR-1947',
+            title: 'DSVR 1947',
+            performerCount: 1,
+          ),
+        },
+      );
+      final javbus = _FakeScrapeSource(
+        id: ScrapeSourceId.javbus,
+        detailBirthDate: '1996-05-29',
+        works: [
+          ScrapeWorkSummary(
+            source: ScrapeSourceId.javbus,
+            code: 'STZY-017',
+            title: 'STZY canonical',
+            detailUri: Uri.parse('https://www.javbus.com/STZY-017'),
+          ),
+          ScrapeWorkSummary(
+            source: ScrapeSourceId.javbus,
+            code: 'DSVR-1947',
+            title: 'DSVR canonical',
+            detailUri: Uri.parse('https://www.javbus.com/DSVR-1947'),
+          ),
+        ],
+        detailsByCode: {
+          'STZY-017': const ScrapeWorkDetails(
+            source: ScrapeSourceId.javbus,
+            code: 'STZY-017',
+            title: 'STZY 017 JavBus',
+            durationMinutes: 90,
+            performerCount: 1,
+          ),
+          'DSVR-1947': const ScrapeWorkDetails(
+            source: ScrapeSourceId.javbus,
+            code: 'DSVR-1947',
+            title: 'DSVR 1947 JavBus',
+            durationMinutes: 120,
+            performerCount: 1,
+          ),
+        },
+      );
+      final service = WorksScrapeService(
+        db: database,
+        sources: {
+          ScrapeSourceId.minnanoAv: minnano,
+          ScrapeSourceId.javbus: javbus,
+        },
+        workImageDownloader: _FakeWorkImageDownloader(),
+        imageDirectory: directory.path,
+      );
+
+      final result = await service.scrape(
+        actressId: actressId,
+        actressName: '小湊よつ葉',
+        options: const WorkScrapeOptions(),
+        sourceSettings: const ScrapeSourceSettings(),
+      );
+
+      final works = await database.getWorksForActress(actressId);
+      expect(result.saved, 2);
+      expect(result.failed, 0);
+      expect(works, hasLength(2));
+      expect(
+        works.map((row) => row['code']),
+        unorderedEquals(['STZY-017', 'DSVR-1947']),
+      );
+      expect(
+        (await (await database.database).query(
+          'works',
+          where: 'code = ?',
+          whereArgs: ['1STZY00017'],
+        )),
+        isEmpty,
+      );
+      expect(minnano.detailRequests, ['STZY-017', 'DSVR-1947']);
+      expect(javbus.detailRequests, ['STZY-017', 'DSVR-1947']);
+      expect(
+        (await (await database.database).query('actress_works')).length,
+        2,
+      );
+    },
+  );
+
   test('merge priority is independent of source completion order', () async {
     Future<Map<String, Object?>> runScenario({
       required Duration minnanoDelay,
