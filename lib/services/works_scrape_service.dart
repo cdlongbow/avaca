@@ -1,18 +1,23 @@
-import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:path/path.dart' as path;
 
 import '../core/database.dart';
+import '../models/scrape_source_settings.dart';
 import '../models/scraped_actress_details.dart';
 import '../models/work_scrape_options.dart';
 import 'javbus/javbus_client.dart';
-import 'javbus/javbus_models.dart';
+import 'javbus/javbus_scrape_source.dart';
 import 'javbus/prefix_exclusion.dart';
 import 'javbus/work_image_downloader.dart';
 import 'javbus/work_image_policy.dart';
 import 'safe_image.dart';
+import 'scrape/scrape_image_downloader.dart';
+import 'scrape/scrape_models.dart';
+import 'scrape/scrape_source.dart';
+import 'scrape/scrape_source_registry.dart';
+import 'scrape/work_code_canonicalizer.dart';
 
 abstract interface class ActressImageDownloader {
   Future<String> download(Uri uri, String targetPath);
@@ -85,6 +90,7 @@ class WorksScrapeProgress {
     required this.saved,
     required this.excluded,
     required this.failed,
+    this.source,
   });
 
   final int current;
@@ -92,6 +98,7 @@ class WorksScrapeProgress {
   final int saved;
   final int excluded;
   final int failed;
+  final ScrapeSourceId? source;
 }
 
 class WorksScrapeResult {
@@ -101,6 +108,8 @@ class WorksScrapeResult {
     required this.failed,
     required this.cancelled,
     this.actressImageStatus = ActressImageSyncStatus.notRequested,
+    this.partialSuccess = false,
+    this.sourceResults = const {},
   });
 
   final int saved;
@@ -108,6 +117,8 @@ class WorksScrapeResult {
   final int failed;
   final bool cancelled;
   final ActressImageSyncStatus actressImageStatus;
+  final bool partialSuccess;
+  final Map<ScrapeSourceId, ScrapeSourceRunResult> sourceResults;
 }
 
 class WorksScrapeException implements Exception {
@@ -122,24 +133,46 @@ class WorksScrapeException implements Exception {
 class WorksScrapeService {
   WorksScrapeService({
     required this.db,
-    required this.client,
+    JavBusClient? client,
+    Map<ScrapeSourceId, ScrapeSource>? sources,
     WorkImageDownloader? workImageDownloader,
     ActressImageDownloader? actressImageDownloader,
+    this.imageUriDownloader,
     String? imageDirectory,
-  }) : workImageDownloader = workImageDownloader ?? WorkImageDownloader(),
+  }) : client = client,
+       sources = sources ?? _legacySources(client),
+       workImageDownloader = workImageDownloader ?? WorkImageDownloader(),
        actressImageDownloader =
            actressImageDownloader ?? HttpActressImageDownloader(),
        imageDirectory = imageDirectory ?? path.join(db.imgDir, 'scraped');
 
   final AppDatabase db;
-  final JavBusClient client;
+  final JavBusClient? client;
+  final Map<ScrapeSourceId, ScrapeSource> sources;
   final WorkImageDownloader workImageDownloader;
   final ActressImageDownloader actressImageDownloader;
+  final ScrapeImageUriDownloader? imageUriDownloader;
   final String imageDirectory;
 
+  static Map<ScrapeSourceId, ScrapeSource> _legacySources(
+    JavBusClient? client,
+  ) {
+    if (client == null) {
+      throw ArgumentError('Either client or sources must be supplied.');
+    }
+    return {ScrapeSourceId.javbus: JavBusScrapeSource(client)};
+  }
+
   void close() {
-    client.close();
+    final closed = <ScrapeSource>{};
+    for (final source in sources.values) {
+      if (closed.add(source)) {
+        source.close();
+      }
+    }
     workImageDownloader.close();
+    final imageDownloader = imageUriDownloader;
+    imageDownloader?.close();
     final downloader = actressImageDownloader;
     if (downloader is HttpActressImageDownloader) {
       downloader.close();
@@ -151,6 +184,7 @@ class WorksScrapeService {
     required String actressName,
     List<String> aliases = const [],
     required WorkScrapeOptions options,
+    ScrapeSourceSettings? sourceSettings,
     WorksScrapeCancellationToken? cancellationToken,
     void Function(WorksScrapeProgress progress)? onProgress,
   }) async {
@@ -158,153 +192,219 @@ class WorksScrapeService {
     if (name.isEmpty) {
       throw const WorksScrapeException('Actress name is empty.');
     }
+    final settings =
+        sourceSettings ?? const ScrapeSourceSettings.legacyJavBus();
+    final queries = _queries(name, aliases);
+    final requestedWorkIds = ScrapeSourceRegistry.resolveWorksSources(
+      settings.worksSource,
+    );
+    final sourceResults = <ScrapeSourceId, ScrapeSourceRunResult>{};
+    final collectedById = <ScrapeSourceId, _CollectedSource>{};
 
-    final queries = <String>[name];
-    final queryKeys = <String>{name.toLowerCase()};
-    for (final alias in aliases) {
-      final normalizedAlias = alias.trim();
-      final key = normalizedAlias.toLowerCase();
-      if (normalizedAlias.isEmpty || key == name.toLowerCase()) {
-        continue;
-      }
-      if (queryKeys.add(key)) {
-        queries.add(normalizedAlias);
-      }
-    }
-    final matchesByUri = <String, JavBusActressSearchResult>{};
-    final actressPagesByUri = <String, JavBusActressPage>{};
-    final completedUris = <String>{};
-    final summariesByCode = <String, JavBusWorkSummary>{};
-    Object? lastSourceError;
-    var successfulWorkSources = 0;
-    for (final query in queries) {
-      if (cancellationToken?.isCancelled ?? false) {
+    final sourceIdsToCollect = <ScrapeSourceId>[
+      ...requestedWorkIds,
+      if (!requestedWorkIds.contains(settings.actressDetailsSource))
+        settings.actressDetailsSource,
+    ];
+    for (final sourceId in sourceIdsToCollect) {
+      if (_isCancelled(cancellationToken)) {
         break;
       }
-      List<JavBusActressSearchResult> searchResults;
-      try {
-        searchResults = await client.searchActresses(query);
-      } catch (error) {
-        lastSourceError = error;
+      final source = sources[sourceId];
+      if (source == null) {
+        sourceResults[sourceId] = ScrapeSourceRunResult(
+          source: sourceId,
+          state: ScrapeSourceRunState.unavailable,
+          error: 'Source is not configured.',
+        );
         continue;
       }
-      final queryKey = query.toLowerCase();
-      final exactMatches = searchResults
-          .where((result) => result.name.trim().toLowerCase() == queryKey)
-          .toList(growable: false);
-      for (final actress in exactMatches) {
-        final uriKey = actress.uri.toString();
-        if (completedUris.contains(uriKey)) {
-          continue;
-        }
-        matchesByUri.putIfAbsent(uriKey, () => actress);
-        try {
-          final page = await client.fetchActressPage(actress.uri);
-          actressPagesByUri[uriKey] = page;
-          try {
-            final sourceWorks = await client.fetchAllActressWorks(
-              actress.uri,
-              firstPage: page,
-              isCancelled: () => cancellationToken?.isCancelled ?? false,
-            );
-            successfulWorkSources++;
-            completedUris.add(uriKey);
-            for (final work in sourceWorks) {
-              final code = work.code.trim().toUpperCase();
-              if (code.isNotEmpty) {
-                summariesByCode.putIfAbsent(code, () => work);
-              }
-            }
-          } catch (error) {
-            // One source's work traversal must not discard another source.
-            lastSourceError = error;
-          }
-        } catch (error) {
-          lastSourceError = error;
-        }
+      final collected = await _collectSource(
+        source: source,
+        queries: queries,
+        cancellationToken: cancellationToken,
+        includeWorks: requestedWorkIds.contains(sourceId),
+      );
+      collectedById[sourceId] = collected;
+      if (requestedWorkIds.contains(sourceId) ||
+          sourceId == settings.actressDetailsSource) {
+        sourceResults[sourceId] = collected.result;
       }
     }
-    if (actressPagesByUri.isEmpty) {
-      if (cancellationToken?.isCancelled ?? false) {
-        return const WorksScrapeResult(
-          saved: 0,
-          excluded: 0,
-          failed: 0,
-          cancelled: true,
-        );
-      }
-      throw WorksScrapeException(
-        matchesByUri.isEmpty
-            ? 'Exact actress was not found: $name'
-            : 'Actress pages could not be fetched: $name'
-                  '${lastSourceError == null ? '' : ' ($lastSourceError)'}',
+
+    if (_isCancelled(cancellationToken)) {
+      return WorksScrapeResult(
+        saved: 0,
+        excluded: 0,
+        failed: 0,
+        cancelled: true,
+        sourceResults: Map.unmodifiable(sourceResults),
       );
     }
-    if (successfulWorkSources == 0 && lastSourceError != null) {
+
+    final successfulWorkSources = collectedById.values
+        .where(
+          (value) =>
+              requestedWorkIds.contains(value.source.id) &&
+              value.result.succeeded,
+        )
+        .toList(growable: false);
+    if (successfulWorkSources.isEmpty) {
+      final lastError = sourceResults.values
+          .map((result) => result.error)
+          .whereType<Object>()
+          .lastOrNull;
       throw WorksScrapeException(
-        'Actress works could not be fetched: $name ($lastSourceError)',
+        _hasExactMatch(sourceResults.values)
+            ? 'Actress works could not be fetched: $name'
+                  '${lastError == null ? '' : ' ($lastError)'}'
+            : 'Exact actress was not found: $name',
       );
     }
-    final actressImageStatus = await _syncActress(
-      actressId: actressId,
-      page: _mergeActressPages(
-        actressPagesByUri.values.toList(growable: false),
-      ),
-      options: options,
-    );
+
+    final detailsSourceId = settings.actressDetailsSource;
+    final detailsSource = sources[detailsSourceId];
+    final detailsCollection = collectedById[detailsSourceId];
+    ActressImageSyncStatus actressImageStatus = options.replaceActressImage
+        ? ActressImageSyncStatus.unavailable
+        : ActressImageSyncStatus.notRequested;
+    if (detailsSource != null &&
+        detailsCollection != null &&
+        detailsCollection.pages.isNotEmpty) {
+      final details = _mergeActressPages(
+        detailsCollection.pages.values.toList(growable: false),
+        source: detailsSource,
+      );
+      actressImageStatus = await _syncActress(
+        actressId: actressId,
+        details: details,
+        source: detailsSource,
+        options: options,
+      );
+    }
+
     final exclusions = PrefixExclusion(options.excludedPrefixes);
-    final summaries = summariesByCode.values.toList(growable: false);
+    final groups = _buildWorkGroups(
+      requestedWorkIds,
+      collectedById,
+      exclusions,
+    );
     var saved = 0;
-    var excluded = 0;
+    var excluded = groups.preExcluded;
     var failed = 0;
     var current = 0;
+    final resolvedGroups = <String, _ResolvedWorkGroup>{};
 
-    for (final summary in summaries) {
-      if (cancellationToken?.isCancelled ?? false) {
+    for (final group in groups.groups) {
+      if (_isCancelled(cancellationToken)) {
         break;
       }
       current++;
-      if (exclusions.matches(summary.code)) {
-        excluded++;
-        _notify(onProgress, current, summaries.length, saved, excluded, failed);
-        continue;
-      }
-
-      try {
-        final details = await client.fetchWorkDetails(summary.detailUri);
-        if (cancellationToken?.isCancelled ?? false) {
+      final fetched = <ScrapeWorkDetails>[];
+      var hadSourceFailure = false;
+      for (final candidate in group.candidates) {
+        if (_isCancelled(cancellationToken)) {
           break;
         }
-        final maxActressCount = options.maxActressCount;
-        if (maxActressCount != null) {
-          if (details.actressUris.isEmpty) {
-            failed++;
-            _notify(
-              onProgress,
-              current,
-              summaries.length,
-              saved,
-              excluded,
-              failed,
-            );
+        try {
+          final source = sources[candidate.source.id];
+          if (source == null) {
+            hadSourceFailure = true;
             continue;
           }
-          if (details.actressUris.length > maxActressCount) {
-            excluded++;
-            _notify(
-              onProgress,
-              current,
-              summaries.length,
-              saved,
-              excluded,
-              failed,
-            );
+          final details = await source.fetchWorkDetails(candidate.summary);
+          final code = canonicalizeWorkCode(details.code);
+          if (code == null ||
+              (group.expectedCode != null && code != group.expectedCode)) {
+            hadSourceFailure = true;
             continue;
           }
+          fetched.add(
+            _withCanonicalCode(
+              details,
+              code,
+              fallbackTitle: candidate.summary.title,
+              fallbackReleaseDate: candidate.summary.releaseDate,
+            ),
+          );
+        } catch (_) {
+          hadSourceFailure = true;
         }
+      }
+      if (_isCancelled(cancellationToken)) {
+        break;
+      }
+      if (fetched.isEmpty) {
+        failed++;
+        _notify(
+          onProgress,
+          current,
+          groups.groups.length,
+          saved,
+          excluded,
+          failed,
+          source: group.sourceId,
+        );
+        continue;
+      }
+      final code = canonicalizeWorkCode(fetched.first.code);
+      if (code == null) {
+        failed++;
+        continue;
+      }
+      final existing = resolvedGroups[code];
+      if (existing == null) {
+        resolvedGroups[code] = _ResolvedWorkGroup(
+          code: code,
+          details: fetched,
+          hadSourceFailure: hadSourceFailure,
+        );
+      } else {
+        existing.details.addAll(fetched);
+        existing.hadSourceFailure =
+            existing.hadSourceFailure || hadSourceFailure;
+      }
+      _notify(
+        onProgress,
+        current,
+        groups.groups.length,
+        saved,
+        excluded,
+        failed,
+        source: group.sourceId,
+      );
+    }
+
+    for (final resolved in resolvedGroups.values) {
+      if (_isCancelled(cancellationToken)) {
+        break;
+      }
+      final code = canonicalizeWorkCode(resolved.code);
+      if (code == null) {
+        failed++;
+        continue;
+      }
+      if (exclusions.matches(code)) {
+        excluded++;
+        continue;
+      }
+      final merged = _mergeWorkDetails(resolved.details, code);
+      final maxActressCount = options.maxActressCount;
+      if (maxActressCount != null) {
+        final performerCount = merged.performerCount;
+        if (performerCount == null || performerCount <= 0) {
+          failed++;
+          continue;
+        }
+        if (performerCount > maxActressCount) {
+          excluded++;
+          continue;
+        }
+      }
+      try {
         await _saveWork(
           actressId: actressId,
-          details: details,
+          details: merged,
           missingOnly: options.fillMissingOnly,
           cancellationToken: cancellationToken,
         );
@@ -314,19 +414,171 @@ class WorksScrapeService {
       } catch (_) {
         failed++;
       }
-      _notify(onProgress, current, summaries.length, saved, excluded, failed);
     }
 
+    final partial =
+        sourceResults.values.any(
+          (result) =>
+              result.state == ScrapeSourceRunState.failed ||
+              result.state == ScrapeSourceRunState.unavailable ||
+              result.state == ScrapeSourceRunState.cancelled,
+        ) ||
+        failed > 0 ||
+        resolvedGroups.values.any((group) => group.hadSourceFailure);
     return WorksScrapeResult(
       saved: saved,
       excluded: excluded,
       failed: failed,
-      cancelled: cancellationToken?.isCancelled ?? false,
+      cancelled: _isCancelled(cancellationToken),
       actressImageStatus: actressImageStatus,
+      partialSuccess: partial,
+      sourceResults: Map.unmodifiable(sourceResults),
     );
   }
 
-  JavBusActressPage _mergeActressPages(List<JavBusActressPage> pages) {
+  List<String> _queries(String name, List<String> aliases) {
+    final queries = <String>[name];
+    final seen = <String>{name.toLowerCase()};
+    for (final alias in aliases) {
+      final normalized = alias.trim();
+      if (normalized.isNotEmpty && seen.add(normalized.toLowerCase())) {
+        queries.add(normalized);
+      }
+    }
+    return queries;
+  }
+
+  Future<_CollectedSource> _collectSource({
+    required ScrapeSource source,
+    required List<String> queries,
+    required WorksScrapeCancellationToken? cancellationToken,
+    required bool includeWorks,
+  }) async {
+    final pages = <String, ScrapeActressPage>{};
+    final matches = <String, ScrapeActressSearchResult>{};
+    final completedUris = <String>{};
+    final summaries = <ScrapeWorkSummary>[];
+    Object? lastError;
+    var matched = false;
+    var traversed = false;
+    for (final query in queries) {
+      if (_isCancelled(cancellationToken)) {
+        break;
+      }
+      List<ScrapeActressSearchResult> results;
+      try {
+        results = await source.searchActresses(query);
+      } catch (error) {
+        lastError = error;
+        continue;
+      }
+      final queryKey = query.trim().toLowerCase();
+      for (final actress in results.where(
+        (result) => result.name.trim().toLowerCase() == queryKey,
+      )) {
+        matched = true;
+        final uriKey = actress.uri.toString();
+        if (completedUris.contains(uriKey)) {
+          continue;
+        }
+        matches[uriKey] = actress;
+        try {
+          final page = await source.fetchActressPage(actress);
+          pages[uriKey] = page;
+          if (!includeWorks) {
+            traversed = true;
+            completedUris.add(uriKey);
+            continue;
+          }
+          try {
+            final sourceWorks = await source.fetchActressWorks(
+              actress,
+              firstPage: page,
+              isCancelled: () => _isCancelled(cancellationToken),
+            );
+            summaries.addAll(sourceWorks);
+            traversed = true;
+            completedUris.add(uriKey);
+          } catch (error) {
+            lastError = error;
+          }
+        } catch (error) {
+          lastError = error;
+        }
+      }
+    }
+    final state = _isCancelled(cancellationToken)
+        ? ScrapeSourceRunState.cancelled
+        : traversed
+        ? (summaries.isEmpty
+              ? ScrapeSourceRunState.zeroResults
+              : ScrapeSourceRunState.success)
+        : matched
+        ? ScrapeSourceRunState.failed
+        : ScrapeSourceRunState.unavailable;
+    return _CollectedSource(
+      source: source,
+      pages: pages,
+      summaries: summaries,
+      result: ScrapeSourceRunResult(
+        source: source.id,
+        state: state,
+        discovered: summaries.length,
+        error: lastError,
+      ),
+    );
+  }
+
+  _WorkGroups _buildWorkGroups(
+    List<ScrapeSourceId> sourceIds,
+    Map<ScrapeSourceId, _CollectedSource> collectedById,
+    PrefixExclusion exclusions,
+  ) {
+    final groupsByKey = <String, _WorkGroup>{};
+    final groups = <_WorkGroup>[];
+    var preExcluded = 0;
+    final preExcludedCodes = <String>{};
+    for (final sourceId in sourceIds) {
+      final collected = collectedById[sourceId];
+      if (collected == null) {
+        continue;
+      }
+      for (final summary in collected.summaries) {
+        final code = canonicalizeWorkCode(summary.code);
+        if (code != null && exclusions.matches(code)) {
+          if (preExcludedCodes.add(code)) {
+            preExcluded++;
+          }
+          continue;
+        }
+        final key = code ?? '${sourceId.storageValue}:${summary.detailUri}';
+        final group = groupsByKey[key];
+        if (group == null) {
+          final created = _WorkGroup(expectedCode: code, sourceId: sourceId);
+          created.candidates.add(
+            _WorkCandidate(source: collected.source, summary: summary),
+          );
+          groupsByKey[key] = created;
+          groups.add(created);
+        } else {
+          if (group.candidates.any(
+            (candidate) => candidate.source.id == sourceId,
+          )) {
+            continue;
+          }
+          group.candidates.add(
+            _WorkCandidate(source: collected.source, summary: summary),
+          );
+        }
+      }
+    }
+    return _WorkGroups(groups: groups, preExcluded: preExcluded);
+  }
+
+  ScrapedActressDetails _mergeActressPages(
+    List<ScrapeActressPage> pages, {
+    required ScrapeSource source,
+  }) {
     String? firstValue(String? Function(ScrapedActressDetails) select) {
       for (final page in pages) {
         final value = select(page.details)?.trim();
@@ -340,48 +592,34 @@ class WorksScrapeService {
     Uri? avatarUrl;
     for (final page in pages) {
       final candidate = page.details.avatarUrl;
-      if (_isUsableAvatar(candidate)) {
+      if (candidate != null && source.acceptsImageUri(candidate)) {
         avatarUrl = candidate;
         break;
       }
     }
-    return JavBusActressPage(
-      details: ScrapedActressDetails(
-        name: firstValue((details) => details.name),
-        avatarUrl: avatarUrl,
-        birthDate: firstValue((details) => details.birthDate),
-        height: firstValue((details) => details.height),
-        cup: firstValue((details) => details.cup),
-        bust: firstValue((details) => details.bust),
-        waist: firstValue((details) => details.waist),
-        hip: firstValue((details) => details.hip),
-      ),
-      works: const [],
-      pageCount: 1,
+    return ScrapedActressDetails(
+      name: firstValue((details) => details.name),
+      avatarUrl: avatarUrl,
+      birthDate: firstValue((details) => details.birthDate),
+      height: firstValue((details) => details.height),
+      cup: firstValue((details) => details.cup),
+      bust: firstValue((details) => details.bust),
+      waist: firstValue((details) => details.waist),
+      hip: firstValue((details) => details.hip),
     );
-  }
-
-  bool _isUsableAvatar(Uri? uri) {
-    if (uri == null) {
-      return false;
-    }
-    final port = uri.hasPort ? uri.port : 443;
-    return uri.scheme == 'https' &&
-        uri.userInfo.isEmpty &&
-        uri.host.toLowerCase() == 'www.javbus.com' &&
-        port == 443 &&
-        !uri.path.toLowerCase().endsWith('/nowprinting.gif');
   }
 
   Future<ActressImageSyncStatus> _syncActress({
     required int actressId,
-    required JavBusActressPage page,
+    required ScrapedActressDetails details,
+    required ScrapeSource source,
     required WorkScrapeOptions options,
   }) async {
     return db.runManagedImageLifecycle(
       () => _syncActressUnlocked(
         actressId: actressId,
-        page: page,
+        details: details,
+        source: source,
         options: options,
       ),
     );
@@ -389,7 +627,8 @@ class WorksScrapeService {
 
   Future<ActressImageSyncStatus> _syncActressUnlocked({
     required int actressId,
-    required JavBusActressPage page,
+    required ScrapedActressDetails details,
+    required ScrapeSource source,
     required WorkScrapeOptions options,
   }) async {
     String? imagePath;
@@ -397,14 +636,17 @@ class WorksScrapeService {
     var imageStatus = options.replaceActressImage
         ? ActressImageSyncStatus.unavailable
         : ActressImageSyncStatus.notRequested;
-    if (options.replaceActressImage && page.details.avatarUrl != null) {
+    final avatar = details.avatarUrl;
+    if (options.replaceActressImage &&
+        avatar != null &&
+        source.acceptsImageUri(avatar)) {
       try {
         previousImagePath = (await db.getActressById(
           actressId,
         ))?['img_path']?.toString();
         final version = DateTime.now().microsecondsSinceEpoch;
         imagePath = await actressImageDownloader.download(
-          page.details.avatarUrl!,
+          avatar,
           path.join(
             imageDirectory,
             'actresses',
@@ -422,22 +664,21 @@ class WorksScrapeService {
       return imageStatus;
     }
 
-    final source = page.details;
-    final details = ScrapedActressDetails(
+    final syncDetails = ScrapedActressDetails(
       // The local canonical name is authoritative; scraped alias pages must
       // never rename the actress record.
       name: null,
       imagePath: imagePath,
-      birthDate: options.syncDetails ? source.birthDate : null,
-      height: options.syncDetails ? source.height : null,
-      cup: options.syncDetails ? source.cup : null,
-      bust: options.syncDetails ? source.bust : null,
-      waist: options.syncDetails ? source.waist : null,
-      hip: options.syncDetails ? source.hip : null,
+      birthDate: options.syncDetails ? details.birthDate : null,
+      height: options.syncDetails ? details.height : null,
+      cup: options.syncDetails ? details.cup : null,
+      bust: options.syncDetails ? details.bust : null,
+      waist: options.syncDetails ? details.waist : null,
+      hip: options.syncDetails ? details.hip : null,
     );
     final updated = await db.syncActressDetails(
       actressId: actressId,
-      details: details,
+      details: syncDetails,
       missingOnly: options.fillMissingOnly,
       replaceImage: options.replaceActressImage,
     );
@@ -476,7 +717,7 @@ class WorksScrapeService {
 
   Future<void> _saveWork({
     required int actressId,
-    required JavBusWorkDetails details,
+    required ScrapeWorkDetails details,
     required bool missingOnly,
     WorksScrapeCancellationToken? cancellationToken,
   }) async {
@@ -492,11 +733,11 @@ class WorksScrapeService {
 
   Future<void> _saveWorkUnlocked({
     required int actressId,
-    required JavBusWorkDetails details,
+    required ScrapeWorkDetails details,
     required bool missingOnly,
     WorksScrapeCancellationToken? cancellationToken,
   }) async {
-    if (cancellationToken?.isCancelled ?? false) {
+    if (_isCancelled(cancellationToken)) {
       throw const _ScrapeCancelled();
     }
     var work = details.toWork();
@@ -508,33 +749,40 @@ class WorksScrapeService {
     final current = await db.getWorkById(workId);
     final currentCard = current?['card_image_path']?.toString() ?? '';
     final currentDetail = current?['detail_image_path']?.toString() ?? '';
-    final safeCode = base64Url
-        .encode(utf8.encode(details.code.trim().toUpperCase()))
-        .replaceAll('=', '');
-
-    if (cancellationToken?.isCancelled ?? false) {
+    if (_isCancelled(cancellationToken)) {
       throw const _ScrapeCancelled();
     }
     final cardPath = await _downloadWorkImage(
-      code: details.code,
-      studio: details.studio,
+      details: details,
       variant: WorkImageVariant.card,
-      targetPath: path.join(imageDirectory, 'works', '${safeCode}_card.jpg'),
+      targetPath: path.join(
+        imageDirectory,
+        'works',
+        workImageDownloader.fileNameFor(
+          code: details.code,
+          variant: WorkImageVariant.card,
+        ),
+      ),
       currentPath: currentCard,
       missingOnly: missingOnly,
     );
-    if (cancellationToken?.isCancelled ?? false) {
+    if (_isCancelled(cancellationToken)) {
       throw const _ScrapeCancelled();
     }
     final detailPath = await _downloadWorkImage(
-      code: details.code,
-      studio: details.studio,
+      details: details,
       variant: WorkImageVariant.detail,
-      targetPath: path.join(imageDirectory, 'works', '${safeCode}_detail.jpg'),
+      targetPath: path.join(
+        imageDirectory,
+        'works',
+        workImageDownloader.fileNameFor(
+          code: details.code,
+          variant: WorkImageVariant.detail,
+        ),
+      ),
       currentPath: currentDetail,
       missingOnly: missingOnly,
     );
-
     work = details.toWork(cardImagePath: cardPath, detailImagePath: detailPath);
     await db.upsertActressWork(
       actressId: actressId,
@@ -544,8 +792,7 @@ class WorksScrapeService {
   }
 
   Future<String?> _downloadWorkImage({
-    required String code,
-    required String? studio,
+    required ScrapeWorkDetails details,
     required WorkImageVariant variant,
     required String targetPath,
     required String currentPath,
@@ -556,10 +803,25 @@ class WorksScrapeService {
         File(currentPath).existsSync()) {
       return currentPath;
     }
+    final uriDownloader = imageUriDownloader;
+    if (uriDownloader != null) {
+      for (final uri in details.imageUris) {
+        final source = sources[details.source];
+        if (source == null || !source.acceptsImageUri(uri)) {
+          continue;
+        }
+        try {
+          return await uriDownloader.download(uri: uri, targetPath: targetPath);
+        } catch (_) {
+          // Continue to the next source image and then use the legacy image
+          // policy as a compatibility fallback.
+        }
+      }
+    }
     try {
       await workImageDownloader.downloadToFile(
-        code: code,
-        studio: studio,
+        code: details.code,
+        studio: details.studio,
         variant: variant,
         targetPath: targetPath,
       );
@@ -569,14 +831,101 @@ class WorksScrapeService {
     }
   }
 
+  ScrapeWorkDetails _withCanonicalCode(
+    ScrapeWorkDetails details,
+    String code, {
+    required String fallbackTitle,
+    required String? fallbackReleaseDate,
+  }) {
+    return ScrapeWorkDetails(
+      source: details.source,
+      code: code,
+      title: details.title.trim().isEmpty ? fallbackTitle : details.title,
+      releaseDate: details.releaseDate ?? fallbackReleaseDate,
+      durationMinutes: details.durationMinutes,
+      studio: details.studio,
+      publisher: details.publisher,
+      series: details.series,
+      performerCount: details.performerCount,
+      imageUris: details.imageUris,
+    );
+  }
+
+  ScrapeWorkDetails _mergeWorkDetails(
+    List<ScrapeWorkDetails> details,
+    String code,
+  ) {
+    String? firstText(String? Function(ScrapeWorkDetails) select) {
+      for (final item in details) {
+        final value = select(item)?.trim();
+        if (value != null && value.isNotEmpty) {
+          return value;
+        }
+      }
+      return null;
+    }
+
+    int? firstInt(int? Function(ScrapeWorkDetails) select) {
+      for (final item in details) {
+        final value = select(item);
+        if (value != null && value > 0) {
+          return value;
+        }
+      }
+      return null;
+    }
+
+    int? performerCount;
+    for (final item in details) {
+      final value = item.performerCount;
+      if (value != null && (performerCount == null || value > performerCount)) {
+        performerCount = value;
+      }
+    }
+    final imageUris = <Uri>[];
+    final imageKeys = <String>{};
+    for (final item in details) {
+      for (final uri in item.imageUris) {
+        if (imageKeys.add(uri.toString())) {
+          imageUris.add(uri);
+        }
+      }
+    }
+    return ScrapeWorkDetails(
+      source: details.first.source,
+      code: code,
+      title: firstText((item) => item.title) ?? code,
+      releaseDate: firstText((item) => item.releaseDate),
+      durationMinutes: firstInt((item) => item.durationMinutes),
+      studio: firstText((item) => item.studio),
+      publisher: firstText((item) => item.publisher),
+      series: firstText((item) => item.series),
+      performerCount: performerCount,
+      imageUris: List.unmodifiable(imageUris),
+    );
+  }
+
+  bool _hasExactMatch(Iterable<ScrapeSourceRunResult> results) {
+    return results.any(
+      (result) =>
+          result.error != null ||
+          result.state == ScrapeSourceRunState.failed ||
+          result.state == ScrapeSourceRunState.zeroResults,
+    );
+  }
+
+  bool _isCancelled(WorksScrapeCancellationToken? token) =>
+      token?.isCancelled ?? false;
+
   void _notify(
     void Function(WorksScrapeProgress progress)? callback,
     int current,
     int total,
     int saved,
     int excluded,
-    int failed,
-  ) {
+    int failed, {
+    ScrapeSourceId? source,
+  }) {
     callback?.call(
       WorksScrapeProgress(
         current: current,
@@ -584,9 +933,58 @@ class WorksScrapeService {
         saved: saved,
         excluded: excluded,
         failed: failed,
+        source: source,
       ),
     );
   }
+}
+
+final class _CollectedSource {
+  const _CollectedSource({
+    required this.source,
+    required this.pages,
+    required this.summaries,
+    required this.result,
+  });
+
+  final ScrapeSource source;
+  final Map<String, ScrapeActressPage> pages;
+  final List<ScrapeWorkSummary> summaries;
+  final ScrapeSourceRunResult result;
+}
+
+final class _WorkCandidate {
+  const _WorkCandidate({required this.source, required this.summary});
+
+  final ScrapeSource source;
+  final ScrapeWorkSummary summary;
+}
+
+final class _WorkGroup {
+  _WorkGroup({required this.expectedCode, required this.sourceId});
+
+  final String? expectedCode;
+  final ScrapeSourceId sourceId;
+  final candidates = <_WorkCandidate>[];
+}
+
+final class _WorkGroups {
+  const _WorkGroups({required this.groups, required this.preExcluded});
+
+  final List<_WorkGroup> groups;
+  final int preExcluded;
+}
+
+final class _ResolvedWorkGroup {
+  _ResolvedWorkGroup({
+    required this.code,
+    required this.details,
+    required this.hadSourceFailure,
+  });
+
+  final String code;
+  final List<ScrapeWorkDetails> details;
+  bool hadSourceFailure;
 }
 
 class _ScrapeCancelled implements Exception {

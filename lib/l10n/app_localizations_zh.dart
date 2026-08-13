@@ -514,7 +514,40 @@ class AppLocalizationsZh extends AppLocalizations {
   String get otherSettings => '其他';
 
   @override
+  String get about => '關於';
+
+  @override
+  String get github => 'github';
+
+  @override
+  String get feedbackSuggestions => '回饋建議';
+
+  @override
   String get scrapeSources => '刮削來源';
+
+  @override
+  String get scrapeSourceDetailsTitle => '女優詳細資料來源';
+
+  @override
+  String get scrapeSourceWorksTitle => '作品來源';
+
+  @override
+  String get scrapeSourceMinnanoAv => 'Minnano AV';
+
+  @override
+  String get scrapeSourceJavBus => 'JavBus';
+
+  @override
+  String get scrapeSourceAll => '所有來源（依番號整合並去重複）';
+
+  @override
+  String get scrapeSourceSaveFailed => '無法儲存刮削來源設定。';
+
+  @override
+  String get scrapePartial => '部分來源或作品無法處理。';
+
+  @override
+  String get scrapeZeroResults => '找不到新作品。';
 
   @override
   String get softwareUpdate => '軟體更新';
@@ -1096,7 +1129,40 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get otherSettings => '其他';
 
   @override
+  String get about => '关于';
+
+  @override
+  String get github => 'github';
+
+  @override
+  String get feedbackSuggestions => '反馈建议';
+
+  @override
   String get scrapeSources => '刮削来源';
+
+  @override
+  String get scrapeSourceDetailsTitle => '女优详细资料来源';
+
+  @override
+  String get scrapeSourceWorksTitle => '作品来源';
+
+  @override
+  String get scrapeSourceMinnanoAv => 'Minnano AV';
+
+  @override
+  String get scrapeSourceJavBus => 'JavBus';
+
+  @override
+  String get scrapeSourceAll => '所有来源（按番号整合并去重）';
+
+  @override
+  String get scrapeSourceSaveFailed => '无法保存刮削来源设置。';
+
+  @override
+  String get scrapePartial => '部分来源或作品无法处理。';
+
+  @override
+  String get scrapeZeroResults => '找不到新作品。';
 
   @override
   String get softwareUpdate => '软件更新';
@@ -1678,7 +1744,40 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get otherSettings => '其他';
 
   @override
+  String get about => '關於';
+
+  @override
+  String get github => 'github';
+
+  @override
+  String get feedbackSuggestions => '回饋建議';
+
+  @override
   String get scrapeSources => '刮削來源';
+
+  @override
+  String get scrapeSourceDetailsTitle => '女優詳細資料來源';
+
+  @override
+  String get scrapeSourceWorksTitle => '作品來源';
+
+  @override
+  String get scrapeSourceMinnanoAv => 'Minnano AV';
+
+  @override
+  String get scrapeSourceJavBus => 'JavBus';
+
+  @override
+  String get scrapeSourceAll => '所有來源（依番號整合並去重複）';
+
+  @override
+  String get scrapeSourceSaveFailed => '無法儲存刮削來源設定。';
+
+  @override
+  String get scrapePartial => '部分來源或作品無法處理。';
+
+  @override
+  String get scrapeZeroResults => '找不到新作品。';
 
   @override
   String get softwareUpdate => '軟體更新';

@@ -103,6 +103,11 @@ void main() {
       expect(exported.summary.actresses, 1);
       expect(exported.summary.works, 1);
       expect(exported.summary.images, 3);
+      final archive = ZipDecoder().decodeBytes(exported.bytes);
+      expect(
+        archive.files.map((file) => file.name),
+        containsAll(['assets/rt00001ps.jpg', 'assets/rt00001pl.jpg']),
+      );
 
       final result = await DataTransferService(
         db: target,
@@ -119,6 +124,14 @@ void main() {
       expect(await target.getWorkCountForActress(importedId), 1);
       final importedWork = (await target.getWorksForActress(importedId)).single;
       expect(importedWork['code'], 'RT-001');
+      expect(
+        path.basename(importedWork['card_image_path'] as String),
+        'rt00001ps.jpg',
+      );
+      expect(
+        path.basename(importedWork['detail_image_path'] as String),
+        'rt00001pl.jpg',
+      );
       expect(
         await File(importedActors.single['img_path'] as String).exists(),
         isTrue,
@@ -221,21 +234,91 @@ void main() {
     expect(count.single['count'], 0);
   });
 
-  test('import keeps staged images referenced by the committed database rows',
-      () async {
-    final avatar = File(path.join(source.imgDir, 'avatar.jpg'));
-    await avatar.writeAsBytes([1, 2, 3, 4]);
-    await source.addActress(name: 'Staged Image Actor', imgPath: avatar.path);
+  test(
+    'import keeps staged images referenced by the committed database rows',
+    () async {
+      final avatar = File(path.join(source.imgDir, 'avatar.jpg'));
+      await avatar.writeAsBytes([1, 2, 3, 4]);
+      await source.addActress(name: 'Staged Image Actor', imgPath: avatar.path);
 
-    final exported = await DataTransferService(db: source).buildExport();
+      final exported = await DataTransferService(db: source).buildExport();
+      final result = await DataTransferService(
+        db: target,
+      ).importArchive(bytes: exported.bytes);
+
+      expect(result.succeeded, isTrue);
+      final imported = (await target.getAllActresses()).single;
+      final importedPath = imported['img_path'] as String;
+      expect(importedPath, contains('.imports'));
+      expect(await File(importedPath).readAsBytes(), [1, 2, 3, 4]);
+    },
+  );
+
+  test('import normalizes legacy work asset names to the work code', () async {
+    const payload = [1, 2, 3];
+    const checksum =
+        '039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81';
+    final manifest = DataTransferManifest(
+      exportedAt: '2026-08-10T00:00:00Z',
+      actresses: const [],
+      works: const [
+        DataTransferWork(
+          id: 'w000001',
+          code: 'START-489',
+          title: 'Legacy asset names',
+          releaseDate: null,
+          durationMinutes: null,
+          studio: null,
+          publisher: null,
+          series: null,
+          cardImageAssetId: 'asset000001',
+          detailImageAssetId: 'asset000002',
+          createdAt: null,
+          modifiedAt: null,
+        ),
+      ],
+      relations: const [],
+      assets: const [
+        DataTransferAsset(
+          id: 'asset000001',
+          path: 'assets/asset000001.jpg',
+          size: 3,
+          sha256: checksum,
+        ),
+        DataTransferAsset(
+          id: 'asset000002',
+          path: 'assets/asset000002.jpg',
+          size: 3,
+          sha256: checksum,
+        ),
+      ],
+    );
+    final archive = Archive()
+      ..addFile(
+        ArchiveFile.bytes('manifest.json', utf8.encode(manifest.encode())),
+      )
+      ..addFile(ArchiveFile.bytes('assets/asset000001.jpg', payload))
+      ..addFile(ArchiveFile.bytes('assets/asset000002.jpg', payload));
+
     final result = await DataTransferService(
       db: target,
-    ).importArchive(bytes: exported.bytes);
+    ).importArchive(bytes: Uint8List.fromList(ZipEncoder().encode(archive)));
 
-    expect(result.succeeded, isTrue);
-    final imported = (await target.getAllActresses()).single;
-    final importedPath = imported['img_path'] as String;
-    expect(importedPath, contains('.imports'));
-    expect(await File(importedPath).readAsBytes(), [1, 2, 3, 4]);
+    expect(result.succeeded, isTrue, reason: result.error?.toString());
+    final imported = (await target.database).query(
+      'works',
+      columns: const ['card_image_path', 'detail_image_path'],
+      where: 'code = ?',
+      whereArgs: ['START-489'],
+    );
+    final work = (await imported).single;
+    expect(
+      path.basename(work['card_image_path'] as String),
+      'start00489ps.jpg',
+    );
+    expect(
+      path.basename(work['detail_image_path'] as String),
+      'start00489pl.jpg',
+    );
   });
 }

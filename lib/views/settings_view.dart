@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:avaca/l10n/app_localizations.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../components/aligned_app_bar_back_button.dart';
 import '../components/adaptive_page_layout.dart';
 import '../controllers/data_transfer_controller.dart';
@@ -13,8 +14,15 @@ import '../controllers/software_update_controller.dart';
 import '../core/database.dart';
 import '../core/layout.dart';
 import '../models/data_transfer_models.dart';
+import '../models/scrape_source_settings.dart';
 import '../services/data_transfer_service.dart';
 import 'software_update_view.dart';
+
+typedef ExternalUrlLauncher = Future<bool> Function(Uri uri);
+
+Future<bool> _launchExternalUrl(Uri uri) {
+  return launchUrl(uri, mode: LaunchMode.externalApplication);
+}
 
 class _SettingsInteractionTheme extends StatelessWidget {
   const _SettingsInteractionTheme({required this.child});
@@ -164,6 +172,7 @@ class SettingsView extends StatefulWidget {
     required this.onLocaleChanged,
     this.transferController,
     this.softwareUpdateController,
+    this.externalUrlLauncher = _launchExternalUrl,
   });
 
   final AppDatabase db;
@@ -176,6 +185,7 @@ class SettingsView extends StatefulWidget {
   final void Function(Locale? locale) onLocaleChanged;
   final DataTransferController? transferController;
   final SoftwareUpdateController? softwareUpdateController;
+  final ExternalUrlLauncher externalUrlLauncher;
 
   @override
   State<SettingsView> createState() => _SettingsViewState();
@@ -183,6 +193,12 @@ class SettingsView extends StatefulWidget {
 
 class _SettingsViewState extends State<SettingsView> {
   static const double _settingsCardRadius = 12;
+  static final Uri _githubUri = Uri.parse(
+    'https://github.com/william12233/avaca',
+  );
+  static final Uri _issuesUri = Uri.parse(
+    'https://github.com/william12233/avaca/issues',
+  );
   static const AnimationStyle _expansionAnimationStyle = AnimationStyle(
     duration: Duration(milliseconds: 180),
     curve: Curves.easeOutCubic,
@@ -471,12 +487,59 @@ class _SettingsViewState extends State<SettingsView> {
             bodyBuilder: _buildScrapeSourcesSettings,
           ),
         ),
+        const SizedBox(height: 8),
+        _settingsActionCard(
+          context: context,
+          feedbackId: 'other-about',
+          icon: Icons.info_outline,
+          title: localizations.about,
+          subtitle: null,
+          enabled: true,
+          onTap: () => _openCategory(
+            titleBuilder: (context) => AppLocalizations.of(context).about,
+            bodyBuilder: _buildAboutSettings,
+          ),
+        ),
       ],
     );
   }
 
   Widget _buildScrapeSourcesSettings(BuildContext context) {
-    return ListView(padding: EdgeInsets.zero);
+    return _ScrapeSourcesSettingsBody(database: widget.db);
+  }
+
+  Widget _buildAboutSettings(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+    return ListView(
+      padding: EdgeInsets.zero,
+      children: [
+        _settingsActionCard(
+          context: context,
+          feedbackId: 'about-github',
+          icon: Icons.code_outlined,
+          title: localizations.github,
+          subtitle: null,
+          enabled: true,
+          trailing: const Icon(Icons.open_in_new),
+          onTap: () => unawaited(_openExternalLink(_githubUri)),
+        ),
+        const SizedBox(height: 8),
+        _settingsActionCard(
+          context: context,
+          feedbackId: 'about-feedback-suggestions',
+          icon: Icons.feedback_outlined,
+          title: localizations.feedbackSuggestions,
+          subtitle: null,
+          enabled: true,
+          trailing: const Icon(Icons.open_in_new),
+          onTap: () => unawaited(_openExternalLink(_issuesUri)),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _openExternalLink(Uri uri) async {
+    await widget.externalUrlLauncher(uri);
   }
 
   Widget _settingsActionCard({
@@ -994,6 +1057,165 @@ class _TransferProgressIndicator extends StatelessWidget {
     return const SizedBox.square(
       dimension: 22,
       child: CircularProgressIndicator(strokeWidth: 2),
+    );
+  }
+}
+
+class _ScrapeSourcesSettingsBody extends StatefulWidget {
+  const _ScrapeSourcesSettingsBody({required this.database});
+
+  final AppDatabase database;
+
+  @override
+  State<_ScrapeSourcesSettingsBody> createState() =>
+      _ScrapeSourcesSettingsBodyState();
+}
+
+class _ScrapeSourcesSettingsBodyState
+    extends State<_ScrapeSourcesSettingsBody> {
+  late final Future<ScrapeSourceSettings> _settingsFuture;
+  ScrapeSourceSettings? _settings;
+  Future<void> _saveQueue = Future<void>.value();
+  int _selectionVersion = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // This state is created for each category visit, so reopening the page
+    // always reads the latest persisted selection instead of reusing the
+    // SettingsView state's initial Future.
+    _settingsFuture = _loadScrapeSourceSettings();
+  }
+
+  Future<ScrapeSourceSettings> _loadScrapeSourceSettings() async {
+    return ScrapeSourceSettings.decode(
+      await widget.database.getSetting(scrapeSourceSettingsKey),
+    );
+  }
+
+  Future<void> _select({
+    ScrapeSourceId? actressDetailsSource,
+    WorksSourceSelection? worksSource,
+  }) async {
+    final current = _settings;
+    if (current == null) {
+      return;
+    }
+    final next = current.copyWith(
+      actressDetailsSource: actressDetailsSource,
+      worksSource: worksSource,
+    );
+    final version = ++_selectionVersion;
+    setState(() => _settings = next);
+    final save = _saveQueue.then<void>(
+      (_) => widget.database.setSetting(scrapeSourceSettingsKey, next.encode()),
+    );
+    _saveQueue = save.catchError((_) {});
+    try {
+      await save;
+    } catch (_) {
+      if (!mounted || version != _selectionVersion) {
+        return;
+      }
+      final persisted = await _loadScrapeSourceSettings();
+      if (!mounted || version != _selectionVersion) {
+        return;
+      }
+      setState(() => _settings = persisted);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context).scrapeSourceSaveFailed),
+          ),
+        );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<ScrapeSourceSettings>(
+      key: const PageStorageKey('scrape-source-settings-loader'),
+      future: _settingsFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(
+            child: Text(AppLocalizations.of(context).scrapeSourceSaveFailed),
+          );
+        }
+        _settings ??= snapshot.data ?? const ScrapeSourceSettings();
+        final settings = _settings!;
+        final localizations = AppLocalizations.of(context);
+        return ListView(
+          key: const PageStorageKey('scrape-source-settings-scroll'),
+          padding: EdgeInsets.zero,
+          children: [
+            _sourceSelector<ScrapeSourceId>(
+              key: const PageStorageKey('scrape-actress-source'),
+              title: localizations.scrapeSourceDetailsTitle,
+              value: settings.actressDetailsSource,
+              options: [
+                (ScrapeSourceId.minnanoAv, localizations.scrapeSourceMinnanoAv),
+                (ScrapeSourceId.javbus, localizations.scrapeSourceJavBus),
+              ],
+              onChanged: (value) =>
+                  unawaited(_select(actressDetailsSource: value)),
+            ),
+            const SizedBox(height: 12),
+            _sourceSelector<WorksSourceSelection>(
+              key: const PageStorageKey('scrape-works-source'),
+              title: localizations.scrapeSourceWorksTitle,
+              value: settings.worksSource,
+              options: [
+                (WorksSourceSelection.all, localizations.scrapeSourceAll),
+                (
+                  WorksSourceSelection.minnanoAv,
+                  localizations.scrapeSourceMinnanoAv,
+                ),
+                (WorksSourceSelection.javbus, localizations.scrapeSourceJavBus),
+              ],
+              onChanged: (value) => unawaited(_select(worksSource: value)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _sourceSelector<T>({
+    required Key key,
+    required String title,
+    required T value,
+    required List<(T, String)> options,
+    required ValueChanged<T?> onChanged,
+  }) {
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 0,
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        key: key,
+        title: Text(title),
+        children: [
+          RadioGroup<T>(
+            groupValue: value,
+            onChanged: onChanged,
+            child: Column(
+              children: [
+                for (final option in options)
+                  RadioListTile<T>(
+                    value: option.$1,
+                    title: Text(option.$2),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

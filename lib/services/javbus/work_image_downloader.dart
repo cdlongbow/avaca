@@ -77,6 +77,13 @@ class WorkImageDownloader {
   final BinaryTransport _transport;
   final WorkImagePolicy _policy;
 
+  String fileNameFor({
+    required String code,
+    required WorkImageVariant variant,
+  }) {
+    return _policy.fileNameFor(code: code, variant: variant);
+  }
+
   void close() {
     final transport = _transport;
     if (transport is HttpBinaryTransport) {

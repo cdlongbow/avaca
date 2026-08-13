@@ -532,7 +532,40 @@ class AppLocalizationsEn extends AppLocalizations {
   String get otherSettings => 'Other';
 
   @override
+  String get about => 'About';
+
+  @override
+  String get github => 'github';
+
+  @override
+  String get feedbackSuggestions => 'Feedback';
+
+  @override
   String get scrapeSources => 'Scrape sources';
+
+  @override
+  String get scrapeSourceDetailsTitle => 'Actress details source';
+
+  @override
+  String get scrapeSourceWorksTitle => 'Works source';
+
+  @override
+  String get scrapeSourceMinnanoAv => 'Minnano AV';
+
+  @override
+  String get scrapeSourceJavBus => 'JavBus';
+
+  @override
+  String get scrapeSourceAll => 'All sources (merge and deduplicate by code)';
+
+  @override
+  String get scrapeSourceSaveFailed => 'Could not save scrape source settings.';
+
+  @override
+  String get scrapePartial => 'Some sources or records could not be processed.';
+
+  @override
+  String get scrapeZeroResults => 'No new works were found.';
 
   @override
   String get softwareUpdate => 'Software update';

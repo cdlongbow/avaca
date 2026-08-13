@@ -516,7 +516,40 @@ class AppLocalizationsJa extends AppLocalizations {
   String get otherSettings => 'その他';
 
   @override
+  String get about => '概要';
+
+  @override
+  String get github => 'github';
+
+  @override
+  String get feedbackSuggestions => 'フィードバック';
+
+  @override
   String get scrapeSources => '取得元';
+
+  @override
+  String get scrapeSourceDetailsTitle => '女優詳細情報の取得元';
+
+  @override
+  String get scrapeSourceWorksTitle => '作品の取得元';
+
+  @override
+  String get scrapeSourceMinnanoAv => 'みんなのAV';
+
+  @override
+  String get scrapeSourceJavBus => 'JavBus';
+
+  @override
+  String get scrapeSourceAll => 'すべての取得元（品番で統合・重複排除）';
+
+  @override
+  String get scrapeSourceSaveFailed => '取得元の設定を保存できませんでした。';
+
+  @override
+  String get scrapePartial => '一部の取得元または作品を処理できませんでした。';
+
+  @override
+  String get scrapeZeroResults => '新しい作品は見つかりませんでした。';
 
   @override
   String get softwareUpdate => 'ソフトウェア更新';
@@ -1102,7 +1135,40 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
   String get otherSettings => 'その他';
 
   @override
+  String get about => '概要';
+
+  @override
+  String get github => 'github';
+
+  @override
+  String get feedbackSuggestions => 'フィードバック';
+
+  @override
   String get scrapeSources => '取得元';
+
+  @override
+  String get scrapeSourceDetailsTitle => '女優詳細情報の取得元';
+
+  @override
+  String get scrapeSourceWorksTitle => '作品の取得元';
+
+  @override
+  String get scrapeSourceMinnanoAv => 'みんなのAV';
+
+  @override
+  String get scrapeSourceJavBus => 'JavBus';
+
+  @override
+  String get scrapeSourceAll => 'すべての取得元（品番で統合・重複排除）';
+
+  @override
+  String get scrapeSourceSaveFailed => '取得元の設定を保存できませんでした。';
+
+  @override
+  String get scrapePartial => '一部の取得元または作品を処理できませんでした。';
+
+  @override
+  String get scrapeZeroResults => '新しい作品は見つかりませんでした。';
 
   @override
   String get softwareUpdate => 'ソフトウェア更新';

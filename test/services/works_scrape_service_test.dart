@@ -13,6 +13,7 @@ import 'package:avaca/services/javbus/work_image_policy.dart';
 import 'package:avaca/services/works_scrape_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as image;
+import 'package:path/path.dart' as path;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
@@ -99,6 +100,10 @@ void main() {
 
       expect(client.receivedExclusions, isEmpty);
       expect(client.detailRequests, ['ABF-367']);
+      expect(workImages.targetPaths.map(path.basename), [
+        'abf00367ps.jpg',
+        'abf00367pl.jpg',
+      ]);
       expect(await database.getWorkCountForActress(actressId), 1);
       final works = await database.getWorksForActress(actressId);
       expect(works.single['code'], 'ABF-367');
@@ -736,6 +741,7 @@ class _FakeWorkImageDownloader extends WorkImageDownloader {
   _FakeWorkImageDownloader() : super(transport: _NoBinaryTransport());
 
   final downloads = <WorkImageVariant>[];
+  final targetPaths = <String>[];
 
   @override
   Future<DownloadedWorkImage> downloadToFile({
@@ -745,6 +751,7 @@ class _FakeWorkImageDownloader extends WorkImageDownloader {
     required String targetPath,
   }) async {
     downloads.add(variant);
+    targetPaths.add(targetPath);
     final file = File(targetPath);
     await file.parent.create(recursive: true);
     await file.writeAsBytes([1, 2, 3]);

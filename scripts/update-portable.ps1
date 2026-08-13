@@ -18,6 +18,11 @@ param(
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
+# PowerShell launched by cmd.exe with -NoProfile may not auto-load the utility
+# module. Import it explicitly because checksum verification depends on
+# Get-FileHash.
+Import-Module Microsoft.PowerShell.Utility -ErrorAction Stop
+
 function Stop-Avaca {
     $processes = @(Get-Process -Name 'avaca' -ErrorAction SilentlyContinue)
     foreach ($process in $processes) {

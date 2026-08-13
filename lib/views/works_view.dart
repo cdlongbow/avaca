@@ -10,9 +10,18 @@ import '../controllers/works_controller.dart';
 import '../core/database.dart';
 import '../core/layout.dart';
 import '../l10n/app_localizations.dart';
+import '../models/scrape_source_settings.dart';
 import '../models/work_scrape_options.dart';
 import '../services/javbus/javbus_client.dart';
+import '../services/javbus/javbus_scrape_source.dart';
 import '../services/javbus/javbus_verification.dart';
+import '../services/javbus/work_image_downloader.dart';
+import '../services/minnano/minnano_client.dart';
+import '../services/minnano/minnano_scrape_source.dart';
+import '../services/minnano/minnano_transport.dart';
+import '../services/scrape/scrape_image_downloader.dart';
+import '../services/scrape/scrape_source.dart';
+import '../services/scrape/scrape_source_registry.dart';
 import '../services/works_scrape_service.dart';
 import '../controllers/settings_controller.dart';
 import 'work_detail_view.dart';
@@ -734,7 +743,18 @@ class _WorksViewState extends State<WorksView> {
       };
     }
 
-    if (cancelled) {
+    final hasNoChanges =
+        !cancelled &&
+        completedResult.saved == 0 &&
+        completedResult.excluded == 0 &&
+        completedResult.failed == 0;
+    if (hasNoChanges) {
+      message = l10n.scrapeZeroResults;
+    } else if (completedResult.partialSuccess && !cancelled) {
+      message = '$message ${l10n.scrapePartial}';
+    }
+
+    if (cancelled || completedResult.partialSuccess || hasNoChanges) {
       AppSnackBar.showInfo(context, message);
     } else {
       AppSnackBar.showSuccess(context, message);
@@ -743,33 +763,72 @@ class _WorksViewState extends State<WorksView> {
 
   Future<WorksScrapeResult> _defaultScrapeExecutor(
     WorkScrapeOptions options,
-
     WorksScrapeCancellationToken token,
-
     void Function(WorksScrapeProgress progress) onProgress,
   ) async {
-    String? initialCookies;
-
+    ScrapeSourceSettings sourceSettings;
     try {
-      initialCookies = await widget.db.getSetting('javbus_cookies');
+      sourceSettings = ScrapeSourceSettings.decode(
+        await widget.db.getSetting(scrapeSourceSettingsKey),
+      );
     } catch (_) {
-      initialCookies = null;
+      sourceSettings = const ScrapeSourceSettings();
     }
 
-    final transport = HttpJavBusTransport(
-      initialCookieHeader: initialCookies,
+    final requestedSourceIds = <ScrapeSourceId>{
+      sourceSettings.actressDetailsSource,
+      ...ScrapeSourceRegistry.resolveWorksSources(sourceSettings.worksSource),
+    };
+    final configuredSources = <ScrapeSourceId, ScrapeSource>{};
+    HttpJavBusTransport? javBusTransport;
+    HttpMinnanoTransport? minnanoTransport;
+    MinnanoClient? minnanoClient;
+    HttpBinaryTransport? minnanoAvatarTransport;
+    HttpScrapeImageUriDownloader? imageUriDownloader;
 
-      verificationHandler: _showJavBusVerification,
-    );
+    if (requestedSourceIds.contains(ScrapeSourceId.javbus)) {
+      String? initialCookies;
+      try {
+        initialCookies = await widget.db.getSetting('javbus_cookies');
+      } catch (_) {
+        initialCookies = null;
+      }
+      javBusTransport = HttpJavBusTransport(
+        initialCookieHeader: initialCookies,
+        verificationHandler: _showJavBusVerification,
+      );
+      configuredSources[ScrapeSourceId.javbus] = JavBusScrapeSource(
+        JavBusClient(transport: javBusTransport),
+      );
+    }
+    if (requestedSourceIds.contains(ScrapeSourceId.minnanoAv)) {
+      minnanoTransport = HttpMinnanoTransport();
+      minnanoClient = MinnanoClient(transport: minnanoTransport);
+      configuredSources[ScrapeSourceId.minnanoAv] = MinnanoScrapeSource(
+        minnanoClient,
+      );
+      minnanoAvatarTransport = HttpBinaryTransport(
+        allowedHosts: const {'www.minnano-av.com'},
+        maxBytes: 5 * 1024 * 1024,
+      );
+      imageUriDownloader = HttpScrapeImageUriDownloader(
+        isAllowed: minnanoClient.acceptsImageUri,
+        transport: HttpBinaryTransport(
+          allowedHosts: const {'www.minnano-av.com'},
+          maxBytes: 15 * 1024 * 1024,
+        ),
+      );
+    }
 
+    final detailsImageDownloader =
+        sourceSettings.actressDetailsSource == ScrapeSourceId.minnanoAv
+        ? HttpActressImageDownloader(transport: minnanoAvatarTransport)
+        : HttpActressImageDownloader(authenticatedTransport: javBusTransport);
     final service = WorksScrapeService(
       db: widget.db,
-
-      client: JavBusClient(transport: transport),
-
-      actressImageDownloader: HttpActressImageDownloader(
-        authenticatedTransport: transport,
-      ),
+      sources: configuredSources,
+      actressImageDownloader: detailsImageDownloader,
+      imageUriDownloader: imageUriDownloader,
     );
 
     try {
@@ -779,17 +838,18 @@ class _WorksViewState extends State<WorksView> {
         actressName: controller.actressName,
 
         aliases: controller.actressAliases,
-
         options: options,
-
+        sourceSettings: sourceSettings,
         cancellationToken: token,
-
         onProgress: onProgress,
       );
     } finally {
-      if (transport.cookieHeader.isNotEmpty) {
+      if (javBusTransport != null && javBusTransport.cookieHeader.isNotEmpty) {
         try {
-          await widget.db.setSetting('javbus_cookies', transport.cookieHeader);
+          await widget.db.setSetting(
+            'javbus_cookies',
+            javBusTransport.cookieHeader,
+          );
         } catch (_) {
           // Cookie 儲存失敗不應遮蔽原始刮削結果。
         }

@@ -1069,11 +1069,77 @@ abstract class AppLocalizations {
   /// **'其他'**
   String get otherSettings;
 
+  /// No description provided for @about.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'關於'**
+  String get about;
+
+  /// No description provided for @github.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'github'**
+  String get github;
+
+  /// No description provided for @feedbackSuggestions.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'回饋建議'**
+  String get feedbackSuggestions;
+
   /// No description provided for @scrapeSources.
   ///
   /// In zh_TW, this message translates to:
   /// **'刮削來源'**
   String get scrapeSources;
+
+  /// No description provided for @scrapeSourceDetailsTitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'女優詳細資料來源'**
+  String get scrapeSourceDetailsTitle;
+
+  /// No description provided for @scrapeSourceWorksTitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'作品來源'**
+  String get scrapeSourceWorksTitle;
+
+  /// No description provided for @scrapeSourceMinnanoAv.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'Minnano AV'**
+  String get scrapeSourceMinnanoAv;
+
+  /// No description provided for @scrapeSourceJavBus.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'JavBus'**
+  String get scrapeSourceJavBus;
+
+  /// No description provided for @scrapeSourceAll.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'所有來源（依番號整合並去重複）'**
+  String get scrapeSourceAll;
+
+  /// No description provided for @scrapeSourceSaveFailed.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'無法儲存刮削來源設定。'**
+  String get scrapeSourceSaveFailed;
+
+  /// No description provided for @scrapePartial.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'部分來源或作品無法處理。'**
+  String get scrapePartial;
+
+  /// No description provided for @scrapeZeroResults.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'找不到新作品。'**
+  String get scrapeZeroResults;
 
   /// No description provided for @softwareUpdate.
   ///

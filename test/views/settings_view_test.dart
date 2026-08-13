@@ -1,6 +1,7 @@
 import 'package:avaca/core/config.dart';
 import 'package:avaca/core/database.dart';
 import 'package:avaca/l10n/app_localizations.dart';
+import 'package:avaca/models/scrape_source_settings.dart';
 import 'package:avaca/views/settings_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
@@ -33,6 +34,109 @@ void main() {
     expect(find.text('Theme Mode'), findsNothing);
     expect(find.text('Language'), findsNothing);
     expect(find.text('Pure Black AMOLED'), findsNothing);
+  });
+
+  testWidgets('about exposes GitHub and feedback links', (tester) async {
+    final openedUrls = <Uri>[];
+
+    await _pumpSettings(
+      tester,
+      externalUrlLauncher: (uri) async {
+        openedUrls.add(uri);
+        return true;
+      },
+    );
+
+    await tester.tap(find.text('Other'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('About'), findsOneWidget);
+    expect(find.byIcon(Icons.info_outline), findsOneWidget);
+
+    await tester.tap(find.text('About'));
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(AppBar, 'About'), findsOneWidget);
+    expect(find.text('github'), findsOneWidget);
+    expect(find.text('Feedback'), findsOneWidget);
+    expect(find.byIcon(Icons.open_in_new), findsNWidgets(2));
+
+    await tester.tap(find.text('github'));
+    await tester.pump();
+    await tester.tap(find.text('Feedback'));
+    await tester.pump();
+
+    expect(openedUrls, [
+      Uri.parse('https://github.com/william12233/avaca'),
+      Uri.parse('https://github.com/william12233/avaca/issues'),
+    ]);
+  });
+
+  testWidgets('scrape sources persist independent detail and work selections', (
+    tester,
+  ) async {
+    await _pumpSettings(tester);
+
+    await tester.tap(find.text('Other'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Scrape sources'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Actress details source'), findsOneWidget);
+    expect(find.text('Works source'), findsOneWidget);
+
+    await tester.tap(find.byKey(const PageStorageKey('scrape-actress-source')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.widgetWithText(RadioListTile<ScrapeSourceId>, 'JavBus'),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const PageStorageKey('scrape-works-source')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.widgetWithText(RadioListTile<WorksSourceSelection>, 'Minnano AV'),
+    );
+    await tester.pumpAndSettle();
+
+    final database = tester
+        .state<_SettingsHarnessState>(find.byType(_SettingsHarness))
+        .database;
+    final settings = ScrapeSourceSettings.decode(
+      await database.getSetting(scrapeSourceSettingsKey),
+    );
+    expect(settings.actressDetailsSource, ScrapeSourceId.javbus);
+    expect(settings.worksSource, WorksSourceSelection.minnanoAv);
+
+    // Reopening the category must read the latest persisted pair. Selecting
+    // only the works source must not restore the old default actress source.
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Scrape sources'));
+    await tester.pumpAndSettle();
+    if (find
+        .widgetWithText(
+          RadioListTile<WorksSourceSelection>,
+          'All sources (merge and deduplicate by code)',
+        )
+        .evaluate()
+        .isEmpty) {
+      await tester.tap(find.byKey(const PageStorageKey('scrape-works-source')));
+      await tester.pumpAndSettle();
+    }
+    await tester.tap(
+      find.widgetWithText(
+        RadioListTile<WorksSourceSelection>,
+        'All sources (merge and deduplicate by code)',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final reopenedSettings = ScrapeSourceSettings.decode(
+      await database.getSetting(scrapeSourceSettingsKey),
+    );
+    expect(reopenedSettings.actressDetailsSource, ScrapeSourceId.javbus);
+    expect(reopenedSettings.worksSource, WorksSourceSelection.all);
   });
 
   testWidgets('all visible settings text uses the bundled variable font', (
@@ -670,15 +774,25 @@ void _expectOutlinedShape(
 Future<void> _pumpSettings(
   WidgetTester tester, {
   TextScaler textScaler = TextScaler.noScaling,
+  ExternalUrlLauncher? externalUrlLauncher,
 }) async {
-  await tester.pumpWidget(_SettingsHarness(textScaler: textScaler));
+  await tester.pumpWidget(
+    _SettingsHarness(
+      textScaler: textScaler,
+      externalUrlLauncher: externalUrlLauncher,
+    ),
+  );
   await tester.pumpAndSettle();
 }
 
 class _SettingsHarness extends StatefulWidget {
-  const _SettingsHarness({this.textScaler = TextScaler.noScaling});
+  const _SettingsHarness({
+    this.textScaler = TextScaler.noScaling,
+    this.externalUrlLauncher,
+  });
 
   final TextScaler textScaler;
+  final ExternalUrlLauncher? externalUrlLauncher;
 
   @override
   State<_SettingsHarness> createState() => _SettingsHarnessState();
@@ -687,6 +801,7 @@ class _SettingsHarness extends StatefulWidget {
 class _SettingsHarnessState extends State<_SettingsHarness> {
   ThemeMode _themeMode = ThemeMode.system;
   Locale? _locale = const Locale('en');
+  final database = _FakeAppDatabase();
 
   @override
   Widget build(BuildContext context) {
@@ -702,7 +817,7 @@ class _SettingsHarnessState extends State<_SettingsHarness> {
         child: child!,
       ),
       home: SettingsView(
-        db: _FakeAppDatabase(),
+        db: database,
         onThemeChanged: (themeMode, _, _) {
           if (_themeMode == themeMode) return;
           setState(() => _themeMode = themeMode);
@@ -711,6 +826,7 @@ class _SettingsHarnessState extends State<_SettingsHarness> {
           if (_locale == locale) return;
           setState(() => _locale = locale);
         },
+        externalUrlLauncher: widget.externalUrlLauncher ?? (_) async => true,
       ),
     );
   }

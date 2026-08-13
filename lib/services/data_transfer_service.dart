@@ -10,6 +10,7 @@ import 'package:sqflite/sqflite.dart';
 import '../core/database.dart';
 import '../models/data_transfer_manifest.dart';
 import '../models/data_transfer_models.dart';
+import 'javbus/work_image_policy.dart';
 
 typedef DataTransferDuplicateResolver =
     Future<DataTransferDuplicateResolution?> Function(
@@ -30,6 +31,7 @@ class DataTransferService {
   DataTransferService({required this.db});
 
   final AppDatabase db;
+  static const _workImagePolicy = WorkImagePolicy();
 
   Future<DataTransferExport> buildExport({
     DataTransferProgressCallback? onProgress,
@@ -97,14 +99,22 @@ class DataTransferService {
     final imageBySource = <String, _ExportImage>{};
     var skippedImages = 0;
 
-    Future<String?> collectImage(String? storedPath) async {
+    Future<String?> collectImage(
+      String? storedPath, {
+      String? preferredArchiveFileName,
+    }) async {
       final file = await db.resolveManagedImageForTransfer(storedPath);
       if (file == null) {
         if (storedPath?.trim().isNotEmpty ?? false) skippedImages++;
         return null;
       }
       final sourceKey = _imageKey(file.path);
-      if (!imageBySource.containsKey(sourceKey)) {
+      final preferredFileName = preferredArchiveFileName == null
+          ? null
+          : '${path.basenameWithoutExtension(preferredArchiveFileName)}'
+                '${_supportedExtension(file.path)}';
+      final existing = imageBySource[sourceKey];
+      if (existing == null) {
         final bytes = await file.readAsBytes();
         if (bytes.length > DataTransferLimits.maxSingleEntryBytes) {
           throw const DataTransferException(
@@ -117,7 +127,11 @@ class DataTransferService {
           extension: _supportedExtension(file.path),
           bytes: Uint8List.fromList(bytes),
           sha256: sha256.convert(bytes).toString(),
+          preferredFileName: preferredFileName,
         );
+      } else if (existing.preferredFileName == null &&
+          preferredFileName != null) {
+        existing.preferredFileName = preferredFileName;
       }
       return sourceKey;
     }
@@ -168,9 +182,19 @@ class DataTransferService {
           studio: _asNullableString(row['studio']),
           publisher: _asNullableString(row['publisher']),
           series: _asNullableString(row['series']),
-          cardSourceKey: await collectImage(row['card_image_path']?.toString()),
+          cardSourceKey: await collectImage(
+            row['card_image_path']?.toString(),
+            preferredArchiveFileName: _workImagePolicy.fileNameFor(
+              code: code,
+              variant: WorkImageVariant.card,
+            ),
+          ),
           detailSourceKey: await collectImage(
             row['detail_image_path']?.toString(),
+            preferredArchiveFileName: _workImagePolicy.fileNameFor(
+              code: code,
+              variant: WorkImageVariant.detail,
+            ),
           ),
           createdAt: _asNullableString(row['created_at']),
           modifiedAt: _asNullableString(row['modified_at']),
@@ -242,11 +266,22 @@ class DataTransferService {
       ..sort((a, b) => a.sourceKey.compareTo(b.sourceKey));
     final assetIds = <String, String>{};
     final exportedAssets = <DataTransferAsset>[];
+    final usedArchiveFileNames = <String>{};
     for (var index = 0; index < sortedAssets.length; index++) {
       final image = sortedAssets[index];
       final archiveId = 'asset${(index + 1).toString().padLeft(6, '0')}';
       assetIds[image.sourceKey] = archiveId;
-      image.archivePath = 'assets/$archiveId${image.extension}';
+      var archiveFileName =
+          image.preferredFileName ?? '$archiveId${image.extension}';
+      if (!usedArchiveFileNames.add(archiveFileName.toLowerCase())) {
+        archiveFileName = '$archiveId${image.extension}';
+        var collision = 1;
+        while (!usedArchiveFileNames.add(archiveFileName.toLowerCase())) {
+          archiveFileName = '$archiveId-$collision${image.extension}';
+          collision++;
+        }
+      }
+      image.archivePath = 'assets/$archiveFileName';
       exportedAssets.add(
         DataTransferAsset(
           id: archiveId,
@@ -406,6 +441,31 @@ class DataTransferService {
       );
       await directory.create(recursive: true);
       final localAssetPaths = <String, String>{};
+      final preferredImportFileNames = <String, String>{};
+      for (final work in prepared.manifest.works) {
+        final code = work.code.trim();
+        final cardAssetId = work.cardImageAssetId;
+        if (cardAssetId != null) {
+          preferredImportFileNames.putIfAbsent(
+            cardAssetId,
+            () => _workImagePolicy.fileNameFor(
+              code: code,
+              variant: WorkImageVariant.card,
+            ),
+          );
+        }
+        final detailAssetId = work.detailImageAssetId;
+        if (detailAssetId != null) {
+          preferredImportFileNames.putIfAbsent(
+            detailAssetId,
+            () => _workImagePolicy.fileNameFor(
+              code: code,
+              variant: WorkImageVariant.detail,
+            ),
+          );
+        }
+      }
+      final stagedFileNames = <String>{};
       var committed = false;
       try {
         onProgress?.call(
@@ -418,9 +478,19 @@ class DataTransferService {
         for (var index = 0; index < prepared.manifest.assets.length; index++) {
           final asset = prepared.manifest.assets[index];
           final extension = _supportedExtension(asset.path);
-          final target = File(
-            path.join(directory.path, '${asset.id}$extension'),
-          );
+          final preferredFileName = preferredImportFileNames[asset.id];
+          var stagedFileName = preferredFileName == null
+              ? path.basename(asset.path)
+              : '${path.basenameWithoutExtension(preferredFileName)}$extension';
+          if (!stagedFileNames.add(stagedFileName.toLowerCase())) {
+            stagedFileName = 'asset-$index$extension';
+            var collision = 1;
+            while (!stagedFileNames.add(stagedFileName.toLowerCase())) {
+              stagedFileName = 'asset-$index-$collision$extension';
+              collision++;
+            }
+          }
+          final target = File(path.join(directory.path, stagedFileName));
           await target.writeAsBytes(
             prepared.assetBytes[asset.id]!,
             flush: true,
@@ -1079,12 +1149,14 @@ class _ExportImage {
     required this.extension,
     required this.bytes,
     required this.sha256,
+    this.preferredFileName,
   });
 
   final String sourceKey;
   final String extension;
   final Uint8List bytes;
   final String sha256;
+  String? preferredFileName;
   String? archivePath;
 }
 

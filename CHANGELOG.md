@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.8.2 - 2026-08-13
+
+- Added Minnano AV (`https://www.minnano-av.com/`) as a scraping source for
+  actress details and works.
+- Added independent source selection: Minnano AV or JavBus for details, and a
+  single source or canonical-code deduplicated aggregation for works.
+- Hardened Unicode work-code normalization, source failure reporting, image
+  host restrictions, cancellation, and cross-source detail-code validation.
+- Verified the new settings flow on Android phone/tablet targets and retained
+  the existing JavBus scraping behavior.
+
 ## 0.8.1 - 2026-08-13
 
 - Raised the Android release build-number to 2026 so 0.8.1 can update

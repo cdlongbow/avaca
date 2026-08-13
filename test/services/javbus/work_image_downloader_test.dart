@@ -25,6 +25,17 @@ void main() {
       expect(urls.source, WorkImageSource.dmm);
     });
 
+    test('builds番號-based local filenames for card and detail images', () {
+      expect(
+        policy.fileNameFor(code: 'START-489', variant: WorkImageVariant.card),
+        'start00489ps.jpg',
+      );
+      expect(
+        policy.fileNameFor(code: 'START-489', variant: WorkImageVariant.detail),
+        'start00489pl.jpg',
+      );
+    });
+
     test('builds the h_346 DMM URLs for REBD codes', () {
       final cases = {
         'REBD-975': 'h_346rebd00975',
