@@ -255,7 +255,7 @@ void main() {
       expect(works, hasLength(2));
       expect(
         works.map((row) => row['code']),
-        unorderedEquals(['SIVR00303', 'SIVR-303']),
+        unorderedEquals(['SIVR-00303', 'SIVR-303']),
       );
       expect(minnano.detailRequests, ['SIVR-303']);
       expect(javbus.detailRequests, ['SIVR-303']);
@@ -343,7 +343,7 @@ void main() {
       final imageProgress = progress
           .where((item) => item.phase == WorksScrapePhase.downloadingImages)
           .last;
-      expect(imageProgress.workCode, 'SSIS875');
+      expect(imageProgress.workCode, 'SSIS-875');
 
       imageDownloader.releaseFirstImage();
       final result = await scrape;
@@ -562,7 +562,7 @@ void main() {
     expect(result.failed, 0);
     expect(result.failedWorks, isEmpty);
     expect(result.imageFailures, hasLength(1));
-    expect(result.imageFailures.single.code, 'SSIS875');
+    expect(result.imageFailures.single.code, 'SSIS-875');
     expect(
       result.imageFailures.single.variants,
       containsAll([WorkImageVariant.card, WorkImageVariant.detail]),
@@ -1720,6 +1720,144 @@ void main() {
       throwsA(isA<WorksScrapeException>()),
     );
   });
+  test(
+    'merges safe code forms and hides a matched source detail failure',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'avaca_new_identity_merge_test_',
+      );
+      final database = AppDatabase.forTesting(
+        baseDir: directory.path,
+        databaseFactory: databaseFactoryFfi,
+      );
+      addTearDown(() async {
+        await database.close();
+        await directory.delete(recursive: true);
+      });
+      await database.init();
+      await database.addActress(name: '河北彩花');
+      final actressId =
+          (await (await database.database).query('actresses')).single['id']
+              as int;
+
+      final minnano = _FakeScrapeSource(
+        id: ScrapeSourceId.minnanoAv,
+        detailBirthDate: '1999-01-01',
+        works: [
+          ScrapeWorkSummary(
+            source: ScrapeSourceId.minnanoAv,
+            code: 'SSIS875',
+            title: 'SSIS 875',
+            releaseDate: '2026-01-01',
+            detailUri: Uri.parse('https://www.minnano-av.com/ssis875.html'),
+          ),
+          ScrapeWorkSummary(
+            source: ScrapeSourceId.minnanoAv,
+            code: null,
+            title: '新人河北彩花作品',
+            releaseDate: '2026-02-01',
+            detailUri: Uri.parse('https://www.minnano-av.com/no-code.html'),
+          ),
+        ],
+        detailsByCode: {
+          'SSIS-875': const ScrapeWorkDetails(
+            source: ScrapeSourceId.minnanoAv,
+            code: 'SSIS875',
+            title: 'SSIS 875',
+            releaseDate: '2026-01-01',
+            publisher: 'SODSTAR',
+            performerCount: 1,
+          ),
+          '': const ScrapeWorkDetails(
+            source: ScrapeSourceId.minnanoAv,
+            code: '',
+            title: '新人河北彩花作品',
+            releaseDate: '2026-02-01',
+            publisher: 'SODSTAR',
+            performerCount: 1,
+          ),
+        },
+      );
+      final javbus = _FakeScrapeSource(
+        id: ScrapeSourceId.javbus,
+        detailBirthDate: '1999-01-01',
+        works: [
+          ScrapeWorkSummary(
+            source: ScrapeSourceId.javbus,
+            code: 'SSIS-875',
+            title: 'SSIS 875',
+            releaseDate: '2026-01-01',
+            detailUri: Uri.parse('https://www.javbus.com/SSIS-875'),
+          ),
+          ScrapeWorkSummary(
+            source: ScrapeSourceId.javbus,
+            code: 'SSNI-190',
+            title: '新人河北彩花作品',
+            releaseDate: '2026-02-01',
+            detailUri: Uri.parse('https://www.javbus.com/SSNI-190'),
+          ),
+        ],
+        detailsByCode: {
+          'SSNI-190': const ScrapeWorkDetails(
+            source: ScrapeSourceId.javbus,
+            code: 'SSNI-190',
+            title: '新人河北彩花作品',
+            releaseDate: '2026-02-01',
+            publisher: 'SODSTAR',
+            performerCount: 1,
+          ),
+        },
+        failingCodes: {'SSIS-875'},
+      );
+      final service = WorksScrapeService(
+        db: database,
+        sources: {
+          ScrapeSourceId.minnanoAv: minnano,
+          ScrapeSourceId.javbus: javbus,
+        },
+        workImageDownloader: _FakeWorkImageDownloader(),
+        imageDirectory: directory.path,
+      );
+      final progress = <WorksScrapeProgress>[];
+
+      final result = await service.scrape(
+        actressId: actressId,
+        actressName: '河北彩花',
+        options: const WorkScrapeOptions(syncDetails: false),
+        sourceSettings: const ScrapeSourceSettings(),
+        onProgress: progress.add,
+      );
+
+      expect(result.saved, 2);
+      expect(result.failed, 0);
+      expect(result.failedWorks, isEmpty);
+      expect(
+        (await database.getWorksForActress(
+          actressId,
+        )).map((row) => row['code']),
+        unorderedEquals(['SSIS-875', 'SSNI-190']),
+      );
+      expect(
+        result.sourceResults[ScrapeSourceId.javbus]?.state,
+        ScrapeSourceRunState.partial,
+      );
+      expect(
+        result.sourceResults[ScrapeSourceId.javbus]?.error.toString(),
+        contains('www.javbus.com/SSIS-875'),
+      );
+      final sourceSnapshot = progress.lastWhere(
+        (item) => item.sourceProgress.length == 2,
+      );
+      expect(
+        sourceSnapshot.sourceProgress.keys,
+        containsAll([ScrapeSourceId.minnanoAv, ScrapeSourceId.javbus]),
+      );
+      expect(
+        sourceSnapshot.sourceProgress.values,
+        everyElement(isA<WorksScrapeSourceProgress>()),
+      );
+    },
+  );
 }
 
 final class _FakeScrapeSource implements ScrapeSource {

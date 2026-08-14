@@ -26,9 +26,52 @@ void main() {
     expect(normalizeScrapeWorkCodeSurface('   '), isNull);
   });
 
+  test('matches safe separatorless forms and preserves unsafe forms', () {
+    expect(scrapeWorkCodesEqual('SSIS875', 'SSIS-875'), isTrue);
+    expect(preferredScrapeWorkCode(['SSIS875', 'SSIS-875']), 'SSIS-875');
+    expect(scrapeWorkCodesEqual('START00023', 'START-023'), isTrue);
+    expect(preferredScrapeWorkCode(['START00023', 'START-023']), 'START-023');
+
+    expect(scrapeWorkCodesEqual('SIVR00303', 'SIVR-303'), isFalse);
+    expect(scrapeWorkCodesEqual('1STZY00017', 'STZY-017'), isFalse);
+    expect(scrapeWorkCodesEqual('3DSVR-1947', 'DSVR-1947'), isFalse);
+    expect(scrapeWorkCodesEqual('H_346REBD00975', 'REBD-975'), isFalse);
+  });
+
+  test('requires title plus independent metadata when a code is missing', () {
+    const common = '同一作品標題';
+    expect(
+      scrapeWorkMetadataLikelySame(
+        firstTitle: common,
+        firstReleaseDate: '2025-10-01',
+        firstPublisher: null,
+        firstStudio: null,
+        secondTitle: common,
+        secondReleaseDate: '2025-10-01',
+        secondPublisher: null,
+        secondStudio: null,
+      ),
+      isTrue,
+    );
+    expect(
+      scrapeWorkMetadataLikelySame(
+        firstTitle: common,
+        firstReleaseDate: null,
+        firstPublisher: null,
+        firstStudio: null,
+        secondTitle: common,
+        secondReleaseDate: null,
+        secondPublisher: null,
+        secondStudio: null,
+      ),
+      isFalse,
+    );
+  });
+
   test('Rebecca classification is publisher based and exact', () {
     expect(isRebeccaPublisher(' Rebecca '), isTrue);
     expect(isRebeccaPublisher('REBECCA'), isTrue);
+    expect(isRebeccaPublisher('Rebecca / Rebecca'), isTrue);
     expect(isRebeccaPublisher('REBD'), isFalse);
     expect(isRebeccaPublisher('H_346REBD00975'), isFalse);
     expect(isRebeccaPublisher('Rebecca Studio'), isFalse);

@@ -1,4 +1,4 @@
-import '../scrape/work_code_canonicalizer.dart';
+import '../scrape/work_identity.dart';
 
 class PrefixExclusion {
   PrefixExclusion(Iterable<String> prefixes)
@@ -7,7 +7,7 @@ class PrefixExclusion {
   final List<String> values;
 
   bool matches(String code) {
-    final normalizedCode = canonicalizeWorkCode(code) ?? '';
+    final normalizedCode = normalizeScrapeWorkCodeSurface(code) ?? '';
     return values.any(normalizedCode.startsWith);
   }
 
@@ -16,7 +16,7 @@ class PrefixExclusion {
     final seen = <String>{};
     for (final prefix in prefixes) {
       final original = prefix.trim();
-      var normalized = canonicalizeWorkCode(original) ?? '';
+      var normalized = normalizeScrapeWorkCodeSurface(original) ?? '';
       if (normalized.isNotEmpty &&
           RegExp(r'[-‐‑‒–—−]$').hasMatch(original) &&
           !normalized.endsWith('-')) {

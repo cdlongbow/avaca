@@ -4,10 +4,20 @@ import '../../models/scrape_source_settings.dart';
 import 'javbus_client.dart';
 import 'javbus_models.dart';
 
-final class JavBusScrapeSource implements ScrapeSource {
+final class JavBusScrapeSource
+    implements ScrapeSource, ScrapeSourceDiagnosticsProvider {
   JavBusScrapeSource(this.client);
 
   final JavBusClient client;
+  ScrapeSourceRunDiagnostic? _lastRunDiagnostic;
+
+  @override
+  ScrapeSourceRunDiagnostic? get lastRunDiagnostic => _lastRunDiagnostic;
+
+  @override
+  void resetRunDiagnostic() {
+    _lastRunDiagnostic = null;
+  }
 
   @override
   ScrapeSourceId get id => ScrapeSourceId.javbus;
@@ -51,6 +61,7 @@ final class JavBusScrapeSource implements ScrapeSource {
           .map(
             (work) => JavBusWorkSummary(
               code: work.code ?? '',
+              rawCode: work.rawCode ?? work.code ?? '',
               title: work.title,
               detailUri: work.detailUri,
               releaseDate: work.releaseDate,
@@ -64,6 +75,16 @@ final class JavBusScrapeSource implements ScrapeSource {
       firstPage: firstJavBusPage,
       isCancelled: isCancelled,
     );
+    final issues = client.lastWorkCollectionIssues;
+    if (issues.isNotEmpty) {
+      final firstIssue = issues.first;
+      _lastRunDiagnostic = ScrapeSourceRunDiagnostic(
+        state: works.isNotEmpty
+            ? ScrapeSourceRunState.partial
+            : _stateForIssue(firstIssue.kind),
+        error: firstIssue,
+      );
+    }
     return works.map(_summary).toList(growable: false);
   }
 
@@ -72,7 +93,8 @@ final class JavBusScrapeSource implements ScrapeSource {
     final details = await client.fetchWorkDetails(work.detailUri);
     return ScrapeWorkDetails(
       source: id,
-      code: details.code,
+      code: details.rawCode ?? details.code,
+      rawCode: details.rawCode ?? details.code,
       title: details.title,
       releaseDate: details.releaseDate,
       durationMinutes: details.durationMinutes,
@@ -103,10 +125,24 @@ final class JavBusScrapeSource implements ScrapeSource {
   ScrapeWorkSummary _summary(JavBusWorkSummary work) {
     return ScrapeWorkSummary(
       source: id,
-      code: work.code,
+      code: work.rawCode ?? work.code,
       title: work.title,
       detailUri: work.detailUri,
       releaseDate: work.releaseDate,
     );
+  }
+
+  ScrapeSourceRunState _stateForIssue(JavBusPageIssueKind kind) {
+    return switch (kind) {
+      JavBusPageIssueKind.verificationRequired =>
+        ScrapeSourceRunState.verificationRequired,
+      JavBusPageIssueKind.blocked => ScrapeSourceRunState.blocked,
+      JavBusPageIssueKind.rateLimited => ScrapeSourceRunState.rateLimited,
+      JavBusPageIssueKind.timeout => ScrapeSourceRunState.timedOut,
+      JavBusPageIssueKind.cancelled => ScrapeSourceRunState.cancelled,
+      JavBusPageIssueKind.notFound ||
+      JavBusPageIssueKind.transport ||
+      JavBusPageIssueKind.parserInvalid => ScrapeSourceRunState.failed,
+    };
   }
 }

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:avaca/services/javbus/javbus_client.dart';
+import 'package:avaca/services/javbus/javbus_models.dart';
 import 'package:avaca/services/javbus/prefix_exclusion.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -370,6 +371,46 @@ void main() {
     expect(works.map((work) => work.code), ['ABF-183']);
     expect(transport.requested, ['https://www.javbus.com/star/uly']);
   });
+  test('keeps successful pages when a later pagination page fails', () async {
+    final transport = _FakeTransport({
+      'https://www.javbus.com/star/partial': _page(
+        pageCount: 2,
+        works: const [('SSIS-875', 'first page')],
+      ),
+    });
+    final result = await JavBusClient(transport: transport)
+        .fetchAllActressWorksResult(
+          Uri.parse('https://www.javbus.com/star/partial'),
+        );
+
+    expect(result.works.map((work) => work.code), ['SSIS-875']);
+    expect(result.issues, hasLength(1));
+    expect(result.issues.single.uri.toString(), endsWith('/star/partial/2'));
+    expect(result.issues.single.kind, JavBusPageIssueKind.parserInvalid);
+  });
+
+  test(
+    'classifies Cloudflare access denial instead of calling it missing',
+    () async {
+      final transport = HttpJavBusTransport(
+        retryDelay: Duration.zero,
+        client: MockClient(
+          (_) async => http.Response('Access denied | Cloudflare', 403),
+        ),
+      );
+
+      await expectLater(
+        transport.get(Uri.parse('https://www.javbus.com/star/blocked')),
+        throwsA(
+          isA<JavBusRequestException>().having(
+            (error) => error.kind,
+            'kind',
+            JavBusFailureKind.blocked,
+          ),
+        ),
+      );
+    },
+  );
 }
 
 const _driverVerificationHtml = '''

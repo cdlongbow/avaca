@@ -1069,6 +1069,67 @@ void main() {
     await tester.pumpAndSettle();
   });
 
+  testWidgets('shows numeric progress per source without work names', (
+    tester,
+  ) async {
+    final result = Completer<WorksScrapeResult>();
+    await _pumpWorks(
+      tester,
+      scrapeExecutor: (options, token, onProgress) async {
+        const payload = WorksScrapeProgress(
+            phase: WorksScrapePhase.fetchingDetails,
+            current: 3,
+            total: 10,
+            saved: 0,
+            excluded: 0,
+            failed: 0,
+            sourceProgress: {
+              ScrapeSourceId.minnanoAv: WorksScrapeSourceProgress(
+                phase: WorksScrapePhase.fetchingDetails,
+                current: 3,
+                total: 10,
+                workCode: 'MINNANO-TITLE-MUST-NOT-SHOW',
+              ),
+              ScrapeSourceId.javbus: WorksScrapeSourceProgress(
+                phase: WorksScrapePhase.fetchingDetails,
+                current: 4,
+                total: 10,
+                workCode: 'JAVBUS-TITLE-MUST-NOT-SHOW',
+              ),
+            },
+          );
+        expect(payload.sourceProgress, hasLength(2));
+        onProgress(payload);
+        return result.future;
+      },
+    );
+
+    await _openWorksScrapeSettings(tester);
+    await tester.tap(find.text('開始刮削'));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump();
+
+    expect(find.byKey(const Key('scrape-progress-sources')), findsOneWidget);
+    expect(find.text('Minnano AV'), findsOneWidget);
+    expect(find.text('JavBus'), findsOneWidget);
+    expect(find.text('3 / 10'), findsNWidgets(2));
+    expect(find.text('4 / 10'), findsOneWidget);
+    expect(find.text('MINNANO-TITLE-MUST-NOT-SHOW'), findsNothing);
+    expect(find.text('JAVBUS-TITLE-MUST-NOT-SHOW'), findsNothing);
+
+    result.complete(
+      const WorksScrapeResult(
+        saved: 0,
+        excluded: 0,
+        failed: 0,
+        cancelled: true,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('scrape-result-done')));
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('scrape result lists unique failed works and image issues', (
     tester,
   ) async {

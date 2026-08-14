@@ -9,123 +9,71 @@ void main() {
   group('image URL policy', () {
     const policy = WorkImagePolicy();
 
-    test('builds padded lowercase DMM card and detail URLs', () {
-      final urls = policy.urlsFor(code: 'SONE-833');
-
+    test('keeps the six approved endpoint forms allowlisted', () {
       expect(
-        urls.card.toString(),
-        'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
-        'sone00833/sone00833ps.jpg',
+        approvedWorkImageEndpointExamples
+            .map(Uri.parse)
+            .every(isApprovedWorkImageUri),
+        isTrue,
       );
       expect(
-        urls.detail.toString(),
-        'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
-        'sone00833/sone00833pl.jpg',
-      );
-      expect(urls.source, WorkImageSource.dmm);
-    });
-
-    test('builds番號-based local filenames for card and detail images', () {
-      expect(
-        policy.fileNameFor(code: 'START-489', variant: WorkImageVariant.card),
-        'start00489ps.jpg',
+        isApprovedWorkImageUri(
+          Uri.parse('https://www.javbus.com/pics/cover/ssis00875.jpg'),
+        ),
+        isFalse,
       );
       expect(
-        policy.fileNameFor(code: 'START-489', variant: WorkImageVariant.detail),
-        'start00489pl.jpg',
+        isApprovedWorkImageUri(
+          Uri.parse(
+            'https://awsimgsrc.dmm.co.jp/p_package/ssis00875/ssis00875ps.jpg',
+          ),
+        ),
+        isFalse,
       );
     });
 
-    test('uses one image identity for leading-one START aliases', () {
-      final alias = policy.urlsFor(code: '1start00408');
-      final canonical = policy.urlsFor(code: 'START-408');
-
-      expect(alias.card, canonical.card);
-      expect(alias.detail, canonical.detail);
-      expect(
-        policy.fileNameFor(code: '1start00408', variant: WorkImageVariant.card),
-        'start00408ps.jpg',
-      );
-    });
-
-    test('uses one image identity for generic numeric-leading aliases', () {
-      final aliasPairs = [
-        ('1stzy00017', 'STZY-017'),
-        ('3DSVR-1947', 'DSVR-1947'),
-        ('SSIS875', 'SSIS-875'),
-        ('SIVR00303', 'SIVR-303'),
-        ('SONE00687', 'SONE-687'),
-        ('RBB00321', 'RBB-321'),
-      ];
-
-      for (final (aliasCode, canonicalCode) in aliasPairs) {
-        final alias = policy.urlsFor(code: aliasCode);
-        final canonical = policy.urlsFor(code: canonicalCode);
-
-        expect(alias.card, canonical.card);
-        expect(alias.detail, canonical.detail);
-      }
-    });
-
-    test('builds the h_346 DMM URLs for REBD codes', () {
-      final cases = {
+    test('maps representative code families to one deterministic token', () {
+      const cases = {
+        'SONE-833': 'sone00833',
+        'SSIS-875': 'ssis00875',
+        'SSNI-190': 'ssni00190',
+        'SIVR-303': 'sivr00303',
+        'IPX-100': 'ipx00100',
+        'MIAA-001': 'miaa00001',
+        'STARS-859': 'stars00859',
+        'START-618': '1start00618',
+        'START00023': '1start00023',
+        'SDJS-380': '1sdjs00380',
+        'DEVR-039': 'h_1711devr00039',
         'REBD-975': 'h_346rebd00975',
-        'REBD-1048': 'h_346rebd01048',
       };
 
       for (final entry in cases.entries) {
         final urls = policy.urlsFor(code: entry.key);
-        expect(
-          urls.card.toString(),
-          'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
-          '${entry.value}/${entry.value}ps.jpg',
-        );
-        expect(
-          urls.detail.toString(),
-          'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
-          '${entry.value}/${entry.value}pl.jpg',
-        );
-        expect(urls.source, WorkImageSource.dmm);
+        final path = urls.card.pathSegments;
+        expect(path[path.length - 2], entry.value);
+        expect(path.last, entry.value + 'ps.jpg');
+        expect(isApprovedWorkImageUri(urls.card), isTrue);
+        expect(isApprovedWorkImageUri(urls.detail), isTrue);
       }
     });
 
-    test('ignores V T and VT edition suffixes in DMM image codes', () {
-      final cases = {
-        'STARS-859-V': 'stars00859',
-        'STARS-757-T': 'stars00757',
-        'STARS-715-VT': 'stars00715',
-      };
-
-      for (final entry in cases.entries) {
-        final urls = policy.urlsFor(code: entry.key);
-        expect(
-          urls.detail.toString(),
-          'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
-          '${entry.value}/${entry.value}pl.jpg',
-        );
-      }
-    });
-
-    test('builds the fourth DMM h2 candidate', () {
-      final urls = policy.urlsFor(
-        code: 'STARS-685',
-        dmmLeadingOne: true,
-        dmmTrailingH2: true,
-      );
-
+    test('normalizes separatorless SSIS and START forms without aliases', () {
       expect(
-        urls.card.toString(),
-        'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
-        '1stars00685h2/1stars00685h2ps.jpg',
+        policy.urlsFor(code: 'SSIS875').card,
+        policy.urlsFor(code: 'SSIS-875').card,
       );
       expect(
-        urls.detail.toString(),
-        'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
-        '1stars00685h2/1stars00685h2pl.jpg',
+        policy.urlsFor(code: 'START00023').card,
+        policy.urlsFor(code: 'START-023').card,
+      );
+      expect(
+        policy.urlsFor(code: 'SIVR00303').card,
+        policy.urlsFor(code: 'SIVR-00303').card,
       );
     });
 
-    test('uses MGStage for Prestige studio without padding the number', () {
+    test('builds the exact Prestige endpoints without number padding', () {
       final urls = policy.urlsFor(code: 'ABF-183', studio: 'プレステージ');
 
       expect(
@@ -140,181 +88,84 @@ void main() {
       );
       expect(urls.source, WorkImageSource.mgstage);
     });
+
+    test(
+      'uses the registered Prestige route when studio metadata is missing',
+      () {
+        final urls = policy.urlsFor(code: 'ABF-183');
+
+        expect(urls.source, WorkImageSource.mgstage);
+        expect(
+          urls.card.toString(),
+          'https://image.mgstage.com/images/prestige/abf/183/'
+          'pf_e_abf-183.jpg',
+        );
+      },
+    );
+
+    test('refuses an unregistered publisher prefix instead of guessing', () {
+      expect(
+        () => policy.urlsFor(code: 'ZZZZ-001'),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('uses visible work code for local filenames, not network token', () {
+      expect(
+        policy.fileNameFor(code: 'START-489', variant: WorkImageVariant.card),
+        'start00489ps.jpg',
+      );
+      expect(
+        policy.fileNameFor(code: 'REBD-975', variant: WorkImageVariant.detail),
+        'rebd00975pl.jpg',
+      );
+    });
   });
 
   test(
-    'DMM 90x122 placeholder retries with a leading one image code',
+    'downloads only the selected approved URL and has no fallback',
     () async {
-      final placeholder = image.encodePng(image.Image(width: 90, height: 122));
       final valid = image.encodePng(image.Image(width: 300, height: 450));
       final transport = _FakeBinaryTransport([
-        BinaryResponse(statusCode: 200, bodyBytes: placeholder),
-        BinaryResponse(statusCode: 200, bodyBytes: valid),
-      ]);
-      final downloader = WorkImageDownloader(transport: transport);
-
-      final result = await downloader.fetch(
-        code: 'START-196',
-        variant: WorkImageVariant.card,
-      );
-
-      expect(result.bytes, valid);
-      expect(
-        result.sourceUri.toString(),
-        'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
-        '1start00196/1start00196ps.jpg',
-      );
-      expect(transport.requested.map((uri) => uri.toString()), [
-        'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
-            'start00196/start00196ps.jpg',
-        'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
-            '1start00196/1start00196ps.jpg',
-      ]);
-    },
-  );
-
-  test(
-    'DMM retries with a leading one and trailing v as the third candidate',
-    () async {
-      final placeholder = image.encodePng(image.Image(width: 90, height: 122));
-      final valid = image.encodePng(image.Image(width: 1700, height: 1200));
-      final transport = _FakeBinaryTransport([
-        BinaryResponse(statusCode: 200, bodyBytes: placeholder),
-        BinaryResponse(statusCode: 200, bodyBytes: placeholder),
-        BinaryResponse(statusCode: 200, bodyBytes: valid),
-      ]);
-      final downloader = WorkImageDownloader(transport: transport);
-
-      final result = await downloader.fetch(
-        code: 'START-135',
-        variant: WorkImageVariant.detail,
-      );
-
-      expect(result.bytes, valid);
-      expect(
-        result.sourceUri.toString(),
-        'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
-        '1start00135v/1start00135vpl.jpg',
-      );
-      expect(transport.requested.map((uri) => uri.toString()), [
-        'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
-            'start00135/start00135pl.jpg',
-        'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
-            '1start00135/1start00135pl.jpg',
-        'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
-            '1start00135v/1start00135vpl.jpg',
-      ]);
-    },
-  );
-
-  test('DMM retries with h2 as the fourth candidate', () async {
-    final placeholder = image.encodePng(image.Image(width: 90, height: 122));
-    final valid = image.encodePng(image.Image(width: 2184, height: 1542));
-    final transport = _FakeBinaryTransport([
-      BinaryResponse(statusCode: 200, bodyBytes: placeholder),
-      BinaryResponse(statusCode: 200, bodyBytes: placeholder),
-      BinaryResponse(statusCode: 200, bodyBytes: placeholder),
-      BinaryResponse(statusCode: 200, bodyBytes: valid),
-    ]);
-
-    final result = await WorkImageDownloader(
-      transport: transport,
-    ).fetch(code: 'STARS-685', variant: WorkImageVariant.detail);
-
-    expect(result.bytes, valid);
-    expect(
-      result.sourceUri.toString(),
-      'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
-      '1stars00685h2/1stars00685h2pl.jpg',
-    );
-    expect(transport.requested.map((uri) => uri.toString()), [
-      'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
-          'stars00685/stars00685pl.jpg',
-      'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
-          '1stars00685/1stars00685pl.jpg',
-      'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
-          '1stars00685v/1stars00685vpl.jpg',
-      'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
-          '1stars00685h2/1stars00685h2pl.jpg',
-    ]);
-  });
-
-  test('REBD does not repeat its special DMM URL as fallbacks', () async {
-    final transport = _FakeBinaryTransport([
-      const BinaryResponse(statusCode: 404, bodyBytes: []),
-    ]);
-    final downloader = WorkImageDownloader(transport: transport);
-
-    await expectLater(
-      downloader.fetch(code: 'REBD-975', variant: WorkImageVariant.card),
-      throwsA(isA<WorkImageDownloadException>()),
-    );
-    expect(transport.requested, hasLength(1));
-    expect(
-      transport.requested.single.toString(),
-      'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
-      'h_346rebd00975/h_346rebd00975ps.jpg',
-    );
-  });
-
-  test('MGStage failure does not guess a DMM URL', () async {
-    final transport = _FakeBinaryTransport([
-      const BinaryResponse(statusCode: 404, bodyBytes: []),
-    ]);
-    final downloader = WorkImageDownloader(transport: transport);
-
-    await expectLater(
-      downloader.fetch(
-        code: 'ABF-183',
-        studio: 'プレステージ',
-        variant: WorkImageVariant.detail,
-      ),
-      throwsA(isA<WorkImageDownloadException>()),
-    );
-    expect(transport.requested, hasLength(1));
-    expect(transport.requested.single.host, 'image.mgstage.com');
-  });
-
-  test('returns a valid primary image without fallback', () async {
-    final valid = image.encodePng(image.Image(width: 300, height: 450));
-    final transport = _FakeBinaryTransport([
-      BinaryResponse(statusCode: 200, bodyBytes: valid),
-    ]);
-
-    final result = await WorkImageDownloader(
-      transport: transport,
-    ).fetch(code: 'SONE-833', variant: WorkImageVariant.detail);
-
-    expect(result.bytes, valid);
-    expect(transport.requested, hasLength(1));
-  });
-
-  test(
-    'rejects oversized image dimensions before accepting a download',
-    () async {
-      final oversized = image.encodePng(image.Image(width: 10001, height: 1));
-      final valid = image.encodePng(image.Image(width: 300, height: 450));
-      final transport = _FakeBinaryTransport([
-        BinaryResponse(statusCode: 200, bodyBytes: oversized),
         BinaryResponse(statusCode: 200, bodyBytes: valid),
       ]);
 
       final result = await WorkImageDownloader(
         transport: transport,
-      ).fetch(code: 'SONE-833', variant: WorkImageVariant.card);
+      ).fetch(code: 'SSIS-875', variant: WorkImageVariant.detail);
 
       expect(result.bytes, valid);
-      expect(transport.requested, hasLength(2));
+      expect(transport.requested, hasLength(1));
+      expect(
+        transport.requested.single.toString(),
+        'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
+        'ssis00875/ssis00875pl.jpg',
+      );
     },
   );
 
-  test('throws after all DMM attempts return invalid images', () async {
-    final invalid = image.encodePng(image.Image(width: 90, height: 122));
+  test(
+    'reports one failed approved URL without trying another family',
+    () async {
+      final transport = _FakeBinaryTransport([
+        const BinaryResponse(statusCode: 404, bodyBytes: []),
+      ]);
+
+      await expectLater(
+        WorkImageDownloader(
+          transport: transport,
+        ).fetch(code: 'REBD-975', variant: WorkImageVariant.card),
+        throwsA(isA<WorkImageDownloadException>()),
+      );
+      expect(transport.requested, hasLength(1));
+      expect(transport.requested.single.toString(), contains('h_346rebd00975'));
+    },
+  );
+
+  test('rejects placeholder dimensions without fallback', () async {
+    final placeholder = image.encodePng(image.Image(width: 90, height: 122));
     final transport = _FakeBinaryTransport([
-      BinaryResponse(statusCode: 200, bodyBytes: invalid),
-      const BinaryResponse(statusCode: 500, bodyBytes: []),
-      const BinaryResponse(statusCode: 404, bodyBytes: []),
-      const BinaryResponse(statusCode: 404, bodyBytes: []),
+      BinaryResponse(statusCode: 200, bodyBytes: placeholder),
     ]);
 
     await expectLater(
@@ -323,25 +174,28 @@ void main() {
       ).fetch(code: 'START-196', variant: WorkImageVariant.card),
       throwsA(isA<WorkImageDownloadException>()),
     );
-    expect(transport.requested, hasLength(4));
+    expect(transport.requested, hasLength(1));
+    expect(transport.requested.single.toString(), contains('1start00196'));
   });
 
-  test('writes downloaded bytes to the requested local file', () async {
+  test('writes a downloaded image to the requested local file', () async {
     final directory = await Directory.systemTemp.createTemp(
       'avaca_image_download_test_',
     );
     addTearDown(() => directory.delete(recursive: true));
     final bytes = image.encodePng(image.Image(width: 300, height: 450));
     final target =
-        '${directory.path}${Platform.pathSeparator}nested'
-        '${Platform.pathSeparator}card.png';
-    final downloader = WorkImageDownloader(
+        directory.path +
+        Platform.pathSeparator +
+        'nested' +
+        Platform.pathSeparator +
+        'card.png';
+
+    await WorkImageDownloader(
       transport: _FakeBinaryTransport([
         BinaryResponse(statusCode: 200, bodyBytes: bytes),
       ]),
-    );
-
-    await downloader.downloadToFile(
+    ).downloadToFile(
       code: 'SONE-833',
       variant: WorkImageVariant.card,
       targetPath: target,

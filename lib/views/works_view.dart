@@ -22,6 +22,7 @@ import '../services/minnano/minnano_client.dart';
 import '../services/minnano/minnano_scrape_source.dart';
 import '../services/minnano/minnano_transport.dart';
 import '../services/scrape/scrape_image_downloader.dart';
+import '../services/scrape/scrape_models.dart';
 import '../services/scrape/scrape_source.dart';
 import '../services/scrape/scrape_source_registry.dart';
 import '../services/works_scrape_service.dart';
@@ -1298,6 +1299,9 @@ class _ScrapeProgressDialog extends StatelessWidget {
           final current = value?.current ?? 0;
           final l10n = AppLocalizations.of(context);
           final phase = value?.phase ?? WorksScrapePhase.collectingSources;
+          final sourceProgress =
+              value?.sourceProgress.entries.toList(growable: false) ??
+              const <MapEntry<ScrapeSourceId, WorksScrapeSourceProgress>>[];
           final operation = [
             _scrapePhaseLabel(l10n, phase),
             if (value?.source != null) _scrapeSourceLabel(l10n, value!.source!),
@@ -1335,6 +1339,32 @@ class _ScrapeProgressDialog extends StatelessWidget {
                 key: const Key('scrape-progress-summary'),
                 textAlign: TextAlign.center,
               ),
+              if (sourceProgress.length > 1) ...[
+                const SizedBox(height: 12),
+                Column(
+                  key: const Key('scrape-progress-sources'),
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final entry in sourceProgress)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(_scrapeSourceLabel(l10n, entry.key)),
+                            Text(
+                              entry.value.total > 0
+                                  ? entry.value.current.toString() +
+                                        ' / ' +
+                                        entry.value.total.toString()
+                                  : _scrapePhaseLabel(l10n, entry.value.phase),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ],
             ],
           );
         },
@@ -1361,8 +1391,29 @@ class _ScrapeResultDialog extends StatelessWidget {
     final failedWorks = result?.failedWorks ?? const <WorksScrapeFailure>[];
     final imageFailures =
         result?.imageFailures ?? const <WorksScrapeImageFailure>[];
+    final sourceResults =
+        result?.sourceResults.entries.toList(growable: false) ??
+        const <MapEntry<ScrapeSourceId, ScrapeSourceRunResult>>[];
     final body = <Widget>[
       Text(message, key: const Key('scrape-result-message')),
+      if (sourceResults.isNotEmpty) ...[
+        const SizedBox(height: 20),
+        Text(
+          '來源結果',
+          key: const Key('scrape-source-results-title'),
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 8),
+        for (final entry in sourceResults)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Text(
+              '• ${_scrapeSourceLabel(l10n, entry.key)} — '
+              '${_scrapeSourceStateLabel(entry.value.state)}'
+              '${entry.value.error == null ? '' : '：${entry.value.error}'}',
+            ),
+          ),
+      ],
       if (failedWorks.isNotEmpty) ...[
         const SizedBox(height: 20),
         Text(
@@ -1374,7 +1425,11 @@ class _ScrapeResultDialog extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(bottom: 6),
             child: Text(
-              '• ${failure.code} — ${_scrapeFailureReasonLabel(l10n, failure.reason)}',
+              '• ' +
+                  failure.code +
+                  ' — ' +
+                  _scrapeFailureReasonLabel(l10n, failure.reason) +
+                  (failure.error == null ? '' : '：' + failure.error.toString()),
             ),
           ),
       ],
@@ -1418,6 +1473,21 @@ class _ScrapeResultDialog extends StatelessWidget {
       ],
     );
   }
+}
+
+String _scrapeSourceStateLabel(ScrapeSourceRunState state) {
+  return switch (state) {
+    ScrapeSourceRunState.success => '成功',
+    ScrapeSourceRunState.zeroResults => '完成，沒有作品',
+    ScrapeSourceRunState.partial => '部分成功，另有頁面失敗',
+    ScrapeSourceRunState.unavailable => '未設定',
+    ScrapeSourceRunState.failed => '失敗',
+    ScrapeSourceRunState.cancelled => '已取消',
+    ScrapeSourceRunState.verificationRequired => '需要驗證',
+    ScrapeSourceRunState.blocked => '頁面被阻擋',
+    ScrapeSourceRunState.rateLimited => '被限流',
+    ScrapeSourceRunState.timedOut => '逾時',
+  };
 }
 
 String _scrapePhaseLabel(AppLocalizations l10n, WorksScrapePhase phase) {

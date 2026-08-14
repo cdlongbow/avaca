@@ -18,6 +18,18 @@ abstract interface class JavBusBinarySession {
   Future<BinaryResponse> getBinary(Uri uri);
 }
 
+enum JavBusFailureKind {
+  verificationRequired,
+  blocked,
+  rateLimited,
+  timeout,
+  transport,
+  notFound,
+  parserInvalid,
+  cancelled,
+  transientTransport,
+}
+
 class HttpJavBusTransport implements JavBusTransport, JavBusBinarySession {
   HttpJavBusTransport({
     http.Client? client,
@@ -78,7 +90,7 @@ class HttpJavBusTransport implements JavBusTransport, JavBusBinarySession {
           );
           final handler = verificationHandler;
           if (challenge == null || handler == null) {
-            throw const JavBusVerificationCancelledException();
+            throw JavBusVerificationRequiredException(uri);
           }
           final answers = await handler(challenge);
           if (answers == null) {
@@ -92,21 +104,40 @@ class HttpJavBusTransport implements JavBusTransport, JavBusBinarySession {
           response = await _fetcher.get(uri, referer: referer);
         }
         if (_isVerificationPage(response.finalUri)) {
-          throw const JavBusVerificationCancelledException();
+          throw JavBusVerificationRequiredException(uri);
+        }
+        if (_looksBlocked(response)) {
+          throw JavBusRequestException(
+            uri,
+            response.statusCode,
+            kind: JavBusFailureKind.blocked,
+          );
         }
         if (response.statusCode >= 200 && response.statusCode < 300) {
           return response;
         }
         if (!_isTransient(response.statusCode) || attempt == maxAttempts) {
-          throw JavBusRequestException(uri, response.statusCode);
+          throw JavBusRequestException(
+            uri,
+            response.statusCode,
+            kind: _kindForStatus(response.statusCode),
+          );
         }
       } on TimeoutException {
         if (attempt == maxAttempts) {
-          rethrow;
+          throw JavBusRequestException(
+            uri,
+            null,
+            kind: JavBusFailureKind.timeout,
+          );
         }
       } on http.ClientException {
         if (attempt == maxAttempts) {
-          rethrow;
+          throw JavBusRequestException(
+            uri,
+            null,
+            kind: JavBusFailureKind.transport,
+          );
         }
       }
       if (retryDelay > Duration.zero) {
@@ -124,19 +155,66 @@ class HttpJavBusTransport implements JavBusTransport, JavBusBinarySession {
     return statusCode == 408 || statusCode == 429 || statusCode >= 500;
   }
 
+  JavBusFailureKind _kindForStatus(int statusCode) {
+    if (statusCode == 404) {
+      return JavBusFailureKind.notFound;
+    }
+    if (statusCode == 408 || statusCode >= 500) {
+      return JavBusFailureKind.transientTransport;
+    }
+    if (statusCode == 429) {
+      return JavBusFailureKind.rateLimited;
+    }
+    if (statusCode == 403) {
+      return JavBusFailureKind.blocked;
+    }
+    return JavBusFailureKind.transport;
+  }
+
+  bool _looksBlocked(SafeHttpResponse response) {
+    if (response.statusCode == 403) {
+      return true;
+    }
+    final body = utf8
+        .decode(response.bodyBytes, allowMalformed: true)
+        .toLowerCase();
+    return body.contains('access denied') ||
+        body.contains('used cloudflare to restrict access') ||
+        body.contains('just a moment') ||
+        body.contains('cf-chl-');
+  }
+
   bool _isVerificationPage(Uri uri) {
     return uri.path.contains('/doc/driver-verify');
   }
 }
 
 class JavBusRequestException implements Exception {
-  const JavBusRequestException(this.uri, this.statusCode);
+  const JavBusRequestException(
+    this.uri,
+    this.statusCode, {
+    this.kind = JavBusFailureKind.transport,
+  });
 
   final Uri uri;
-  final int statusCode;
+  final int? statusCode;
+  final JavBusFailureKind kind;
 
   @override
-  String toString() => 'JavBus request failed ($statusCode): $uri';
+  String toString() =>
+      'JavBus request failed (' +
+      (statusCode ?? kind.name).toString() +
+      '): ' +
+      uri.toString();
+}
+
+class JavBusVerificationRequiredException implements Exception {
+  const JavBusVerificationRequiredException(this.uri);
+
+  final Uri uri;
+
+  @override
+  String toString() => 'JavBus verification is required: $uri';
 }
 
 class JavBusClient {
@@ -158,6 +236,10 @@ class JavBusClient {
   final JavBusHtmlParser _parser;
   final Uri _baseUri;
   final int maxPages;
+  List<JavBusPageIssue> _lastWorkCollectionIssues = const [];
+
+  List<JavBusPageIssue> get lastWorkCollectionIssues =>
+      List.unmodifiable(_lastWorkCollectionIssues);
 
   Future<void> checkConnection() async {
     await _transport.get(_baseUri);
@@ -193,15 +275,31 @@ class JavBusClient {
     bool Function()? isCancelled,
     JavBusActressPage? firstPage,
   }) async {
+    return (await fetchAllActressWorksResult(
+      actressUri,
+      exclusions: exclusions,
+      isCancelled: isCancelled,
+      firstPage: firstPage,
+    )).works;
+  }
+
+  Future<JavBusWorkCollectionResult> fetchAllActressWorksResult(
+    Uri actressUri, {
+    PrefixExclusion? exclusions,
+    bool Function()? isCancelled,
+    JavBusActressPage? firstPage,
+  }) async {
+    _lastWorkCollectionIssues = const [];
     _validateNavigationUri(actressUri);
     if (isCancelled?.call() ?? false) {
-      return const [];
+      return const JavBusWorkCollectionResult(works: []);
     }
     final resolvedFirstPage = firstPage ?? await fetchActressPage(actressUri);
     if (resolvedFirstPage.pageCount > maxPages) {
       throw JavBusPageLimitException(resolvedFirstPage.pageCount, maxPages);
     }
     final result = <JavBusWorkSummary>[];
+    final issues = <JavBusPageIssue>[];
     final codes = <String>{};
 
     void append(Iterable<JavBusWorkSummary> works) {
@@ -223,9 +321,48 @@ class JavBusClient {
       final pageUri = Uri.parse(
         '${actressUri.toString().replaceFirst(RegExp(r'/$'), '')}/$page',
       );
-      append((await fetchActressPage(pageUri)).works);
+      try {
+        append((await fetchActressPage(pageUri)).works);
+      } catch (error) {
+        issues.add(
+          JavBusPageIssue(
+            uri: pageUri,
+            kind: _pageIssueKind(error),
+            error: error,
+          ),
+        );
+      }
     }
-    return result;
+    final collection = JavBusWorkCollectionResult(
+      works: List.unmodifiable(result),
+      issues: List.unmodifiable(issues),
+    );
+    _lastWorkCollectionIssues = collection.issues;
+    return collection;
+  }
+
+  JavBusPageIssueKind _pageIssueKind(Object error) {
+    if (error is JavBusVerificationRequiredException) {
+      return JavBusPageIssueKind.verificationRequired;
+    }
+    if (error is JavBusVerificationCancelledException) {
+      return JavBusPageIssueKind.cancelled;
+    }
+    if (error is JavBusRequestException) {
+      return switch (error.kind) {
+        JavBusFailureKind.verificationRequired =>
+          JavBusPageIssueKind.verificationRequired,
+        JavBusFailureKind.blocked => JavBusPageIssueKind.blocked,
+        JavBusFailureKind.rateLimited => JavBusPageIssueKind.rateLimited,
+        JavBusFailureKind.timeout => JavBusPageIssueKind.timeout,
+        JavBusFailureKind.notFound => JavBusPageIssueKind.notFound,
+        JavBusFailureKind.parserInvalid => JavBusPageIssueKind.parserInvalid,
+        JavBusFailureKind.cancelled => JavBusPageIssueKind.cancelled,
+        JavBusFailureKind.transport ||
+        JavBusFailureKind.transientTransport => JavBusPageIssueKind.transport,
+      };
+    }
+    return JavBusPageIssueKind.parserInvalid;
   }
 
   void close() {

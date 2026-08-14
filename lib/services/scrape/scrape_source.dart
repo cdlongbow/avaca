@@ -20,3 +20,12 @@ abstract interface class ScrapeSource {
 
   void close();
 }
+
+/// Optional source-owned diagnostics for partial pagination or access
+/// problems. Sources that do not need this remain compatible with the base
+/// interface.
+abstract interface class ScrapeSourceDiagnosticsProvider {
+  ScrapeSourceRunDiagnostic? get lastRunDiagnostic;
+
+  void resetRunDiagnostic();
+}

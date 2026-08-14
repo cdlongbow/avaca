@@ -23,6 +23,7 @@ void main() {
     expect(page.details.hip, '85');
     expect(page.pageCount, 2);
     expect(page.works.map((work) => work.code), ['ABF-183', 'FC2-123']);
+    expect(page.works.map((work) => work.rawCode), ['ABF-183', 'FC2-123']);
     expect(page.works.first.title, '第一部作品');
     expect(page.works.first.releaseDate, '2024-07-16');
     expect(
@@ -38,6 +39,7 @@ void main() {
     );
 
     expect(work.code, 'ABF-183');
+    expect(work.rawCode, 'ABF-183');
     expect(work.title, '詳細作品標題');
     expect(work.releaseDate, '2024-07-16');
     expect(work.durationMinutes, 120);
@@ -67,7 +69,20 @@ void main() {
       'FC2-PPV_123-999',
     ]);
     expect(details.code, 'STARS-859');
+    expect(details.rawCode, 'STARS-859-V');
     expect(details.title, '特典版標題');
+  });
+
+  test('keeps a separatorless code available to the new scrape identity', () {
+    final page = parser.parseActressPage(
+      '<a class="movie-box" href="/SIVR00303">'
+      '<div class="photo-info"><span>作品</span>'
+      '<date>SIVR00303</date><date>2024-01-01</date></div></a>',
+      pageUri: Uri.parse('https://www.javbus.com/star/zen'),
+    );
+
+    expect(page.works.single.code, 'SIVR00303');
+    expect(page.works.single.rawCode, 'SIVR00303');
   });
 
   test('parses unique actresses only from the work actress section', () {

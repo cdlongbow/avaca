@@ -34,6 +34,7 @@ final class ScrapeWorkSummary {
   const ScrapeWorkSummary({
     required this.source,
     required this.code,
+    this.rawCode,
     required this.title,
     required this.detailUri,
     this.releaseDate,
@@ -41,6 +42,7 @@ final class ScrapeWorkSummary {
 
   final ScrapeSourceId source;
   final String? code;
+  final String? rawCode;
   final String title;
   final Uri detailUri;
   final String? releaseDate;
@@ -50,6 +52,7 @@ final class ScrapeWorkDetails {
   const ScrapeWorkDetails({
     required this.source,
     required this.code,
+    this.rawCode,
     required this.title,
     this.releaseDate,
     this.durationMinutes,
@@ -62,6 +65,7 @@ final class ScrapeWorkDetails {
 
   final ScrapeSourceId source;
   final String code;
+  final String? rawCode;
   final String title;
   final String? releaseDate;
   final int? durationMinutes;
@@ -89,9 +93,14 @@ final class ScrapeWorkDetails {
 enum ScrapeSourceRunState {
   success,
   zeroResults,
+  partial,
   unavailable,
   failed,
   cancelled,
+  verificationRequired,
+  blocked,
+  rateLimited,
+  timedOut,
 }
 
 final class ScrapeSourceRunResult {
@@ -109,5 +118,13 @@ final class ScrapeSourceRunResult {
 
   bool get succeeded =>
       state == ScrapeSourceRunState.success ||
-      state == ScrapeSourceRunState.zeroResults;
+      state == ScrapeSourceRunState.zeroResults ||
+      state == ScrapeSourceRunState.partial;
+}
+
+final class ScrapeSourceRunDiagnostic {
+  const ScrapeSourceRunDiagnostic({required this.state, required this.error});
+
+  final ScrapeSourceRunState state;
+  final Object error;
 }

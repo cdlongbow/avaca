@@ -98,6 +98,9 @@ class WorkImageDownloader {
   }) async {
     final urls = _policy.urlsFor(code: code, studio: studio);
     final primaryUri = urls.forVariant(variant);
+    if (!isApprovedWorkImageUri(primaryUri)) {
+      throw WorkImageDownloadException(primaryUri);
+    }
     final primary = await _transport.get(primaryUri);
     if (_isValid(primary)) {
       return DownloadedWorkImage(
@@ -105,45 +108,6 @@ class WorkImageDownloader {
         sourceUri: primaryUri,
       );
     }
-
-    if (urls.source == WorkImageSource.dmm) {
-      final fallbackUris = <Uri>{
-        _policy
-            .urlsFor(code: code, studio: studio, dmmLeadingOne: true)
-            .forVariant(variant),
-        _policy
-            .urlsFor(
-              code: code,
-              studio: studio,
-              dmmLeadingOne: true,
-              dmmTrailingV: true,
-            )
-            .forVariant(variant),
-        _policy
-            .urlsFor(
-              code: code,
-              studio: studio,
-              dmmLeadingOne: true,
-              dmmTrailingH2: true,
-            )
-            .forVariant(variant),
-      }..remove(primaryUri);
-
-      for (final fallbackUri in fallbackUris) {
-        final fallback = await _transport.get(fallbackUri);
-        if (_isValid(fallback)) {
-          return DownloadedWorkImage(
-            bytes: Uint8List.fromList(fallback.bodyBytes),
-            sourceUri: fallbackUri,
-          );
-        }
-      }
-
-      throw WorkImageDownloadException(
-        fallbackUris.isEmpty ? primaryUri : fallbackUris.last,
-      );
-    }
-
     throw WorkImageDownloadException(primaryUri);
   }
 

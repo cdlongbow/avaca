@@ -75,6 +75,7 @@ final class MinnanoScrapeSource implements ScrapeSource {
     return ScrapeWorkDetails(
       source: id,
       code: details.code ?? '',
+      rawCode: details.code,
       title: details.title,
       releaseDate: details.releaseDate,
       studio: details.studio,

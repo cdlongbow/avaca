@@ -26,9 +26,11 @@ class JavBusWorkSummary {
     required this.title,
     required this.detailUri,
     this.releaseDate,
+    this.rawCode,
   });
 
   final String code;
+  final String? rawCode;
   final String title;
   final String? releaseDate;
   final Uri detailUri;
@@ -38,6 +40,7 @@ class JavBusWorkDetails {
   const JavBusWorkDetails({
     required this.code,
     required this.title,
+    this.rawCode,
     this.releaseDate,
     this.durationMinutes,
     this.studio,
@@ -47,6 +50,7 @@ class JavBusWorkDetails {
   });
 
   final String code;
+  final String? rawCode;
   final String title;
   final String? releaseDate;
   final int? durationMinutes;
@@ -68,4 +72,47 @@ class JavBusWorkDetails {
       detailImagePath: detailImagePath,
     );
   }
+}
+
+enum JavBusPageIssueKind {
+  verificationRequired,
+  blocked,
+  rateLimited,
+  timeout,
+  transport,
+  notFound,
+  parserInvalid,
+  cancelled,
+}
+
+final class JavBusPageIssue {
+  const JavBusPageIssue({
+    required this.uri,
+    required this.kind,
+    required this.error,
+  });
+
+  final Uri uri;
+  final JavBusPageIssueKind kind;
+  final Object error;
+
+  @override
+  String toString() =>
+      'JavBus ' +
+      kind.name +
+      ': ' +
+      uri.toString() +
+      ' (' +
+      error.toString() +
+      ')';
+}
+
+final class JavBusWorkCollectionResult {
+  const JavBusWorkCollectionResult({
+    required this.works,
+    this.issues = const [],
+  });
+
+  final List<JavBusWorkSummary> works;
+  final List<JavBusPageIssue> issues;
 }

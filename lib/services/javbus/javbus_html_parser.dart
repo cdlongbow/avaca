@@ -61,6 +61,7 @@ class JavBusHtmlParser {
 
     return JavBusWorkDetails(
       code: code,
+      rawCode: rawCode,
       title: strippedTitle.isEmpty ? rawTitle : strippedTitle,
       releaseDate: _field(fields, const ['發行日期', '发行日期', '発売日']),
       durationMinutes: int.tryParse(duration ?? ''),
@@ -145,6 +146,7 @@ class JavBusHtmlParser {
     }
     return JavBusWorkSummary(
       code: canonicalizeJavBusWorkCode(code),
+      rawCode: code,
       title: _clean(element.querySelector('.photo-info span')?.text) ?? '',
       releaseDate: dates.length > 1 ? _clean(dates[1].text) : null,
       detailUri: pageUri.resolve(href),
