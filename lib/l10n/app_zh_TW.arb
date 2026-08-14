@@ -179,6 +179,32 @@
     }
   },
   "scrapeFailed": "刮削失敗，請稍後再試。",
+  "scrapePhaseCollecting": "正在取得作品清單",
+  "scrapePhaseSyncingActress": "正在同步女優資料",
+  "scrapePhaseFetchingDetails": "正在取得作品詳情",
+  "scrapePhaseResolvingWorks": "正在整理去重後作品",
+  "scrapePhaseSavingWorks": "正在儲存作品與下載圖片",
+  "scrapePhaseCompleted": "刮削完成",
+  "scrapeProgressSummary": "儲存 {saved}、排除 {excluded}、失敗 {failed}",
+  "@scrapeProgressSummary": {
+    "placeholders": {
+      "saved": {"type": "int"},
+      "excluded": {"type": "int"},
+      "failed": {"type": "int"}
+    }
+  },
+  "scrapeFailedWorksTitle": "失敗作品（{count}）",
+  "@scrapeFailedWorksTitle": {"placeholders": {"count": {"type": "int"}}},
+  "scrapeImageFailuresTitle": "圖片下載失敗（{count}）",
+  "@scrapeImageFailuresTitle": {"placeholders": {"count": {"type": "int"}}},
+  "scrapeFailureDetailsUnavailable": "所有來源都無法取得作品詳情",
+  "scrapeFailureDetailCodeMismatch": "作品詳情番號與作品不一致",
+  "scrapeFailureInvalidCode": "番號無法正規化",
+  "scrapeFailurePerformerCountUnavailable": "無法取得演員人數",
+  "scrapeFailureDatabaseSave": "作品資料儲存失敗",
+  "scrapeImageFailureCard": "封面圖片",
+  "scrapeImageFailureDetail": "詳細圖片",
+  "scrapeImageFailureBoth": "封面與詳細圖片",
   "javBusVerificationTitle": "JavBus 驗證",
   "javBusVerificationInstructions": "JavBus 要求手動完成地區成年驗證。請回答所有題目，App 會在同一安全工作階段繼續刮削。",
   "javBusVerificationSubmit": "送出驗證",

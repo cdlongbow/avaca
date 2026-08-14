@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:avaca/core/database.dart';
 import 'package:avaca/l10n/app_localizations.dart';
 import 'package:avaca/models/work_scrape_options.dart';
+import 'package:avaca/models/scrape_source_settings.dart';
 import 'package:avaca/services/works_scrape_service.dart';
+import 'package:avaca/services/javbus/work_image_policy.dart';
 import 'package:avaca/views/detail_view.dart';
 import 'package:avaca/views/works_view.dart';
 import 'package:flutter/material.dart';
@@ -971,6 +973,144 @@ void main() {
 
     expect(find.byKey(const Key('scrape-result-dialog')), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('scrape progress shows the current phase and operation', (
+    tester,
+  ) async {
+    final result = Completer<WorksScrapeResult>();
+    final allowDetailProgress = Completer<void>();
+    final allowImageProgress = Completer<void>();
+    var executorStarted = false;
+
+    await _pumpWorks(
+      tester,
+      scrapeExecutor: (options, token, onProgress) async {
+        executorStarted = true;
+        onProgress(
+          const WorksScrapeProgress(
+            phase: WorksScrapePhase.collectingSources,
+            current: 0,
+            total: 0,
+            saved: 0,
+            excluded: 0,
+            failed: 0,
+            source: ScrapeSourceId.javbus,
+          ),
+        );
+        await allowDetailProgress.future;
+        onProgress(
+          const WorksScrapeProgress(
+            phase: WorksScrapePhase.fetchingDetails,
+            current: 0,
+            total: 1,
+            saved: 0,
+            excluded: 0,
+            failed: 0,
+            source: ScrapeSourceId.javbus,
+            workCode: 'SHOULD-NOT-BE-SHOWN',
+          ),
+        );
+        await allowImageProgress.future;
+        onProgress(
+          const WorksScrapeProgress(
+            phase: WorksScrapePhase.downloadingImages,
+            current: 0,
+            total: 1,
+            saved: 0,
+            excluded: 0,
+            failed: 0,
+            source: ScrapeSourceId.javbus,
+            workCode: 'REBD-975',
+          ),
+        );
+        return result.future;
+      },
+    );
+
+    await _openWorksScrapeSettings(tester);
+    await tester.tap(find.text('開始刮削'));
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(executorStarted, isTrue);
+    final operation = tester.widget<Text>(
+      find.byKey(const Key('scrape-progress-operation')),
+    );
+    expect(operation.data, contains('正在取得作品清單'));
+    expect(find.byKey(const Key('scrape-progress-count')), findsNothing);
+    expect(find.byKey(const Key('scrape-progress-summary')), findsOneWidget);
+
+    allowDetailProgress.complete();
+    await tester.pump();
+    final detailOperation = tester.widget<Text>(
+      find.byKey(const Key('scrape-progress-operation')),
+    );
+    expect(detailOperation.data, contains('JavBus'));
+    expect(detailOperation.data, isNot(contains('SHOULD-NOT-BE-SHOWN')));
+    expect(find.byKey(const Key('scrape-progress-count')), findsOneWidget);
+
+    allowImageProgress.complete();
+    await tester.pump();
+    final imageOperation = tester.widget<Text>(
+      find.byKey(const Key('scrape-progress-operation')),
+    );
+    expect(imageOperation.data, contains('REBD-975'));
+
+    result.complete(
+      const WorksScrapeResult(
+        saved: 0,
+        excluded: 0,
+        failed: 0,
+        cancelled: true,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('scrape-result-done')));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('scrape result lists unique failed works and image issues', (
+    tester,
+  ) async {
+    await _pumpWorks(
+      tester,
+      scrapeExecutor: (options, token, onProgress) async {
+        return const WorksScrapeResult(
+          saved: 1,
+          excluded: 2,
+          failed: 1,
+          cancelled: false,
+          failedWorks: [
+            WorksScrapeFailure(
+              code: 'SIVR-303',
+              stage: WorksScrapeFailureStage.fetchingDetails,
+              reason: WorksScrapeFailureReason.detailsUnavailable,
+            ),
+          ],
+          imageFailures: [
+            WorksScrapeImageFailure(
+              code: 'SSIS-875',
+              variants: [WorkImageVariant.card, WorkImageVariant.detail],
+            ),
+          ],
+        );
+      },
+    );
+
+    await _openWorksScrapeSettings(tester);
+    await tester.tap(find.text('開始刮削'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('失敗作品（1）'), findsOneWidget);
+    expect(find.textContaining('SIVR-303'), findsOneWidget);
+    expect(find.text('圖片下載失敗（1）'), findsOneWidget);
+    expect(find.textContaining('SSIS-875'), findsOneWidget);
+    expect(find.textContaining('SIVR00303'), findsNothing);
+    expect(find.textContaining('SIVR-303 —'), findsOneWidget);
+    expect(find.byKey(const Key('scrape-result-scroll')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('scrape-result-done')));
+    await tester.pumpAndSettle();
   });
 
   testWidgets(

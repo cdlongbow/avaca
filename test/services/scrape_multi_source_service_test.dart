@@ -133,6 +133,8 @@ void main() {
       final works = await database.getWorksForActress(actressId);
       expect(result.saved, 3);
       expect(result.failed, 1);
+      expect(result.failedWorks, hasLength(1));
+      expect(result.failedWorks.single.code, 'BAD-004');
       expect(result.partialSuccess, isTrue);
       expect(
         result.sourceResults.keys,
@@ -167,10 +169,10 @@ void main() {
   );
 
   test(
-    'aggregate mode rejects details whose canonical code differs from summary',
+    'does not reuse separatorless alias equivalence as cross-source identity',
     () async {
       final directory = await Directory.systemTemp.createTemp(
-        'avaca_multi_source_code_guard_test_',
+        'avaca_separatorless_canonical_dedup_test_',
       );
       final database = AppDatabase.forTesting(
         baseDir: directory.path,
@@ -186,22 +188,22 @@ void main() {
           (await (await database.database).query('actresses')).single['id']
               as int;
 
-      final summary = ScrapeWorkSummary(
-        source: ScrapeSourceId.minnanoAv,
-        code: 'start－489',
-        title: 'Summary title',
-        detailUri: Uri.parse('https://www.minnano-av.com/av489.html'),
-      );
       final minnano = _FakeScrapeSource(
         id: ScrapeSourceId.minnanoAv,
         detailBirthDate: '1999-01-01',
-        works: [summary],
-        detailsByCode: {
-          'START-489': const ScrapeWorkDetails(
+        works: [
+          ScrapeWorkSummary(
             source: ScrapeSourceId.minnanoAv,
-            code: 'OTHER-999',
-            title: 'Wrong detail title',
-            studio: 'Wrong studio must not be merged',
+            code: 'SIVR00303',
+            title: 'SIVR alias',
+            detailUri: Uri.parse('https://www.minnano-av.com/sivr303.html'),
+          ),
+        ],
+        detailsByCode: {
+          'SIVR-303': const ScrapeWorkDetails(
+            source: ScrapeSourceId.minnanoAv,
+            code: 'SIVR00303',
+            title: 'SIVR alias detail',
             performerCount: 1,
           ),
         },
@@ -212,17 +214,16 @@ void main() {
         works: [
           ScrapeWorkSummary(
             source: ScrapeSourceId.javbus,
-            code: 'START-489',
-            title: summary.title,
-            detailUri: Uri.parse('https://www.javbus.com/START-489'),
+            code: 'SIVR-303',
+            title: 'SIVR canonical',
+            detailUri: Uri.parse('https://www.javbus.com/SIVR-303'),
           ),
         ],
         detailsByCode: {
-          'START-489': const ScrapeWorkDetails(
+          'SIVR-303': const ScrapeWorkDetails(
             source: ScrapeSourceId.javbus,
-            code: 'START-489',
-            title: 'Verified detail title',
-            durationMinutes: 90,
+            code: 'SIVR-303',
+            title: 'SIVR canonical detail',
             performerCount: 1,
           ),
         },
@@ -237,29 +238,49 @@ void main() {
         imageDirectory: directory.path,
       );
 
+      final progress = <WorksScrapeProgress>[];
       final result = await service.scrape(
         actressId: actressId,
         actressName: '河北彩花',
-        options: const WorkScrapeOptions(),
+        options: const WorkScrapeOptions(syncDetails: false),
         sourceSettings: const ScrapeSourceSettings(),
+        onProgress: progress.add,
       );
 
       final works = await database.getWorksForActress(actressId);
-      expect(result.saved, 1);
+      expect(result.saved, 2);
+      expect(result.excluded, 0);
       expect(result.failed, 0);
-      expect(result.partialSuccess, isTrue);
-      expect(works, hasLength(1));
-      expect(works.single['code'], 'START-489');
-      expect(works.single['studio'], isNot('Wrong studio must not be merged'));
-      expect(works.single['duration_minutes'], 90);
+      expect(result.failedWorks, isEmpty);
+      expect(works, hasLength(2));
+      expect(
+        works.map((row) => row['code']),
+        unorderedEquals(['SIVR00303', 'SIVR-303']),
+      );
+      expect(minnano.detailRequests, ['SIVR-303']);
+      expect(javbus.detailRequests, ['SIVR-303']);
+
+      final fetching = progress
+          .where((item) => item.phase == WorksScrapePhase.fetchingDetails)
+          .toList();
+      final saving = progress
+          .where((item) => item.phase == WorksScrapePhase.savingWorks)
+          .toList();
+      expect(fetching, isNotEmpty);
+      expect(fetching, everyElement(isA<WorksScrapeProgress>()));
+      expect(fetching.map((item) => item.total), everyElement(1));
+      expect(fetching.where((item) => item.current == 1), isNotEmpty);
+      expect(saving, isNotEmpty);
+      expect(saving.last.total, 2);
+      expect(saving.last.current, 2);
     },
   );
 
   test(
-    'deduplicates equivalent START aliases without merging different numbers',
+    'emits final-code image progress before image variants finish',
     () async {
       final directory = await Directory.systemTemp.createTemp(
-        'avaca_start_alias_dedup_test_',
+        'avaca_canonical_image_progress_test_',
       );
       final database = AppDatabase.forTesting(
         baseDir: directory.path,
@@ -270,97 +291,487 @@ void main() {
         await directory.delete(recursive: true);
       });
       await database.init();
-      await database.addActress(name: '小湊よつ葉');
+      await database.addActress(name: '河北彩花');
       final actressId =
           (await (await database.database).query('actresses')).single['id']
               as int;
-      await database.upsertActressWork(
-        actressId: actressId,
-        work: const Work(code: '1START00408', title: 'legacy alias'),
-      );
-      await database.upsertActressWork(
-        actressId: actressId,
-        work: const Work(code: 'START-408', title: 'legacy canonical'),
-      );
-
       final source = _FakeScrapeSource(
         id: ScrapeSourceId.minnanoAv,
-        detailBirthDate: '1996-05-29',
+        detailBirthDate: '1999-01-01',
         works: [
           ScrapeWorkSummary(
             source: ScrapeSourceId.minnanoAv,
-            code: '1start00408',
-            title: 'START 408 alias',
-            detailUri: Uri.parse('https://www.minnano-av.com/av408-a.html'),
-          ),
-          ScrapeWorkSummary(
-            source: ScrapeSourceId.minnanoAv,
-            code: 'START-408',
-            title: 'START 408 canonical',
-            detailUri: Uri.parse('https://www.minnano-av.com/av408-b.html'),
-          ),
-          ScrapeWorkSummary(
-            source: ScrapeSourceId.minnanoAv,
-            code: '1start00427',
-            title: 'START 427 alias',
-            detailUri: Uri.parse('https://www.minnano-av.com/av427-a.html'),
-          ),
-          ScrapeWorkSummary(
-            source: ScrapeSourceId.minnanoAv,
-            code: 'START-427',
-            title: 'START 427 canonical',
-            detailUri: Uri.parse('https://www.minnano-av.com/av427-b.html'),
+            code: 'SSIS875',
+            title: 'SSIS 875',
+            detailUri: Uri.parse('https://www.minnano-av.com/ssis875.html'),
           ),
         ],
         detailsByCode: {
-          'START-408': ScrapeWorkDetails(
+          'SSIS-875': const ScrapeWorkDetails(
             source: ScrapeSourceId.minnanoAv,
-            code: '1start00408',
-            title: 'START 408',
-            performerCount: 1,
-            imageUris: [
-              Uri.parse('https://www.minnano-av.com/p_package/2605/195939.jpg'),
-            ],
-          ),
-          'START-427': const ScrapeWorkDetails(
-            source: ScrapeSourceId.minnanoAv,
-            code: 'START-427',
-            title: 'START 427',
+            code: 'SSIS875',
+            title: 'SSIS 875 detail',
             performerCount: 1,
           ),
         },
       );
-      final uriDownloader = _RecordingScrapeImageUriDownloader();
+      final imageDownloader = _BlockingWorkImageDownloader();
       final service = WorksScrapeService(
         db: database,
         sources: {ScrapeSourceId.minnanoAv: source},
-        workImageDownloader: _FakeWorkImageDownloader(),
-        imageUriDownloader: uriDownloader,
+        workImageDownloader: imageDownloader,
         imageDirectory: directory.path,
       );
-
-      final result = await service.scrape(
+      final progress = <WorksScrapeProgress>[];
+      final scrape = service.scrape(
         actressId: actressId,
-        actressName: '小湊よつ葉',
-        options: const WorkScrapeOptions(),
+        actressName: '河北彩花',
+        options: const WorkScrapeOptions(syncDetails: false),
         sourceSettings: const ScrapeSourceSettings(
           actressDetailsSource: ScrapeSourceId.minnanoAv,
           worksSource: WorksSourceSelection.minnanoAv,
         ),
+        onProgress: progress.add,
       );
 
-      final works = await database.getWorksForActress(actressId);
-      expect(result.saved, 2);
-      expect(works, hasLength(2));
-      expect(
-        works.map((row) => row['code']),
-        unorderedEquals(['START-408', 'START-427']),
-      );
-      expect(works.where((row) => row['code'] == '1START00408'), isEmpty);
-      expect(source.detailRequests, ['START-408', 'START-427']);
-      expect(uriDownloader.requested, isEmpty);
+      await imageDownloader.firstImageStarted.future;
+      final savingBeforeImages = progress
+          .where((item) => item.phase == WorksScrapePhase.savingWorks)
+          .last;
+      expect(savingBeforeImages.current, 0);
+      expect(savingBeforeImages.total, 1);
+      final imageProgress = progress
+          .where((item) => item.phase == WorksScrapePhase.downloadingImages)
+          .last;
+      expect(imageProgress.workCode, 'SSIS875');
+
+      imageDownloader.releaseFirstImage();
+      final result = await scrape;
+      expect(result.saved, 1);
+      expect(result.failed, 0);
+      final savingAfterImages = progress
+          .where((item) => item.phase == WorksScrapePhase.savingWorks)
+          .last;
+      expect(savingAfterImages.current, 1);
+      expect(savingAfterImages.total, 1);
     },
   );
+
+  test('reports the current work while a detail request is pending', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'avaca_detail_progress_current_work_test_',
+    );
+    final database = AppDatabase.forTesting(
+      baseDir: directory.path,
+      databaseFactory: databaseFactoryFfi,
+    );
+    addTearDown(() async {
+      await database.close();
+      await directory.delete(recursive: true);
+    });
+    await database.init();
+    await database.addActress(name: '河北彩花');
+    final actressId =
+        (await (await database.database).query('actresses')).single['id']
+            as int;
+    final detailStarted = Completer<void>();
+    final releaseDetail = Completer<void>();
+    final source = _FakeScrapeSource(
+      id: ScrapeSourceId.minnanoAv,
+      detailBirthDate: '1999-01-01',
+      works: [
+        ScrapeWorkSummary(
+          source: ScrapeSourceId.minnanoAv,
+          code: 'SSIS875',
+          title: 'SSIS 875',
+          detailUri: Uri.parse('https://www.minnano-av.com/ssis875.html'),
+        ),
+      ],
+      detailsByCode: {
+        'SSIS-875': const ScrapeWorkDetails(
+          source: ScrapeSourceId.minnanoAv,
+          code: 'SSIS875',
+          title: 'SSIS 875 detail',
+          performerCount: 1,
+        ),
+      },
+      beforeDetail: (_) async {
+        if (!detailStarted.isCompleted) {
+          detailStarted.complete();
+        }
+        await releaseDetail.future;
+      },
+    );
+    final service = WorksScrapeService(
+      db: database,
+      sources: {ScrapeSourceId.minnanoAv: source},
+      workImageDownloader: _FakeWorkImageDownloader(),
+      imageDirectory: directory.path,
+    );
+    final progress = <WorksScrapeProgress>[];
+    final scrape = service.scrape(
+      actressId: actressId,
+      actressName: '河北彩花',
+      options: const WorkScrapeOptions(syncDetails: false),
+      sourceSettings: const ScrapeSourceSettings(
+        actressDetailsSource: ScrapeSourceId.minnanoAv,
+        worksSource: WorksSourceSelection.minnanoAv,
+      ),
+      onProgress: progress.add,
+    );
+
+    await detailStarted.future;
+    final fetching = progress
+        .where((item) => item.phase == WorksScrapePhase.fetchingDetails)
+        .last;
+    expect(fetching.current, 0);
+    expect(fetching.total, 1);
+    expect(fetching.workCode, isNull);
+
+    releaseDetail.complete();
+    final result = await scrape;
+    expect(result.saved, 1);
+    expect(result.failed, 0);
+  });
+
+  test(
+    'deduplicates same-source unknown-code titles before detail fetch',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'avaca_unknown_work_identity_test_',
+      );
+      final database = AppDatabase.forTesting(
+        baseDir: directory.path,
+        databaseFactory: databaseFactoryFfi,
+      );
+      addTearDown(() async {
+        await database.close();
+        await directory.delete(recursive: true);
+      });
+      await database.init();
+      await database.addActress(name: '河北彩花');
+      final actressId =
+          (await (await database.database).query('actresses')).single['id']
+              as int;
+      final source = _FakeScrapeSource(
+        id: ScrapeSourceId.minnanoAv,
+        detailBirthDate: '1999-01-01',
+        works: [
+          ScrapeWorkSummary(
+            source: ScrapeSourceId.minnanoAv,
+            code: '',
+            title: '同名未知作品',
+            detailUri: Uri.parse('https://www.minnano-av.com/unknown-a.html'),
+          ),
+          ScrapeWorkSummary(
+            source: ScrapeSourceId.minnanoAv,
+            code: '',
+            title: '同名未知作品',
+            detailUri: Uri.parse('https://www.minnano-av.com/unknown-b.html'),
+          ),
+        ],
+        detailsByCode: const {},
+      );
+      final service = WorksScrapeService(
+        db: database,
+        sources: {ScrapeSourceId.minnanoAv: source},
+        workImageDownloader: _FakeWorkImageDownloader(),
+        imageDirectory: directory.path,
+      );
+      final progress = <WorksScrapeProgress>[];
+      final result = await service.scrape(
+        actressId: actressId,
+        actressName: '河北彩花',
+        options: const WorkScrapeOptions(syncDetails: false),
+        sourceSettings: const ScrapeSourceSettings(
+          actressDetailsSource: ScrapeSourceId.minnanoAv,
+          worksSource: WorksSourceSelection.minnanoAv,
+        ),
+        onProgress: progress.add,
+      );
+
+      expect(result.saved, 0);
+      expect(result.failed, 1);
+      expect(result.failedWorks, hasLength(1));
+      expect(result.imageFailures, isEmpty);
+      expect(
+        progress
+            .where((item) => item.phase == WorksScrapePhase.savingWorks)
+            .last
+            .total,
+        1,
+      );
+    },
+  );
+
+  test('keeps image failures separate and unique from work failures', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'avaca_canonical_image_failure_test_',
+    );
+    final database = AppDatabase.forTesting(
+      baseDir: directory.path,
+      databaseFactory: databaseFactoryFfi,
+    );
+    addTearDown(() async {
+      await database.close();
+      await directory.delete(recursive: true);
+    });
+    await database.init();
+    await database.addActress(name: '河北彩花');
+    final actressId =
+        (await (await database.database).query('actresses')).single['id']
+            as int;
+    final source = _FakeScrapeSource(
+      id: ScrapeSourceId.minnanoAv,
+      detailBirthDate: '1999-01-01',
+      works: [
+        ScrapeWorkSummary(
+          source: ScrapeSourceId.minnanoAv,
+          code: 'SSIS875',
+          title: 'SSIS 875',
+          detailUri: Uri.parse('https://www.minnano-av.com/ssis875.html'),
+        ),
+      ],
+      detailsByCode: {
+        'SSIS-875': const ScrapeWorkDetails(
+          source: ScrapeSourceId.minnanoAv,
+          code: 'SSIS875',
+          title: 'SSIS 875 detail',
+          performerCount: 1,
+        ),
+      },
+    );
+    final service = WorksScrapeService(
+      db: database,
+      sources: {ScrapeSourceId.minnanoAv: source},
+      workImageDownloader: _FailingWorkImageDownloader(),
+      imageDirectory: directory.path,
+    );
+
+    final result = await service.scrape(
+      actressId: actressId,
+      actressName: '河北彩花',
+      options: const WorkScrapeOptions(syncDetails: false),
+      sourceSettings: const ScrapeSourceSettings(
+        actressDetailsSource: ScrapeSourceId.minnanoAv,
+        worksSource: WorksSourceSelection.minnanoAv,
+      ),
+    );
+
+    expect(result.saved, 1);
+    expect(result.failed, 0);
+    expect(result.failedWorks, isEmpty);
+    expect(result.imageFailures, hasLength(1));
+    expect(result.imageFailures.single.code, 'SSIS875');
+    expect(
+      result.imageFailures.single.variants,
+      containsAll([WorkImageVariant.card, WorkImageVariant.detail]),
+    );
+  });
+
+  test('keeps detail code when it differs from the summary code', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'avaca_multi_source_code_guard_test_',
+    );
+    final database = AppDatabase.forTesting(
+      baseDir: directory.path,
+      databaseFactory: databaseFactoryFfi,
+    );
+    addTearDown(() async {
+      await database.close();
+      await directory.delete(recursive: true);
+    });
+    await database.init();
+    await database.addActress(name: '河北彩花');
+    final actressId =
+        (await (await database.database).query('actresses')).single['id']
+            as int;
+
+    final summary = ScrapeWorkSummary(
+      source: ScrapeSourceId.minnanoAv,
+      code: 'start－489',
+      title: 'Summary title',
+      detailUri: Uri.parse('https://www.minnano-av.com/av489.html'),
+    );
+    final minnano = _FakeScrapeSource(
+      id: ScrapeSourceId.minnanoAv,
+      detailBirthDate: '1999-01-01',
+      works: [summary],
+      detailsByCode: {
+        'START-489': const ScrapeWorkDetails(
+          source: ScrapeSourceId.minnanoAv,
+          code: 'OTHER-999',
+          title: 'Wrong detail title',
+          studio: 'Wrong studio must not be merged',
+          performerCount: 1,
+        ),
+      },
+    );
+    final javbus = _FakeScrapeSource(
+      id: ScrapeSourceId.javbus,
+      detailBirthDate: '1999-01-01',
+      works: [
+        ScrapeWorkSummary(
+          source: ScrapeSourceId.javbus,
+          code: 'START-489',
+          title: summary.title,
+          detailUri: Uri.parse('https://www.javbus.com/START-489'),
+        ),
+      ],
+      detailsByCode: {
+        'START-489': const ScrapeWorkDetails(
+          source: ScrapeSourceId.javbus,
+          code: 'START-489',
+          title: 'Verified detail title',
+          durationMinutes: 90,
+          performerCount: 1,
+        ),
+      },
+    );
+    final service = WorksScrapeService(
+      db: database,
+      sources: {
+        ScrapeSourceId.minnanoAv: minnano,
+        ScrapeSourceId.javbus: javbus,
+      },
+      workImageDownloader: _FakeWorkImageDownloader(),
+      imageDirectory: directory.path,
+    );
+
+    final result = await service.scrape(
+      actressId: actressId,
+      actressName: '河北彩花',
+      options: const WorkScrapeOptions(),
+      sourceSettings: const ScrapeSourceSettings(),
+    );
+
+    final works = await database.getWorksForActress(actressId);
+    expect(result.saved, 2);
+    expect(result.failed, 0);
+    expect(result.partialSuccess, isFalse);
+    expect(works, hasLength(2));
+    expect(
+      works.map((row) => row['code']),
+      unorderedEquals(['OTHER-999', 'START-489']),
+    );
+    expect(
+      works.firstWhere((row) => row['code'] == 'OTHER-999')['studio'],
+      'Wrong studio must not be merged',
+    );
+    expect(
+      works.firstWhere((row) => row['code'] == 'START-489')['duration_minutes'],
+      90,
+    );
+  });
+
+  test('does not merge old database aliases into a new scrape', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'avaca_start_alias_dedup_test_',
+    );
+    final database = AppDatabase.forTesting(
+      baseDir: directory.path,
+      databaseFactory: databaseFactoryFfi,
+    );
+    addTearDown(() async {
+      await database.close();
+      await directory.delete(recursive: true);
+    });
+    await database.init();
+    await database.addActress(name: '小湊よつ葉');
+    final actressId =
+        (await (await database.database).query('actresses')).single['id']
+            as int;
+    await database.upsertActressWork(
+      actressId: actressId,
+      work: const Work(code: '1START00408', title: 'legacy alias'),
+    );
+    await database.upsertActressWork(
+      actressId: actressId,
+      work: const Work(code: 'START-408', title: 'legacy canonical'),
+    );
+
+    final source = _FakeScrapeSource(
+      id: ScrapeSourceId.minnanoAv,
+      detailBirthDate: '1996-05-29',
+      works: [
+        ScrapeWorkSummary(
+          source: ScrapeSourceId.minnanoAv,
+          code: '1start00408',
+          title: 'START 408 alias',
+          detailUri: Uri.parse('https://www.minnano-av.com/av408-a.html'),
+        ),
+        ScrapeWorkSummary(
+          source: ScrapeSourceId.minnanoAv,
+          code: 'START-408',
+          title: 'START 408 canonical',
+          detailUri: Uri.parse('https://www.minnano-av.com/av408-b.html'),
+        ),
+        ScrapeWorkSummary(
+          source: ScrapeSourceId.minnanoAv,
+          code: '1start00427',
+          title: 'START 427 alias',
+          detailUri: Uri.parse('https://www.minnano-av.com/av427-a.html'),
+        ),
+        ScrapeWorkSummary(
+          source: ScrapeSourceId.minnanoAv,
+          code: 'START-427',
+          title: 'START 427 canonical',
+          detailUri: Uri.parse('https://www.minnano-av.com/av427-b.html'),
+        ),
+      ],
+      detailsByCode: {
+        'START-408': ScrapeWorkDetails(
+          source: ScrapeSourceId.minnanoAv,
+          code: '1start00408',
+          title: 'START 408',
+          performerCount: 1,
+          imageUris: [
+            Uri.parse('https://www.minnano-av.com/p_package/2605/195939.jpg'),
+          ],
+        ),
+        'START-427': const ScrapeWorkDetails(
+          source: ScrapeSourceId.minnanoAv,
+          code: 'START-427',
+          title: 'START 427',
+          performerCount: 1,
+        ),
+      },
+    );
+    final uriDownloader = _RecordingScrapeImageUriDownloader();
+    final service = WorksScrapeService(
+      db: database,
+      sources: {ScrapeSourceId.minnanoAv: source},
+      workImageDownloader: _FakeWorkImageDownloader(),
+      imageUriDownloader: uriDownloader,
+      imageDirectory: directory.path,
+    );
+
+    final result = await service.scrape(
+      actressId: actressId,
+      actressName: '小湊よつ葉',
+      options: const WorkScrapeOptions(),
+      sourceSettings: const ScrapeSourceSettings(
+        actressDetailsSource: ScrapeSourceId.minnanoAv,
+        worksSource: WorksSourceSelection.minnanoAv,
+      ),
+    );
+
+    final works = await database.getWorksForActress(actressId);
+    expect(result.saved, 2);
+    expect(works, hasLength(3));
+    expect(
+      works.map((row) => row['code']),
+      unorderedEquals(['1START00408', 'START-408', 'START-427']),
+    );
+    expect(works.where((row) => row['code'] == '1START00408'), hasLength(1));
+    expect(source.detailRequests, [
+      'START-408',
+      'START-408',
+      'START-427',
+      'START-427',
+    ]);
+    expect(uriDownloader.requested, isEmpty);
+  });
 
   test(
     'starts all source pipelines and detail queues concurrently while each source stays sequential',
@@ -502,10 +913,14 @@ void main() {
       await javbusCollectionStarted.future;
       expect(minnanoCollectionStarted.isCompleted, isTrue);
       expect(javbusCollectionStarted.isCompleted, isTrue);
+
+      // JavBus detail must start while Minnano is still blocked in collection.
+      await javbusDetailStarted.future;
+      expect(releaseMinnanoCollection.isCompleted, isFalse);
+      expect(javbus.detailRequests, ['J-001']);
       releaseMinnanoCollection.complete();
 
       await minnanoDetailStarted.future;
-      await javbusDetailStarted.future;
       expect(minnano.detailRequests, ['M-001']);
       expect(javbus.detailRequests, ['J-001']);
       releaseMinnanoDetail.complete();
@@ -519,7 +934,7 @@ void main() {
   );
 
   test(
-    'deduplicates numeric-leading aliases across sources for arbitrary prefixes',
+    'does not use numeric-leading aliases as ordinary cross-source identity',
     () async {
       final directory = await Directory.systemTemp.createTemp(
         'avaca_generic_alias_dedup_test_',
@@ -630,27 +1045,383 @@ void main() {
       );
 
       final works = await database.getWorksForActress(actressId);
-      expect(result.saved, 2);
+      expect(result.saved, 4);
       expect(result.failed, 0);
-      expect(works, hasLength(2));
+      expect(works, hasLength(4));
       expect(
         works.map((row) => row['code']),
-        unorderedEquals(['STZY-017', 'DSVR-1947']),
-      );
-      expect(
-        (await (await database.database).query(
-          'works',
-          where: 'code = ?',
-          whereArgs: ['1STZY00017'],
-        )),
-        isEmpty,
+        unorderedEquals(['1STZY00017', '3DSVR-1947', 'STZY-017', 'DSVR-1947']),
       );
       expect(minnano.detailRequests, ['STZY-017', 'DSVR-1947']);
       expect(javbus.detailRequests, ['STZY-017', 'DSVR-1947']);
       expect(
         (await (await database.database).query('actress_works')).length,
-        2,
+        4,
       );
+    },
+  );
+
+  test('same-source title dedupe prefers the ordinary edition', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'avaca_special_edition_title_test_',
+    );
+    final database = AppDatabase.forTesting(
+      baseDir: directory.path,
+      databaseFactory: databaseFactoryFfi,
+    );
+    addTearDown(() async {
+      await database.close();
+      await directory.delete(recursive: true);
+    });
+    await database.init();
+    await database.addActress(name: '河北彩花');
+    final actressId =
+        (await (await database.database).query('actresses')).single['id']
+            as int;
+
+    final source = _FakeScrapeSource(
+      id: ScrapeSourceId.minnanoAv,
+      detailBirthDate: '1999-01-01',
+      works: [
+        ScrapeWorkSummary(
+          source: ScrapeSourceId.minnanoAv,
+          code: 'SP-001',
+          title: '【特典版】同一作品',
+          detailUri: Uri.parse('https://www.minnano-av.com/sp001.html'),
+        ),
+        ScrapeWorkSummary(
+          source: ScrapeSourceId.minnanoAv,
+          code: 'ORD-001',
+          title: '同一作品',
+          detailUri: Uri.parse('https://www.minnano-av.com/ord001.html'),
+        ),
+      ],
+      detailsByCode: {
+        'SP-001': const ScrapeWorkDetails(
+          source: ScrapeSourceId.minnanoAv,
+          code: 'SP-001',
+          title: '【特典版】同一作品',
+          performerCount: 1,
+        ),
+        'ORD-001': const ScrapeWorkDetails(
+          source: ScrapeSourceId.minnanoAv,
+          code: 'ORD-001',
+          title: '同一作品',
+          performerCount: 1,
+        ),
+      },
+    );
+    final service = WorksScrapeService(
+      db: database,
+      sources: {ScrapeSourceId.minnanoAv: source},
+      workImageDownloader: _FakeWorkImageDownloader(),
+      imageDirectory: directory.path,
+    );
+
+    final result = await service.scrape(
+      actressId: actressId,
+      actressName: '河北彩花',
+      options: const WorkScrapeOptions(syncDetails: false),
+      sourceSettings: const ScrapeSourceSettings(
+        actressDetailsSource: ScrapeSourceId.minnanoAv,
+        worksSource: WorksSourceSelection.minnanoAv,
+      ),
+    );
+
+    expect(result.saved, 1);
+    expect(source.detailRequests, ['ORD-001']);
+    expect(
+      (await database.getWorksForActress(actressId)).single['code'],
+      'ORD-001',
+    );
+  });
+
+  test('Rebecca title merge chooses the shortest detail code', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'avaca_rebecca_title_merge_test_',
+    );
+    final database = AppDatabase.forTesting(
+      baseDir: directory.path,
+      databaseFactory: databaseFactoryFfi,
+    );
+    addTearDown(() async {
+      await database.close();
+      await directory.delete(recursive: true);
+    });
+    await database.init();
+    await database.addActress(name: '河北彩花');
+    final actressId =
+        (await (await database.database).query('actresses')).single['id']
+            as int;
+    const title = 'Ui 太陽に照らされて';
+    final minnanoUri = 'https://www.minnano-av.com/rebd975.html';
+    final javbusUri = 'https://www.javbus.com/REBD-975';
+    final minnano = _FakeScrapeSource(
+      id: ScrapeSourceId.minnanoAv,
+      detailBirthDate: '1999-01-01',
+      works: [
+        ScrapeWorkSummary(
+          source: ScrapeSourceId.minnanoAv,
+          code: 'H_346REBD00975',
+          title: title,
+          detailUri: Uri.parse(minnanoUri),
+        ),
+      ],
+      detailsByUri: {
+        minnanoUri: const ScrapeWorkDetails(
+          source: ScrapeSourceId.minnanoAv,
+          code: 'H_346REBD00975',
+          title: title,
+          publisher: 'Rebecca',
+          studio: 'Minnano metadata',
+          performerCount: 1,
+        ),
+      },
+      detailsByCode: const {},
+    );
+    final javbus = _FakeScrapeSource(
+      id: ScrapeSourceId.javbus,
+      detailBirthDate: '1999-01-01',
+      works: [
+        ScrapeWorkSummary(
+          source: ScrapeSourceId.javbus,
+          code: 'REBD-975',
+          title: title,
+          detailUri: Uri.parse(javbusUri),
+        ),
+      ],
+      detailsByUri: {
+        javbusUri: const ScrapeWorkDetails(
+          source: ScrapeSourceId.javbus,
+          code: 'REBD-975',
+          title: title,
+          publisher: 'Rebecca',
+          durationMinutes: 120,
+          performerCount: 1,
+        ),
+      },
+      detailsByCode: const {},
+    );
+    final imageDownloader = _RecordingWorkImageDownloader();
+    final service = WorksScrapeService(
+      db: database,
+      sources: {
+        ScrapeSourceId.minnanoAv: minnano,
+        ScrapeSourceId.javbus: javbus,
+      },
+      workImageDownloader: imageDownloader,
+      imageDirectory: directory.path,
+    );
+
+    final result = await service.scrape(
+      actressId: actressId,
+      actressName: '河北彩花',
+      options: const WorkScrapeOptions(syncDetails: false),
+      sourceSettings: const ScrapeSourceSettings(),
+    );
+
+    final works = await database.getWorksForActress(actressId);
+    expect(result.saved, 1);
+    expect(works, hasLength(1));
+    expect(works.single['code'], 'REBD-975');
+    expect(works.single['studio'], 'Minnano metadata');
+    expect(works.single['duration_minutes'], 120);
+    expect(imageDownloader.requestedCodes, ['REBD-975', 'REBD-975']);
+    expect(minnano.detailUris, [minnanoUri]);
+    expect(javbus.detailUris, [javbusUri]);
+  });
+
+  test('same title with non-Rebecca publishers stays separate', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'avaca_non_rebecca_title_test_',
+    );
+    final database = AppDatabase.forTesting(
+      baseDir: directory.path,
+      databaseFactory: databaseFactoryFfi,
+    );
+    addTearDown(() async {
+      await database.close();
+      await directory.delete(recursive: true);
+    });
+    await database.init();
+    await database.addActress(name: '河北彩花');
+    final actressId =
+        (await (await database.database).query('actresses')).single['id']
+            as int;
+    const title = '同名但非 Rebecca';
+    final minnanoUri = 'https://www.minnano-av.com/non-rebecca-a.html';
+    final javbusUri = 'https://www.javbus.com/NON-REBECCA-B';
+    final minnano = _FakeScrapeSource(
+      id: ScrapeSourceId.minnanoAv,
+      detailBirthDate: '1999-01-01',
+      works: [
+        ScrapeWorkSummary(
+          source: ScrapeSourceId.minnanoAv,
+          code: 'NON-A',
+          title: title,
+          detailUri: Uri.parse(minnanoUri),
+        ),
+      ],
+      detailsByUri: {
+        minnanoUri: const ScrapeWorkDetails(
+          source: ScrapeSourceId.minnanoAv,
+          code: 'NON-A',
+          title: title,
+          publisher: 'Other label',
+          performerCount: 1,
+        ),
+      },
+      detailsByCode: const {},
+    );
+    final javbus = _FakeScrapeSource(
+      id: ScrapeSourceId.javbus,
+      detailBirthDate: '1999-01-01',
+      works: [
+        ScrapeWorkSummary(
+          source: ScrapeSourceId.javbus,
+          code: 'NON-B',
+          title: title,
+          detailUri: Uri.parse(javbusUri),
+        ),
+      ],
+      detailsByUri: {
+        javbusUri: const ScrapeWorkDetails(
+          source: ScrapeSourceId.javbus,
+          code: 'NON-B',
+          title: title,
+          publisher: 'Other label',
+          performerCount: 1,
+        ),
+      },
+      detailsByCode: const {},
+    );
+    final service = WorksScrapeService(
+      db: database,
+      sources: {
+        ScrapeSourceId.minnanoAv: minnano,
+        ScrapeSourceId.javbus: javbus,
+      },
+      workImageDownloader: _FakeWorkImageDownloader(),
+      imageDirectory: directory.path,
+    );
+
+    final result = await service.scrape(
+      actressId: actressId,
+      actressName: '河北彩花',
+      options: const WorkScrapeOptions(syncDetails: false),
+      sourceSettings: const ScrapeSourceSettings(),
+    );
+
+    expect(result.saved, 2);
+    expect(
+      (await database.getWorksForActress(actressId)).map((row) => row['code']),
+      unorderedEquals(['NON-A', 'NON-B']),
+    );
+  });
+
+  test(
+    'cancellation stops overlapping pipelines before save or image work',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'avaca_overlap_cancellation_test_',
+      );
+      final database = AppDatabase.forTesting(
+        baseDir: directory.path,
+        databaseFactory: databaseFactoryFfi,
+      );
+      addTearDown(() async {
+        await database.close();
+        await directory.delete(recursive: true);
+      });
+      await database.init();
+      await database.addActress(name: '河北彩花');
+      final actressId =
+          (await (await database.database).query('actresses')).single['id']
+              as int;
+      final token = WorksScrapeCancellationToken();
+      final minnanoCollectionStarted = Completer<void>();
+      final releaseMinnanoCollection = Completer<void>();
+      final javbusDetailStarted = Completer<void>();
+
+      final minnano = _FakeScrapeSource(
+        id: ScrapeSourceId.minnanoAv,
+        detailBirthDate: '1999-01-01',
+        beforeSearch: () async {
+          if (!minnanoCollectionStarted.isCompleted) {
+            minnanoCollectionStarted.complete();
+          }
+          await releaseMinnanoCollection.future;
+        },
+        works: [
+          ScrapeWorkSummary(
+            source: ScrapeSourceId.minnanoAv,
+            code: 'M-001',
+            title: 'Minnano pending',
+            detailUri: Uri.parse('https://www.minnano-av.com/m001.html'),
+          ),
+        ],
+        detailsByCode: {
+          'M-001': const ScrapeWorkDetails(
+            source: ScrapeSourceId.minnanoAv,
+            code: 'M-001',
+            title: 'Minnano pending',
+            performerCount: 1,
+          ),
+        },
+      );
+      final javbus = _FakeScrapeSource(
+        id: ScrapeSourceId.javbus,
+        detailBirthDate: '1999-01-01',
+        beforeDetail: (_) async {
+          if (!javbusDetailStarted.isCompleted) {
+            javbusDetailStarted.complete();
+          }
+          token.cancel();
+        },
+        works: [
+          ScrapeWorkSummary(
+            source: ScrapeSourceId.javbus,
+            code: 'J-001',
+            title: 'JavBus cancels',
+            detailUri: Uri.parse('https://www.javbus.com/J-001'),
+          ),
+        ],
+        detailsByCode: {
+          'J-001': const ScrapeWorkDetails(
+            source: ScrapeSourceId.javbus,
+            code: 'J-001',
+            title: 'JavBus cancels',
+            performerCount: 1,
+          ),
+        },
+      );
+      final service = WorksScrapeService(
+        db: database,
+        sources: {
+          ScrapeSourceId.minnanoAv: minnano,
+          ScrapeSourceId.javbus: javbus,
+        },
+        workImageDownloader: _FakeWorkImageDownloader(),
+        imageDirectory: directory.path,
+      );
+
+      final scrape = service.scrape(
+        actressId: actressId,
+        actressName: '河北彩花',
+        options: const WorkScrapeOptions(syncDetails: false),
+        cancellationToken: token,
+        sourceSettings: const ScrapeSourceSettings(
+          actressDetailsSource: ScrapeSourceId.javbus,
+        ),
+      );
+      await minnanoCollectionStarted.future;
+      await javbusDetailStarted.future;
+      expect(minnano.detailRequests, isEmpty);
+      releaseMinnanoCollection.complete();
+
+      final result = await scrape;
+      expect(result.cancelled, isTrue);
+      expect(await database.getWorksForActress(actressId), isEmpty);
     },
   );
 
@@ -687,7 +1458,7 @@ void main() {
           detailsByCode: {
             'START-408': const ScrapeWorkDetails(
               source: ScrapeSourceId.minnanoAv,
-              code: '1start00408',
+              code: 'START-408',
               title: 'Minnano title',
               studio: 'Minnano studio',
               performerCount: 1,
@@ -957,6 +1728,7 @@ final class _FakeScrapeSource implements ScrapeSource {
     required this.detailBirthDate,
     required this.works,
     required this.detailsByCode,
+    this.detailsByUri = const {},
     this.failingCodes = const {},
     this.failWorks = false,
     this.beforeSearch,
@@ -969,12 +1741,14 @@ final class _FakeScrapeSource implements ScrapeSource {
   final String detailBirthDate;
   final List<ScrapeWorkSummary> works;
   final Map<String, ScrapeWorkDetails> detailsByCode;
+  final Map<String, ScrapeWorkDetails> detailsByUri;
   final Set<String> failingCodes;
   final bool failWorks;
   final Future<void> Function()? beforeSearch;
   final Future<void> Function(String code)? beforeDetail;
   final Uri? detailAvatarUrl;
   final detailRequests = <String>[];
+  final detailUris = <String>[];
 
   @override
   Future<List<ScrapeActressSearchResult>> searchActresses(String name) async {
@@ -1023,11 +1797,17 @@ final class _FakeScrapeSource implements ScrapeSource {
   Future<ScrapeWorkDetails> fetchWorkDetails(ScrapeWorkSummary work) async {
     final code = canonicalizeWorkCode(work.code) ?? '';
     detailRequests.add(code);
+    detailUris.add(work.detailUri.toString());
     await beforeDetail?.call(code);
     if (failingCodes.contains(code)) {
       throw StateError('simulated failure');
     }
-    return detailsByCode[code]!;
+    final details =
+        detailsByUri[work.detailUri.toString()] ?? detailsByCode[code];
+    if (details == null) {
+      throw StateError('missing fake details');
+    }
+    return details;
   }
 
   @override
@@ -1071,7 +1851,7 @@ final class _CancellingActressImageDownloader
   }
 }
 
-final class _FakeWorkImageDownloader extends WorkImageDownloader {
+class _FakeWorkImageDownloader extends WorkImageDownloader {
   _FakeWorkImageDownloader() : super(transport: _NoBinaryTransport());
 
   @override
@@ -1088,6 +1868,75 @@ final class _FakeWorkImageDownloader extends WorkImageDownloader {
       bytes: Uint8List.fromList([1, 2, 3]),
       sourceUri: Uri.parse('https://example.test/$code.jpg'),
     );
+  }
+}
+
+final class _RecordingWorkImageDownloader extends _FakeWorkImageDownloader {
+  final requestedCodes = <String>[];
+
+  @override
+  Future<DownloadedWorkImage> downloadToFile({
+    required String code,
+    String? studio,
+    required WorkImageVariant variant,
+    required String targetPath,
+  }) {
+    requestedCodes.add(code);
+    return super.downloadToFile(
+      code: code,
+      studio: studio,
+      variant: variant,
+      targetPath: targetPath,
+    );
+  }
+}
+
+final class _BlockingWorkImageDownloader extends WorkImageDownloader {
+  _BlockingWorkImageDownloader() : super(transport: _NoBinaryTransport());
+
+  final firstImageStarted = Completer<void>();
+  final _release = Completer<void>();
+  var _blocked = false;
+
+  void releaseFirstImage() {
+    if (!_release.isCompleted) {
+      _release.complete();
+    }
+  }
+
+  @override
+  Future<DownloadedWorkImage> downloadToFile({
+    required String code,
+    String? studio,
+    required WorkImageVariant variant,
+    required String targetPath,
+  }) async {
+    if (!_blocked) {
+      _blocked = true;
+      firstImageStarted.complete();
+      await _release.future;
+    }
+    final file = File(targetPath);
+    await file.parent.create(recursive: true);
+    await file.writeAsBytes([1, 2, 3]);
+    return DownloadedWorkImage(
+      bytes: Uint8List.fromList([1, 2, 3]),
+      sourceUri: Uri.parse('https://example.test/$code.jpg'),
+    );
+  }
+}
+
+final class _FailingWorkImageDownloader extends WorkImageDownloader {
+  _FailingWorkImageDownloader() : super(transport: _NoBinaryTransport());
+
+  @override
+  Future<DownloadedWorkImage> downloadToFile({
+    required String code,
+    String? studio,
+    required WorkImageVariant variant,
+    required String targetPath,
+  }) {
+    throw StateError('simulated image failure');
   }
 }
 

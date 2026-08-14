@@ -276,6 +276,9 @@ void main() {
       expect(result.saved, 2);
       expect(result.excluded, 1);
       expect(result.failed, 1);
+      expect(result.failedWorks, hasLength(1));
+      expect(result.failedWorks.single.code, 'UNKNOWN-001');
+      expect(result.failedWorks.single.code, isNot('MANY-003'));
       expect(result.actressImageStatus, ActressImageSyncStatus.replaced);
     },
   );

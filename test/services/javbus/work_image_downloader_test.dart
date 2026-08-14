@@ -52,6 +52,10 @@ void main() {
       final aliasPairs = [
         ('1stzy00017', 'STZY-017'),
         ('3DSVR-1947', 'DSVR-1947'),
+        ('SSIS875', 'SSIS-875'),
+        ('SIVR00303', 'SIVR-303'),
+        ('SONE00687', 'SONE-687'),
+        ('RBB00321', 'RBB-321'),
       ];
 
       for (final (aliasCode, canonicalCode) in aliasPairs) {

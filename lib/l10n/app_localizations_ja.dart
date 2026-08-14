@@ -422,6 +422,63 @@ class AppLocalizationsJa extends AppLocalizations {
   String get scrapeFailed => '取得に失敗しました。もう一度お試しください。';
 
   @override
+  String get scrapePhaseCollecting => '作品一覧を取得中';
+
+  @override
+  String get scrapePhaseSyncingActress => '女優情報を同期中';
+
+  @override
+  String get scrapePhaseFetchingDetails => '作品詳細を取得中';
+
+  @override
+  String get scrapePhaseResolvingWorks => '重複除去した作品を整理中';
+
+  @override
+  String get scrapePhaseSavingWorks => '作品を保存して画像をダウンロード中';
+
+  @override
+  String get scrapePhaseCompleted => '取得完了';
+
+  @override
+  String scrapeProgressSummary(int saved, int excluded, int failed) {
+    return '保存 $saved件、除外 $excluded件、失敗 $failed件';
+  }
+
+  @override
+  String scrapeFailedWorksTitle(int count) {
+    return '失敗した作品（$count件）';
+  }
+
+  @override
+  String scrapeImageFailuresTitle(int count) {
+    return '画像ダウンロード失敗（$count件）';
+  }
+
+  @override
+  String get scrapeFailureDetailsUnavailable => '利用可能な作品詳細を取得できませんでした';
+
+  @override
+  String get scrapeFailureDetailCodeMismatch => '作品詳細の番号が作品と一致しません';
+
+  @override
+  String get scrapeFailureInvalidCode => '作品番号を正規化できませんでした';
+
+  @override
+  String get scrapeFailurePerformerCountUnavailable => '出演者数を取得できませんでした';
+
+  @override
+  String get scrapeFailureDatabaseSave => '作品データの保存に失敗しました';
+
+  @override
+  String get scrapeImageFailureCard => 'ジャケット画像';
+
+  @override
+  String get scrapeImageFailureDetail => '詳細画像';
+
+  @override
+  String get scrapeImageFailureBoth => 'ジャケットと詳細画像';
+
+  @override
   String get javBusVerificationTitle => 'JavBus の確認';
 
   @override
@@ -1063,6 +1120,63 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
 
   @override
   String get scrapeFailed => '取得に失敗しました。もう一度お試しください。';
+
+  @override
+  String get scrapePhaseCollecting => '作品一覧を取得中';
+
+  @override
+  String get scrapePhaseSyncingActress => '女優情報を同期中';
+
+  @override
+  String get scrapePhaseFetchingDetails => '作品詳細を取得中';
+
+  @override
+  String get scrapePhaseResolvingWorks => '重複除去した作品を整理中';
+
+  @override
+  String get scrapePhaseSavingWorks => '作品を保存して画像をダウンロード中';
+
+  @override
+  String get scrapePhaseCompleted => '取得完了';
+
+  @override
+  String scrapeProgressSummary(int saved, int excluded, int failed) {
+    return '保存 $saved件、除外 $excluded件、失敗 $failed件';
+  }
+
+  @override
+  String scrapeFailedWorksTitle(int count) {
+    return '失敗した作品（$count件）';
+  }
+
+  @override
+  String scrapeImageFailuresTitle(int count) {
+    return '画像ダウンロード失敗（$count件）';
+  }
+
+  @override
+  String get scrapeFailureDetailsUnavailable => '利用可能な作品詳細を取得できませんでした';
+
+  @override
+  String get scrapeFailureDetailCodeMismatch => '作品詳細の番号が作品と一致しません';
+
+  @override
+  String get scrapeFailureInvalidCode => '作品番号を正規化できませんでした';
+
+  @override
+  String get scrapeFailurePerformerCountUnavailable => '出演者数を取得できませんでした';
+
+  @override
+  String get scrapeFailureDatabaseSave => '作品データの保存に失敗しました';
+
+  @override
+  String get scrapeImageFailureCard => 'ジャケット画像';
+
+  @override
+  String get scrapeImageFailureDetail => '詳細画像';
+
+  @override
+  String get scrapeImageFailureBoth => 'ジャケットと詳細画像';
 
   @override
   String get javBusVerificationTitle => 'JavBus の確認';

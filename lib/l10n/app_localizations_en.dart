@@ -427,6 +427,67 @@ class AppLocalizationsEn extends AppLocalizations {
   String get scrapeFailed => 'Scrape failed. Please try again.';
 
   @override
+  String get scrapePhaseCollecting => 'Getting the work list';
+
+  @override
+  String get scrapePhaseSyncingActress => 'Syncing actress details';
+
+  @override
+  String get scrapePhaseFetchingDetails => 'Getting work details';
+
+  @override
+  String get scrapePhaseResolvingWorks => 'Merging deduplicated works';
+
+  @override
+  String get scrapePhaseSavingWorks => 'Saving works and downloading images';
+
+  @override
+  String get scrapePhaseCompleted => 'Scrape complete';
+
+  @override
+  String scrapeProgressSummary(int saved, int excluded, int failed) {
+    return 'Saved $saved, excluded $excluded, failed $failed';
+  }
+
+  @override
+  String scrapeFailedWorksTitle(int count) {
+    return 'Failed works ($count)';
+  }
+
+  @override
+  String scrapeImageFailuresTitle(int count) {
+    return 'Image download failures ($count)';
+  }
+
+  @override
+  String get scrapeFailureDetailsUnavailable =>
+      'No source returned usable work details';
+
+  @override
+  String get scrapeFailureDetailCodeMismatch =>
+      'Work detail code did not match the work';
+
+  @override
+  String get scrapeFailureInvalidCode =>
+      'The work code could not be normalized';
+
+  @override
+  String get scrapeFailurePerformerCountUnavailable =>
+      'Performer count was unavailable';
+
+  @override
+  String get scrapeFailureDatabaseSave => 'Work data could not be saved';
+
+  @override
+  String get scrapeImageFailureCard => 'cover image';
+
+  @override
+  String get scrapeImageFailureDetail => 'detail image';
+
+  @override
+  String get scrapeImageFailureBoth => 'cover and detail images';
+
+  @override
   String get javBusVerificationTitle => 'JavBus verification';
 
   @override

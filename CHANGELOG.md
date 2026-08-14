@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.8.5 - 2026-08-14
+
+- Updated scrape progress to show source names during collection and detail
+  scraping, then show the work code only while downloading images.
+- Started Minnano AV and JavBus work pipelines concurrently while keeping
+  detail requests sequential within each source.
+- Reworked work deduplication around exact titles, explicit `[特典版]` handling,
+  scraped detail codes, and a Rebecca-specific shortest-code rule so
+  `REBD-975` wins over `H_346REBD00975` without merging unrelated numeric codes.
+- Added coverage for source overlap, title and code deduplication, progress
+  phases, and image downloads receiving the resolved work code.
+
 ## 0.8.4 - 2026-08-14
 
 - Generalized work-code canonicalization so numeric-leading aliases and differently formatted prefixes resolve to the same canonical `LETTERS-NUMBER` code without merging different numeric cores.

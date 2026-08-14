@@ -421,6 +421,63 @@ class AppLocalizationsZh extends AppLocalizations {
   String get scrapeFailed => '刮削失敗，請稍後再試。';
 
   @override
+  String get scrapePhaseCollecting => '正在取得作品清單';
+
+  @override
+  String get scrapePhaseSyncingActress => '正在同步女優資料';
+
+  @override
+  String get scrapePhaseFetchingDetails => '正在取得作品詳情';
+
+  @override
+  String get scrapePhaseResolvingWorks => '正在整理去重後作品';
+
+  @override
+  String get scrapePhaseSavingWorks => '正在儲存作品與下載圖片';
+
+  @override
+  String get scrapePhaseCompleted => '刮削完成';
+
+  @override
+  String scrapeProgressSummary(int saved, int excluded, int failed) {
+    return '儲存 $saved、排除 $excluded、失敗 $failed';
+  }
+
+  @override
+  String scrapeFailedWorksTitle(int count) {
+    return '失敗作品（$count）';
+  }
+
+  @override
+  String scrapeImageFailuresTitle(int count) {
+    return '圖片下載失敗（$count）';
+  }
+
+  @override
+  String get scrapeFailureDetailsUnavailable => '所有來源都無法取得作品詳情';
+
+  @override
+  String get scrapeFailureDetailCodeMismatch => '作品詳情番號與作品不一致';
+
+  @override
+  String get scrapeFailureInvalidCode => '番號無法正規化';
+
+  @override
+  String get scrapeFailurePerformerCountUnavailable => '無法取得演員人數';
+
+  @override
+  String get scrapeFailureDatabaseSave => '作品資料儲存失敗';
+
+  @override
+  String get scrapeImageFailureCard => '封面圖片';
+
+  @override
+  String get scrapeImageFailureDetail => '詳細圖片';
+
+  @override
+  String get scrapeImageFailureBoth => '封面與詳細圖片';
+
+  @override
   String get javBusVerificationTitle => 'JavBus 驗證';
 
   @override
@@ -1060,6 +1117,63 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get scrapeFailed => '刮削失败，请稍后再试。';
 
   @override
+  String get scrapePhaseCollecting => '正在获取作品列表';
+
+  @override
+  String get scrapePhaseSyncingActress => '正在同步女优资料';
+
+  @override
+  String get scrapePhaseFetchingDetails => '正在获取作品详情';
+
+  @override
+  String get scrapePhaseResolvingWorks => '正在整理去重后的作品';
+
+  @override
+  String get scrapePhaseSavingWorks => '正在保存作品并下载图片';
+
+  @override
+  String get scrapePhaseCompleted => '刮削完成';
+
+  @override
+  String scrapeProgressSummary(int saved, int excluded, int failed) {
+    return '保存 $saved、排除 $excluded、失败 $failed';
+  }
+
+  @override
+  String scrapeFailedWorksTitle(int count) {
+    return '失败作品（$count）';
+  }
+
+  @override
+  String scrapeImageFailuresTitle(int count) {
+    return '图片下载失败（$count）';
+  }
+
+  @override
+  String get scrapeFailureDetailsUnavailable => '所有来源都无法获取作品详情';
+
+  @override
+  String get scrapeFailureDetailCodeMismatch => '作品详情番号与作品不一致';
+
+  @override
+  String get scrapeFailureInvalidCode => '番号无法正規化';
+
+  @override
+  String get scrapeFailurePerformerCountUnavailable => '无法获取演员人数';
+
+  @override
+  String get scrapeFailureDatabaseSave => '作品数据保存失败';
+
+  @override
+  String get scrapeImageFailureCard => '封面图片';
+
+  @override
+  String get scrapeImageFailureDetail => '详细图片';
+
+  @override
+  String get scrapeImageFailureBoth => '封面与详细图片';
+
+  @override
   String get javBusVerificationTitle => 'JavBus 验证';
 
   @override
@@ -1697,6 +1811,63 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get scrapeFailed => '刮削失敗，請稍後再試。';
+
+  @override
+  String get scrapePhaseCollecting => '正在取得作品清單';
+
+  @override
+  String get scrapePhaseSyncingActress => '正在同步女優資料';
+
+  @override
+  String get scrapePhaseFetchingDetails => '正在取得作品詳情';
+
+  @override
+  String get scrapePhaseResolvingWorks => '正在整理去重後作品';
+
+  @override
+  String get scrapePhaseSavingWorks => '正在儲存作品與下載圖片';
+
+  @override
+  String get scrapePhaseCompleted => '刮削完成';
+
+  @override
+  String scrapeProgressSummary(int saved, int excluded, int failed) {
+    return '儲存 $saved、排除 $excluded、失敗 $failed';
+  }
+
+  @override
+  String scrapeFailedWorksTitle(int count) {
+    return '失敗作品（$count）';
+  }
+
+  @override
+  String scrapeImageFailuresTitle(int count) {
+    return '圖片下載失敗（$count）';
+  }
+
+  @override
+  String get scrapeFailureDetailsUnavailable => '所有來源都無法取得作品詳情';
+
+  @override
+  String get scrapeFailureDetailCodeMismatch => '作品詳情番號與作品不一致';
+
+  @override
+  String get scrapeFailureInvalidCode => '番號無法正規化';
+
+  @override
+  String get scrapeFailurePerformerCountUnavailable => '無法取得演員人數';
+
+  @override
+  String get scrapeFailureDatabaseSave => '作品資料儲存失敗';
+
+  @override
+  String get scrapeImageFailureCard => '封面圖片';
+
+  @override
+  String get scrapeImageFailureDetail => '詳細圖片';
+
+  @override
+  String get scrapeImageFailureBoth => '封面與詳細圖片';
 
   @override
   String get javBusVerificationTitle => 'JavBus 驗證';

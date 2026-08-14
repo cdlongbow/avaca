@@ -895,6 +895,108 @@ abstract class AppLocalizations {
   /// **'刮削失敗，請稍後再試。'**
   String get scrapeFailed;
 
+  /// No description provided for @scrapePhaseCollecting.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'正在取得作品清單'**
+  String get scrapePhaseCollecting;
+
+  /// No description provided for @scrapePhaseSyncingActress.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'正在同步女優資料'**
+  String get scrapePhaseSyncingActress;
+
+  /// No description provided for @scrapePhaseFetchingDetails.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'正在取得作品詳情'**
+  String get scrapePhaseFetchingDetails;
+
+  /// No description provided for @scrapePhaseResolvingWorks.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'正在整理去重後作品'**
+  String get scrapePhaseResolvingWorks;
+
+  /// No description provided for @scrapePhaseSavingWorks.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'正在儲存作品與下載圖片'**
+  String get scrapePhaseSavingWorks;
+
+  /// No description provided for @scrapePhaseCompleted.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'刮削完成'**
+  String get scrapePhaseCompleted;
+
+  /// No description provided for @scrapeProgressSummary.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'儲存 {saved}、排除 {excluded}、失敗 {failed}'**
+  String scrapeProgressSummary(int saved, int excluded, int failed);
+
+  /// No description provided for @scrapeFailedWorksTitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'失敗作品（{count}）'**
+  String scrapeFailedWorksTitle(int count);
+
+  /// No description provided for @scrapeImageFailuresTitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'圖片下載失敗（{count}）'**
+  String scrapeImageFailuresTitle(int count);
+
+  /// No description provided for @scrapeFailureDetailsUnavailable.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'所有來源都無法取得作品詳情'**
+  String get scrapeFailureDetailsUnavailable;
+
+  /// No description provided for @scrapeFailureDetailCodeMismatch.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'作品詳情番號與作品不一致'**
+  String get scrapeFailureDetailCodeMismatch;
+
+  /// No description provided for @scrapeFailureInvalidCode.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'番號無法正規化'**
+  String get scrapeFailureInvalidCode;
+
+  /// No description provided for @scrapeFailurePerformerCountUnavailable.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'無法取得演員人數'**
+  String get scrapeFailurePerformerCountUnavailable;
+
+  /// No description provided for @scrapeFailureDatabaseSave.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'作品資料儲存失敗'**
+  String get scrapeFailureDatabaseSave;
+
+  /// No description provided for @scrapeImageFailureCard.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'封面圖片'**
+  String get scrapeImageFailureCard;
+
+  /// No description provided for @scrapeImageFailureDetail.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'詳細圖片'**
+  String get scrapeImageFailureDetail;
+
+  /// No description provided for @scrapeImageFailureBoth.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'封面與詳細圖片'**
+  String get scrapeImageFailureBoth;
+
   /// No description provided for @javBusVerificationTitle.
   ///
   /// In zh_TW, this message translates to:
