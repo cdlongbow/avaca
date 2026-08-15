@@ -11,6 +11,9 @@ import '../core/database.dart';
 import '../core/layout.dart';
 
 const double _detailControlRadius = 6.0;
+const double _detailActionHeight = 52.0;
+const double _detailEditableRowHeight = 48.0;
+const double _detailReadOnlyRowHeight = 28.0;
 
 enum _DetailMenuAction { edit, delete }
 
@@ -267,6 +270,7 @@ class _DetailViewState extends State<DetailView> {
   final TextEditingController cupController = TextEditingController();
   final TextEditingController bwhController = TextEditingController();
   final TextEditingController memoController = TextEditingController();
+  final FocusNode memoFocusNode = FocusNode();
   DateTime? birthDate;
 
   final Set<String> selectedAttrs = <String>{};
@@ -291,6 +295,7 @@ class _DetailViewState extends State<DetailView> {
     cupController.dispose();
     bwhController.dispose();
     memoController.dispose();
+    memoFocusNode.dispose();
 
     super.dispose();
   }
@@ -508,9 +513,6 @@ class _DetailViewState extends State<DetailView> {
   Widget _buildMetadataPanel(AppLayoutTokens tokens) {
     final colorScheme = Theme.of(context).colorScheme;
     final isEditing = controller.isEditing;
-    final actionButtonStyle = _detailOutlinedButtonStyle(
-      foregroundColor: colorScheme.onSurface,
-    );
 
     return Container(
       key: const Key('detail-metadata-panel'),
@@ -522,42 +524,78 @@ class _DetailViewState extends State<DetailView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              SizedBox(
-                width: 96,
-                child: OutlinedButton(
-                  key: const Key('detail-works-button'),
-                  onPressed: _openWorks,
-                  style: actionButtonStyle,
-                  child: Text(AppLocalizations.of(context).works),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  '${controller.workCount}',
-                  key: const Key('detail-works-count'),
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ),
-            ],
+          _buildDetailActionButton(
+            buttonKey: const Key('detail-works-button'),
+            countKey: const Key('detail-works-count'),
+            label: AppLocalizations.of(context).works,
+            count: controller.workCount,
+            onPressed: _openWorks,
+            radius: tokens.cardRadius,
           ),
           const SizedBox(height: 12),
-          OutlinedButton(
-            key: const Key('detail-aliases-button'),
+          _buildDetailActionButton(
+            buttonKey: const Key('detail-aliases-button'),
+            countKey: const Key('detail-aliases-count'),
+            label: AppLocalizations.of(context).aliases,
+            count: controller.aliases.length,
             onPressed: _openAliases,
-            style: actionButtonStyle,
-            child: Text(AppLocalizations.of(context).aliases),
+            radius: tokens.cardRadius,
           ),
           const SizedBox(height: 12),
-          KeyedSubtree(
-            key: const Key('detail-attributes'),
-            child: isEditing ? _buildAttrEditRow() : _buildAttrViewRow(),
-          ),
           if (isEditing) ...[const SizedBox(height: 12), _buildPhotoEditRow()],
         ],
+      ),
+    );
+  }
+
+  Widget _buildDetailActionButton({
+    required Key buttonKey,
+    required Key countKey,
+    required String label,
+    required int count,
+    required VoidCallback onPressed,
+    required double radius,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textStyle = const TextStyle(
+      fontSize: 18,
+      fontWeight: FontWeight.w500,
+    );
+
+    return SizedBox(
+      width: double.infinity,
+      height: _detailActionHeight,
+      child: OutlinedButton(
+        key: buttonKey,
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: colorScheme.onSurface,
+          minimumSize: const Size(0, _detailActionHeight),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          side: BorderSide(color: colorScheme.outline, width: 1.1),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(radius),
+          ),
+          textStyle: textStyle,
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: textStyle,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Text('$count', key: countKey, style: textStyle),
+            const SizedBox(width: 6),
+            Icon(
+              Icons.chevron_right,
+              size: 22,
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -635,9 +673,6 @@ class _DetailViewState extends State<DetailView> {
   Widget _buildProfilePanel(AppLayoutTokens tokens) {
     final colorScheme = Theme.of(context).colorScheme;
     final isEditing = controller.isEditing;
-    final actionButtonStyle = _detailOutlinedButtonStyle(
-      foregroundColor: colorScheme.onSurface,
-    );
 
     return Container(
       key: const Key('detail-profile-panel'),
@@ -667,44 +702,22 @@ class _DetailViewState extends State<DetailView> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Row(
-                      children: [
-                        SizedBox(
-                          width: 96,
-                          child: OutlinedButton(
-                            key: const Key('detail-works-button'),
-                            onPressed: _openWorks,
-                            style: actionButtonStyle,
-                            child: Text(AppLocalizations.of(context).works),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            '${controller.workCount}',
-                            key: const Key('detail-works-count'),
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                        ),
-                      ],
+                    _buildDetailActionButton(
+                      buttonKey: const Key('detail-works-button'),
+                      countKey: const Key('detail-works-count'),
+                      label: AppLocalizations.of(context).works,
+                      count: controller.workCount,
+                      onPressed: _openWorks,
+                      radius: tokens.cardRadius,
                     ),
                     const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton(
-                        key: const Key('detail-aliases-button'),
-                        onPressed: _openAliases,
-                        style: actionButtonStyle,
-                        child: Text(AppLocalizations.of(context).aliases),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    KeyedSubtree(
-                      key: const Key('detail-attributes'),
-                      child: isEditing
-                          ? _buildAttrEditRow()
-                          : _buildAttrViewRow(),
+                    _buildDetailActionButton(
+                      buttonKey: const Key('detail-aliases-button'),
+                      countKey: const Key('detail-aliases-count'),
+                      label: AppLocalizations.of(context).aliases,
+                      count: controller.aliases.length,
+                      onPressed: _openAliases,
+                      radius: tokens.cardRadius,
                     ),
                     if (isEditing) ...[
                       const SizedBox(height: 12),
@@ -825,7 +838,7 @@ class _DetailViewState extends State<DetailView> {
     }
 
     return Wrap(
-      alignment: WrapAlignment.start,
+      alignment: WrapAlignment.end,
       spacing: 14,
       runSpacing: 6,
       children: controller.currentAttrs.map((attr) {
@@ -845,7 +858,7 @@ class _DetailViewState extends State<DetailView> {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Wrap(
-      alignment: WrapAlignment.start,
+      alignment: WrapAlignment.end,
       spacing: 4,
       runSpacing: 4,
       children: controller.getAttrOptions(context).map((option) {
@@ -915,31 +928,27 @@ class _DetailViewState extends State<DetailView> {
   }
 
   Widget _buildBodyPanel(AppLayoutTokens tokens) {
+    final isEditing = controller.isEditing;
     return _buildCard(
       title: AppLocalizations.of(context).bodyInfo,
+      titleTrailing: KeyedSubtree(
+        key: const Key('detail-attributes'),
+        child: isEditing ? _buildAttrEditRow() : _buildAttrViewRow(),
+      ),
       radius: tokens.cardRadius,
       child: Column(
         children: [
           _buildBirthDateField(),
-          SizedBox(height: tokens.gridGap),
           _buildStatField(
             fieldKey: const Key('detail-height-field'),
             label: AppLocalizations.of(context).heightCm,
             controller: heightController,
           ),
-          SizedBox(height: tokens.gridGap),
-          _buildStatField(
-            fieldKey: const Key('detail-weight-field'),
-            label: AppLocalizations.of(context).weightKg,
-            controller: weightController,
-          ),
-          SizedBox(height: tokens.gridGap),
           _buildStatField(
             fieldKey: const Key('detail-cup-field'),
             label: AppLocalizations.of(context).cup,
             controller: cupController,
           ),
-          SizedBox(height: tokens.gridGap),
           _buildStatField(
             fieldKey: const Key('detail-measurements-field'),
             label: AppLocalizations.of(context).measurements,
@@ -951,23 +960,61 @@ class _DetailViewState extends State<DetailView> {
   }
 
   Widget _buildNotesPanel(AppLayoutTokens tokens) {
+    final l10n = AppLocalizations.of(context);
+    final hasNotes = memoController.text.trim().isNotEmpty;
+
     return _buildCard(
-      title: AppLocalizations.of(context).privateNotes,
+      key: const Key('detail-notes-card'),
+      title: l10n.privateNotes,
       radius: tokens.cardRadius,
+      onTap: controller.isEditing ? null : _openNotesEditor,
       child: controller.isEditing
           ? TextField(
+              key: const Key('detail-notes-field'),
               controller: memoController,
+              focusNode: memoFocusNode,
               minLines: 5,
               maxLines: 10,
               decoration: const InputDecoration(border: OutlineInputBorder()),
             )
-          : Text(
-              memoController.text.isEmpty
-                  ? AppLocalizations.of(context).noNotes
-                  : memoController.text,
-              style: const TextStyle(fontSize: 14),
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    hasNotes ? memoController.text : l10n.noNotes,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: hasNotes
+                          ? Theme.of(context).colorScheme.onSurface
+                          : Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Icon(
+                  Icons.chevron_right,
+                  size: 20,
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurfaceVariant.withValues(alpha: 0.45),
+                ),
+              ],
             ),
     );
+  }
+
+  Future<void> _openNotesEditor() async {
+    if (controller.isEditing) return;
+
+    await _toggleEditMode();
+    if (!mounted) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        memoFocusNode.requestFocus();
+      }
+    });
   }
 
   Widget _buildBirthDateField() {
@@ -976,18 +1023,15 @@ class _DetailViewState extends State<DetailView> {
     final colorScheme = Theme.of(context).colorScheme;
 
     if (!controller.isEditing) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
+      return SizedBox(
+        height: _detailReadOnlyRowHeight,
         child: Row(
           children: [
             SizedBox(
               width: 90,
               child: Text(
                 label,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: colorScheme.onSurfaceVariant,
-                ),
+                style: TextStyle(fontSize: 13, color: colorScheme.onSurface),
               ),
             ),
             if (selectedDate != null)
@@ -996,10 +1040,19 @@ class _DetailViewState extends State<DetailView> {
                   _ageOn(selectedDate, DateTime.now()),
                   _displayDate(selectedDate),
                 ),
-                style: const TextStyle(fontSize: 14),
+                style: TextStyle(
+                  fontSize: 14,
+                  color: colorScheme.onSurfaceVariant,
+                ),
               )
             else
-              const Text('—', style: TextStyle(fontSize: 14)),
+              Text(
+                '—',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
           ],
         ),
       );
@@ -1070,78 +1123,121 @@ class _DetailViewState extends State<DetailView> {
     final colorScheme = Theme.of(context).colorScheme;
 
     if (!isEditing) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
+      return SizedBox(
+        height: _detailReadOnlyRowHeight,
         child: Row(
           children: [
             SizedBox(
               width: 90,
               child: Text(
                 label,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: colorScheme.onSurfaceVariant,
-                ),
+                style: TextStyle(fontSize: 13, color: colorScheme.onSurface),
               ),
             ),
             Text(
               controller.text.isEmpty ? '—' : controller.text,
-              style: const TextStyle(fontSize: 14),
+              style: TextStyle(
+                fontSize: 14,
+                color: colorScheme.onSurfaceVariant,
+              ),
             ),
           ],
         ),
       );
     }
 
-    return TextField(
-      key: fieldKey,
-      controller: controller,
-      decoration: InputDecoration(
-        labelText: label,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(_detailControlRadius),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(_detailControlRadius),
-          borderSide: BorderSide(color: colorScheme.outline),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(_detailControlRadius),
-          borderSide: BorderSide(color: colorScheme.primary, width: 2),
+    return SizedBox(
+      height: _detailEditableRowHeight,
+      child: TextField(
+        key: fieldKey,
+        controller: controller,
+        decoration: InputDecoration(
+          labelText: label,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(_detailControlRadius),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(_detailControlRadius),
+            borderSide: BorderSide(color: colorScheme.outline),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(_detailControlRadius),
+            borderSide: BorderSide(color: colorScheme.primary, width: 2),
+          ),
         ),
       ),
     );
   }
 
   Widget _buildCard({
+    Key? key,
     required String title,
     required Widget child,
     double radius = 16,
+    Widget? titleTrailing,
+    VoidCallback? onTap,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
+    final cardContent = Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: colorScheme.onSurface,
+                  ),
+                ),
+              ),
+              if (titleTrailing != null) ...[
+                const SizedBox(width: 12),
+                Flexible(
+                  child: Align(
+                    alignment: Alignment.topRight,
+                    child: titleTrailing,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 18),
+          child,
+        ],
+      ),
+    );
+
+    if (onTap != null) {
+      return SizedBox(
+        width: double.infinity,
+        child: Material(
+          key: key,
+          color: colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(radius),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(radius),
+            child: cardContent,
+          ),
+        ),
+      );
+    }
 
     return Container(
+      key: key,
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(radius),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: colorScheme.onSurface,
-            ),
-          ),
-          const SizedBox(height: 12),
-          child,
-        ],
-      ),
+      child: cardContent,
     );
   }
 
@@ -1212,28 +1308,59 @@ class _AliasesDialogState extends State<_AliasesDialog> {
     super.dispose();
   }
 
-  void _addAlias() {
+  Future<void> _addAlias() async {
     final value = inputController.text.trim();
     if (value.isEmpty ||
+        saving ||
         aliases.any((alias) => alias.toLowerCase() == value.toLowerCase())) {
       return;
     }
+
+    final previousInput = inputController.text;
     setState(() {
       aliases.add(value);
       inputController.clear();
+      saving = true;
     });
-  }
 
-  Future<void> _save() async {
-    if (saving) return;
-    setState(() => saving = true);
-    final success = await widget.onSave(aliases);
+    final success = await widget.onSave(List.unmodifiable(aliases));
     if (!mounted) return;
     if (success) {
-      Navigator.of(context).pop();
+      setState(() => saving = false);
       return;
     }
-    setState(() => saving = false);
+
+    setState(() {
+      aliases.remove(value);
+      inputController.text = previousInput;
+      saving = false;
+    });
+    _showSaveError();
+  }
+
+  Future<void> _removeAlias(String alias) async {
+    if (saving) return;
+
+    final index = aliases.indexOf(alias);
+    if (index == -1) return;
+
+    final removed = aliases.removeAt(index);
+    setState(() => saving = true);
+    final success = await widget.onSave(List.unmodifiable(aliases));
+    if (!mounted) return;
+    if (success) {
+      setState(() => saving = false);
+      return;
+    }
+
+    setState(() {
+      aliases.insert(index, removed);
+      saving = false;
+    });
+    _showSaveError();
+  }
+
+  void _showSaveError() {
     AppSnackBar.showError(
       context,
       AppLocalizations.of(context).saveFailedDuplicateName,
@@ -1268,7 +1395,7 @@ class _AliasesDialogState extends State<_AliasesDialog> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  IconButton.filledTonal(
+                  IconButton(
                     key: const Key('detail-alias-add'),
                     tooltip: l10n.addAlias,
                     onPressed: saving ? null : _addAlias,
@@ -1287,9 +1414,7 @@ class _AliasesDialogState extends State<_AliasesDialog> {
                     for (final alias in aliases)
                       InputChip(
                         label: Text(alias),
-                        onDeleted: saving
-                            ? null
-                            : () => setState(() => aliases.remove(alias)),
+                        onDeleted: saving ? null : () => _removeAlias(alias),
                       ),
                   ],
                 ),
@@ -1297,17 +1422,6 @@ class _AliasesDialogState extends State<_AliasesDialog> {
           ),
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: saving ? null : () => Navigator.of(context).pop(),
-          child: Text(l10n.cancel),
-        ),
-        FilledButton(
-          key: const Key('detail-alias-save'),
-          onPressed: saving ? null : _save,
-          child: Text(l10n.saveAliases),
-        ),
-      ],
     );
   }
 }

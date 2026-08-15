@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.8.7 - 2026-08-15
+
+- Made work-image routing metadata-only, added the Seikyouiku MGStage route,
+  and expanded approved MGStage endpoint validation.
+- Fixed scrape search-error handling when a later alias succeeds and reported
+  streaming image/save progress with accurate totals and outcomes.
+- Refined Detail and Works responsive layouts, including tappable private notes,
+  full-row work/alias actions, and immediate alias persistence.
+- Persisted scrape-prefix changes while editing settings and aligned the dialog
+  controls with the current rounded visual style.
+
 ## 0.8.6 - 2026-08-15
 
 - Changed the default JavBus detail-request interval to 600 milliseconds while

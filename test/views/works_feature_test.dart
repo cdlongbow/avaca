@@ -105,6 +105,25 @@ class _WorksFeatureDatabase extends AppDatabase {
   Future<void> setSetting(String key, String value) async {}
 }
 
+class _PersistedWorksFeatureDatabase extends _WorksFeatureDatabase {
+  String? scrapeOptions;
+
+  @override
+  Future<String?> getSetting(String key) async {
+    if (key == 'works_scrape_options') {
+      return scrapeOptions;
+    }
+    return null;
+  }
+
+  @override
+  Future<void> setSetting(String key, String value) async {
+    if (key == 'works_scrape_options') {
+      scrapeOptions = value;
+    }
+  }
+}
+
 class _WideWorksFeatureDatabase extends _WorksFeatureDatabase {
   @override
   Future<List<Map<String, Object?>>> getWorksForActress(int actressId) async {
@@ -613,6 +632,32 @@ void main() {
 
       expect(find.byKey(const Key('scrape-prefix-add')), findsOneWidget);
 
+      final prefixInputFinder = find.byKey(const Key('scrape-prefix-input'));
+      final prefixEditable = tester.widget<EditableText>(
+        find.descendant(
+          of: prefixInputFinder,
+          matching: find.byType(EditableText),
+        ),
+      );
+      expect(prefixEditable.style.fontSize, rowTextStyle?.fontSize);
+
+      final prefixInputDecorator = tester.widget<InputDecorator>(
+        find.descendant(
+          of: prefixInputFinder,
+          matching: find.byType(InputDecorator),
+        ),
+      );
+      final prefixBorder = prefixInputDecorator.decoration.border;
+      expect(prefixBorder, isA<OutlineInputBorder>());
+      expect(
+        (prefixBorder! as OutlineInputBorder).borderRadius,
+        const BorderRadius.all(Radius.circular(28)),
+      );
+      expect(
+        prefixInputDecorator.decoration.contentPadding,
+        const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      );
+
       final addButton = tester.widget<IconButton>(
         find.byKey(const Key('scrape-prefix-add')),
       );
@@ -633,6 +678,37 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('adding a prefix persists even when settings are cancelled', (
+    tester,
+  ) async {
+    final database = _PersistedWorksFeatureDatabase();
+
+    await _pumpWorks(tester, database: database);
+    await _openWorksScrapeSettings(tester);
+
+    await tester.tap(find.byKey(const Key('scrape-prefix-section')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('scrape-prefix-input')),
+      'fc2-ppv_123',
+    );
+    await tester.tap(find.byKey(const Key('scrape-prefix-add')));
+    await tester.pumpAndSettle();
+
+    expect(WorkScrapeOptions.decode(database.scrapeOptions).excludedPrefixes, [
+      'FC2-PPV_123',
+    ]);
+
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    await _openWorksScrapeSettings(tester);
+    await tester.tap(find.byKey(const Key('scrape-prefix-section')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('FC2-PPV_123'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('scrape settings remain scrollable in a constrained viewport', (
     tester,
@@ -1077,27 +1153,27 @@ void main() {
       tester,
       scrapeExecutor: (options, token, onProgress) async {
         const payload = WorksScrapeProgress(
-            phase: WorksScrapePhase.fetchingDetails,
-            current: 3,
-            total: 10,
-            saved: 0,
-            excluded: 0,
-            failed: 0,
-            sourceProgress: {
-              ScrapeSourceId.minnanoAv: WorksScrapeSourceProgress(
-                phase: WorksScrapePhase.fetchingDetails,
-                current: 3,
-                total: 10,
-                workCode: 'MINNANO-TITLE-MUST-NOT-SHOW',
-              ),
-              ScrapeSourceId.javbus: WorksScrapeSourceProgress(
-                phase: WorksScrapePhase.fetchingDetails,
-                current: 4,
-                total: 10,
-                workCode: 'JAVBUS-TITLE-MUST-NOT-SHOW',
-              ),
-            },
-          );
+          phase: WorksScrapePhase.fetchingDetails,
+          current: 3,
+          total: 10,
+          saved: 0,
+          excluded: 0,
+          failed: 0,
+          sourceProgress: {
+            ScrapeSourceId.minnanoAv: WorksScrapeSourceProgress(
+              phase: WorksScrapePhase.fetchingDetails,
+              current: 3,
+              total: 10,
+              workCode: 'MINNANO-TITLE-MUST-NOT-SHOW',
+            ),
+            ScrapeSourceId.javbus: WorksScrapeSourceProgress(
+              phase: WorksScrapePhase.fetchingDetails,
+              current: 4,
+              total: 10,
+              workCode: 'JAVBUS-TITLE-MUST-NOT-SHOW',
+            ),
+          },
+        );
         expect(payload.sourceProgress, hasLength(2));
         onProgress(payload);
         return result.future;
@@ -1175,7 +1251,7 @@ void main() {
   });
 
   testWidgets(
-    'detail page shows the local work count beside a narrower button',
+    'detail page shows the local work count inside the works button',
 
     (tester) async {
       await tester.pumpWidget(
@@ -1194,9 +1270,10 @@ void main() {
 
       expect(find.text('178'), findsOneWidget);
 
-      expect(button.right, lessThan(count.left));
-
-      expect(button.width, lessThan(120));
+      expect(count.left, greaterThan(button.left));
+      expect(count.right, lessThanOrEqualTo(button.right));
+      expect(button.height, 52);
+      expect(button.width, greaterThan(120));
 
       expect(tester.takeException(), isNull);
     },

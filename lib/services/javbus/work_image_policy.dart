@@ -67,7 +67,7 @@ bool isApprovedWorkImageUri(Uri uri) {
   }
   if (host == 'image.mgstage.com') {
     return RegExp(
-      r'^/images/prestige/[a-z0-9]+/\d+/p(?:f|b)_e_[a-z0-9]+-\d+\.jpg$',
+      r'^/images/[a-z0-9]+/[a-z0-9]+/\d+/p(?:f|b)_e_[a-z0-9]+-\d+\.jpg$',
     ).hasMatch(path);
   }
   return false;
@@ -93,6 +93,8 @@ class WorkImagePolicy {
     required String code,
     String? studio,
     String? publisher,
+    // Retained for compatibility with older callers. Route selection is
+    // intentionally metadata-only and never inspects source image URLs.
     List<Uri> evidenceUris = const [],
     WorkImageRouteResolution? route,
   }) {
@@ -100,10 +102,8 @@ class WorkImagePolicy {
     final resolved =
         route ??
         const WorkImageRouteResolver().resolve(
-          code: code,
           studio: studio,
           publisher: publisher,
-          evidenceUris: evidenceUris,
         );
     if (!resolved.isResolved) {
       throw WorkImageRouteException(code, resolved.failureReason!);
@@ -118,6 +118,22 @@ class WorkImagePolicy {
       final urls = WorkImageUrls(
         card: Uri.parse(base + '/pf_e_' + normalizedCode + '.jpg'),
         detail: Uri.parse(base + '/pb_e_' + normalizedCode + '.jpg'),
+        source: WorkImageSource.mgstage,
+      );
+      _assertApproved(urls);
+      return urls;
+    }
+    if (resolved.family == WorkImageNormalizationFamily.mgstageSeikyouiku) {
+      final tokenPrefix = '502' + parts.prefix;
+      final token = tokenPrefix + '-' + parts.number;
+      final base =
+          'https://image.mgstage.com/images/seikyouiku/' +
+          tokenPrefix +
+          '/' +
+          parts.number;
+      final urls = WorkImageUrls(
+        card: Uri.parse(base + '/pf_e_' + token + '.jpg'),
+        detail: Uri.parse(base + '/pb_e_' + token + '.jpg'),
         source: WorkImageSource.mgstage,
       );
       _assertApproved(urls);
@@ -152,7 +168,8 @@ class WorkImagePolicy {
         'h_1711' + parts.prefix + paddedNumber,
       WorkImageNormalizationFamily.dmmRebeccaH346 =>
         'h_346' + parts.prefix + paddedNumber,
-      WorkImageNormalizationFamily.mgstagePrestige => throw StateError(
+      WorkImageNormalizationFamily.mgstagePrestige ||
+      WorkImageNormalizationFamily.mgstageSeikyouiku => throw StateError(
         'MGStage route must not format a DMM URL.',
       ),
     };
@@ -162,14 +179,14 @@ class WorkImagePolicy {
     String code, {
     String? studio,
     String? publisher,
+    // Retained for compatibility with older callers. Route selection is
+    // intentionally metadata-only and never inspects source image URLs.
     List<Uri> evidenceUris = const [],
   }) {
     try {
       final route = const WorkImageRouteResolver().resolve(
-        code: code,
         studio: studio,
         publisher: publisher,
-        evidenceUris: evidenceUris,
       );
       if (!route.isResolved) {
         return null;
@@ -182,7 +199,8 @@ class WorkImagePolicy {
         WorkImageNormalizationFamily.dmmH1711 => WorkImageTokenFamily.h1711Dmm,
         WorkImageNormalizationFamily.dmmRebeccaH346 =>
           WorkImageTokenFamily.rebeccaH346Dmm,
-        WorkImageNormalizationFamily.mgstagePrestige => null,
+        WorkImageNormalizationFamily.mgstagePrestige ||
+        WorkImageNormalizationFamily.mgstageSeikyouiku => null,
       };
     } on FormatException {
       return null;

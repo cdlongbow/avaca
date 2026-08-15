@@ -70,7 +70,7 @@ class _FailingAppDatabase extends _FakeAppDatabase {
 
 void main() {
   group('DetailView responsive profile layout', () {
-    testWidgets('places the image left and Works count above attributes', (
+    testWidgets('places the image left and keeps both actions as full rows', (
       tester,
     ) async {
       await _pumpDetail(tester, size: const Size(390, 844));
@@ -90,10 +90,11 @@ void main() {
 
       expect(imageRect.left, closeTo(16, 0.01));
       expect(worksRect.left, greaterThan(imageRect.right));
-      expect(countRect.left, greaterThan(worksRect.right));
+      expect(countRect.left, greaterThan(worksRect.left));
+      expect(countRect.right, lessThanOrEqualTo(worksRect.right));
       expect(worksRect.top, closeTo(imageRect.top, 0.01));
-      expect(attributesRect.left, greaterThan(imageRect.right));
       expect(attributesRect.top, greaterThan(worksRect.bottom));
+      expect(worksRect.width, greaterThan(120));
       expect(tester.takeException(), isNull);
     });
 
@@ -104,6 +105,26 @@ void main() {
 
       expect(find.text('詳細資料'), findsOneWidget);
       expect(find.text('身體資料'), findsNothing);
+    });
+
+    testWidgets('private notes card opens the editor when tapped', (
+      tester,
+    ) async {
+      await _pumpDetail(tester, size: const Size(390, 844));
+
+      final notesCard = find.byKey(const Key('detail-notes-card'));
+      expect(notesCard, findsOneWidget);
+      expect(
+        find.text(AppLocalizations.of(tester.element(notesCard)).noNotes),
+        findsOneWidget,
+      );
+
+      await tester.tap(notesCard);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('detail-notes-field')), findsOneWidget);
+      expect(find.byKey(const Key('detail-save-button')), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets(
@@ -192,7 +213,6 @@ void main() {
 
         expect(worksRect.left, greaterThan(imageRect.right));
         expect(worksRect.left - imageRect.right, closeTo(12, 0.01));
-        expect(attributesRect.left, greaterThan(imageRect.right));
         expect(attributesRect.top, greaterThan(worksRect.bottom));
         expect(nameField.style?.fontSize, 18);
         expect(nameFieldRect.height, lessThanOrEqualTo(40));
@@ -229,21 +249,20 @@ void main() {
       final birthDateButton = find.byKey(const Key('detail-birth-date-button'));
       final worksRadius = _outlinedButtonRadius(tester, worksButton);
       final birthDateRadius = _outlinedButtonRadius(tester, birthDateButton);
-      expect(worksRadius, BorderRadius.circular(6));
-      expect(birthDateRadius, worksRadius);
+      expect(worksRadius, BorderRadius.circular(12));
+      expect(birthDateRadius, BorderRadius.circular(6));
 
       for (final key in const [
         Key('detail-height-field'),
-        Key('detail-weight-field'),
         Key('detail-cup-field'),
         Key('detail-measurements-field'),
       ]) {
         final fieldFinder = find.byKey(key);
         expect(fieldFinder, findsOneWidget);
         final decoration = tester.widget<TextField>(fieldFinder).decoration!;
-        expect(_inputBorderRadius(decoration.border), worksRadius);
-        expect(_inputBorderRadius(decoration.enabledBorder), worksRadius);
-        expect(_inputBorderRadius(decoration.focusedBorder), worksRadius);
+        expect(_inputBorderRadius(decoration.border), birthDateRadius);
+        expect(_inputBorderRadius(decoration.enabledBorder), birthDateRadius);
+        expect(_inputBorderRadius(decoration.focusedBorder), birthDateRadius);
       }
     });
 
@@ -257,7 +276,6 @@ void main() {
         final image = find.byKey(const Key('detail-profile-image'));
         final works = find.byKey(const Key('detail-works-button'));
         final count = find.byKey(const Key('detail-works-count'));
-        final attributes = find.byKey(const Key('detail-attributes'));
         final actions = find.byKey(const Key('detail-photo-actions'));
         final changePhoto = find.byKey(const Key('detail-change-photo-button'));
         final deletePhoto = find.byKey(const Key('detail-delete-photo-button'));
@@ -270,7 +288,6 @@ void main() {
         final imageRect = tester.getRect(image);
         final worksRect = tester.getRect(works);
         final countRect = tester.getRect(count);
-        final attributesRect = tester.getRect(attributes);
         final actionsRect = tester.getRect(actions);
         final changeRect = tester.getRect(changePhoto);
         final deleteRect = tester.getRect(deletePhoto);
@@ -278,11 +295,12 @@ void main() {
         expect(imageRect.left - panelRect.left, closeTo(12, 0.01));
         expect(imageRect.top - panelRect.top, closeTo(12, 0.01));
         expect(worksRect.top - panelRect.top, closeTo(12, 0.01));
-        expect(panelRect.right - countRect.right, closeTo(12, 0.01));
+        expect(countRect.left, greaterThan(worksRect.left));
+        expect(countRect.right, lessThanOrEqualTo(worksRect.right));
         expect(imageRect.top, closeTo(worksRect.top, 0.01));
-        expect(actionsRect.top, greaterThan(attributesRect.bottom));
+        expect(actionsRect.top, greaterThan(worksRect.bottom));
         expect(actionsRect.left, greaterThanOrEqualTo(worksRect.left));
-        expect(actionsRect.right, lessThanOrEqualTo(countRect.right));
+        expect(actionsRect.right, lessThanOrEqualTo(panelRect.right - 12));
         expect(changeRect.top, closeTo(deleteRect.top, 0.01));
         expect(changeRect.height, closeTo(deleteRect.height, 0.01));
         expect(changeRect.height, lessThanOrEqualTo(40));
@@ -349,8 +367,9 @@ void main() {
         );
 
         expect(worksRect.left, greaterThan(imageRect.right));
-        expect(worksRect.width, closeTo(96, 0.01));
-        expect(countRect.left, greaterThan(worksRect.right));
+        expect(worksRect.width, greaterThan(100));
+        expect(countRect.left, greaterThan(worksRect.left));
+        expect(countRect.right, lessThanOrEqualTo(worksRect.right));
       },
     );
 

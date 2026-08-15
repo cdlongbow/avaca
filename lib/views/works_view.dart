@@ -38,6 +38,8 @@ typedef WorksScrapeExecutor =
 
 enum _WorksMenuAction { search, scrape }
 
+const _scrapeSettingsDialogRadius = 28.0;
+
 class WorksView extends StatefulWidget {
   const WorksView({
     super.key,
@@ -618,21 +620,35 @@ class _WorksViewState extends State<WorksView> {
       return;
     }
 
+    var saveQueue = Future<void>.value();
+
+    Future<void> saveOptions(WorkScrapeOptions options) async {
+      final save = saveQueue.then<void>(
+        (_) => widget.db.setSetting('works_scrape_options', options.encode()),
+      );
+      saveQueue = save.catchError((_) {});
+
+      try {
+        await save;
+      } catch (_) {
+        // 儲存偏好失敗不應阻止關閉設定視窗或本次刮削。
+      }
+    }
+
     final options = await showDialog<WorkScrapeOptions>(
       context: context,
 
-      builder: (context) => _ScrapeSettingsDialog(initial: initial),
+      builder: (context) => _ScrapeSettingsDialog(
+        initial: initial,
+        onOptionsChanged: saveOptions,
+      ),
     );
 
     if (options == null || !mounted) {
       return;
     }
 
-    try {
-      await widget.db.setSetting('works_scrape_options', options.encode());
-    } catch (_) {
-      // 儲存偏好失敗不應阻止本次刮削。
-    }
+    await saveOptions(options);
 
     await _runScrape(options);
   }
@@ -1026,9 +1042,13 @@ class _LocalWorkImage extends StatelessWidget {
 }
 
 class _ScrapeSettingsDialog extends StatefulWidget {
-  const _ScrapeSettingsDialog({required this.initial});
+  const _ScrapeSettingsDialog({
+    required this.initial,
+    required this.onOptionsChanged,
+  });
 
   final WorkScrapeOptions initial;
+  final Future<void> Function(WorkScrapeOptions options) onOptionsChanged;
 
   @override
   State<_ScrapeSettingsDialog> createState() => _ScrapeSettingsDialogState();
@@ -1043,6 +1063,7 @@ class _ScrapeSettingsDialogState extends State<_ScrapeSettingsDialog> {
   late bool replaceImage;
   late bool fillMissingOnly;
   bool prefixesExpanded = false;
+  Future<void> pendingSave = Future<void>.value();
 
   @override
   void initState() {
@@ -1072,15 +1093,58 @@ class _ScrapeSettingsDialogState extends State<_ScrapeSettingsDialog> {
       prefixes.add(value);
       prefixController.clear();
     });
+
+    _scheduleSave();
+  }
+
+  void _scheduleSave() {
+    pendingSave = _saveCurrentOptions();
+  }
+
+  Future<void> _saveCurrentOptions() async {
+    final options = _currentOptions();
+    try {
+      await widget.onOptionsChanged(options);
+    } catch (_) {
+      // 儲存偏好失敗不應阻止繼續編輯設定。
+    }
+  }
+
+  WorkScrapeOptions _currentOptions() {
+    final maxActressCount = int.tryParse(maxActressCountController.text.trim());
+    return WorkScrapeOptions(
+      syncDetails: syncDetails,
+      replaceActressImage: replaceImage,
+      fillMissingOnly: fillMissingOnly,
+      maxActressCount: maxActressCount == null || maxActressCount <= 0
+          ? null
+          : maxActressCount,
+      excludedPrefixes: List.unmodifiable(prefixes),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
 
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final optionTextStyle = theme.textTheme.bodyMedium;
+    final prefixInputBorder = OutlineInputBorder(
+      borderRadius: const BorderRadius.all(
+        Radius.circular(_scrapeSettingsDialogRadius),
+      ),
+      borderSide: BorderSide(color: colorScheme.outline),
+    );
+
     return AlertDialog(
       title: Text(l10n.scrapeSettings, key: const Key('scrape-settings-title')),
       titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(
+          Radius.circular(_scrapeSettingsDialogRadius),
+        ),
+      ),
       content: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 520),
         child: SingleChildScrollView(
@@ -1209,9 +1273,25 @@ class _ScrapeSettingsDialogState extends State<_ScrapeSettingsDialog> {
                             child: TextField(
                               key: const Key('scrape-prefix-input'),
                               controller: prefixController,
+                              style: optionTextStyle,
                               decoration: InputDecoration(
                                 hintText: l10n.codePrefixHint,
+                                hintStyle: optionTextStyle?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
                                 isDense: true,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 7,
+                                ),
+                                border: prefixInputBorder,
+                                enabledBorder: prefixInputBorder,
+                                focusedBorder: prefixInputBorder.copyWith(
+                                  borderSide: BorderSide(
+                                    color: colorScheme.primary,
+                                    width: 2,
+                                  ),
+                                ),
                               ),
                               textCapitalization: TextCapitalization.characters,
                               onSubmitted: (_) => _addPrefix(),
@@ -1237,6 +1317,7 @@ class _ScrapeSettingsDialogState extends State<_ScrapeSettingsDialog> {
                                 label: Text(prefix),
                                 onDeleted: () {
                                   setState(() => prefixes.remove(prefix));
+                                  _scheduleSave();
                                 },
                               ),
                           ],
@@ -1253,28 +1334,27 @@ class _ScrapeSettingsDialogState extends State<_ScrapeSettingsDialog> {
       contentPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
       actions: [
         TextButton(
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () async {
+            await pendingSave;
+            if (!context.mounted) {
+              return;
+            }
+            Navigator.of(context).pop();
+          },
           child: Text(l10n.cancel),
         ),
         FilledButton(
-          onPressed: () {
+          onPressed: () async {
             if (!(formKey.currentState?.validate() ?? false)) {
               return;
             }
-            final maxActressCount = int.tryParse(
-              maxActressCountController.text.trim(),
-            );
-            Navigator.of(context).pop(
-              WorkScrapeOptions(
-                syncDetails: syncDetails,
-                replaceActressImage: replaceImage,
-                fillMissingOnly: fillMissingOnly,
-                maxActressCount: maxActressCount == null || maxActressCount == 0
-                    ? null
-                    : maxActressCount,
-                excludedPrefixes: List.unmodifiable(prefixes),
-              ),
-            );
+
+            await pendingSave;
+            if (!context.mounted) {
+              return;
+            }
+
+            Navigator.of(context).pop(_currentOptions());
           },
           child: Text(l10n.startScrape),
         ),

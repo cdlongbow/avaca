@@ -150,6 +150,7 @@ void main() {
             as int;
     final images = _OverlapWorkImageDownloader();
     final client = _OverlapJavBusClient();
+    final progress = <WorksScrapeProgress>[];
     final service = WorksScrapeService(
       db: database,
       client: client,
@@ -164,16 +165,31 @@ void main() {
       actressName: '涼森?��?',
       options: const WorkScrapeOptions(syncDetails: false),
       sourceSettings: const ScrapeSourceSettings.legacyJavBus(),
+      onProgress: progress.add,
     );
 
     await images.firstDownloadStarted.future;
     expect(client.detailRequests, ['OVR-001', 'OVR-002']);
+    expect(
+      progress.any(
+        (item) =>
+            item.phase == WorksScrapePhase.downloadingImages &&
+            item.current == 0 &&
+            item.total == 2,
+      ),
+      isTrue,
+    );
 
     images.releaseFirstDownload();
     final result = await scrape;
     expect(result.saved, 2);
     expect(result.failed, 0);
     expect(images.maxActive, greaterThan(1));
+    final imageProgress = progress
+        .where((item) => item.phase == WorksScrapePhase.downloadingImages)
+        .map((item) => item.current)
+        .toList();
+    expect(imageProgress, containsAll(<int>[1, 2]));
   });
 
   test('missing-only mode keeps existing downloaded image files', () async {

@@ -1,5 +1,3 @@
-import '../scrape/work_identity.dart';
-
 enum WorkImagePlatform { dmm, mgstage }
 
 enum WorkImageNormalizationFamily {
@@ -8,6 +6,7 @@ enum WorkImageNormalizationFamily {
   dmmH1711,
   dmmRebeccaH346,
   mgstagePrestige,
+  mgstageSeikyouiku,
 }
 
 enum WorkImageRouteFailureReason {
@@ -15,8 +14,6 @@ enum WorkImageRouteFailureReason {
   metadataUnmapped,
   metadataAmbiguous,
   metadataConflict,
-  evidenceMismatch,
-  evidenceConflict,
 }
 
 final class WorkImageRouteResolution {
@@ -54,21 +51,9 @@ final class WorkImageRouteException implements Exception {
 final class WorkImageRouteResolver {
   const WorkImageRouteResolver();
 
-  WorkImageRouteResolution resolve({
-    required String code,
-    String? studio,
-    String? publisher,
-    List<Uri> evidenceUris = const [],
-  }) {
+  WorkImageRouteResolution resolve({String? studio, String? publisher}) {
     final makerCandidates = _candidatesFor(studio, publisher: false);
     final publisherCandidates = _candidatesFor(publisher, publisher: true);
-    final evidence = _evidenceCandidates(code, evidenceUris);
-
-    if (evidence.failureReason != null) {
-      return WorkImageRouteResolution.unclassified(evidence.failureReason!);
-    }
-
-    final evidenceCandidates = evidence.candidates;
     Set<_RouteCandidate> candidates;
     if (makerCandidates.isNotEmpty && publisherCandidates.isNotEmpty) {
       candidates = makerCandidates.intersection(publisherCandidates);
@@ -81,8 +66,6 @@ final class WorkImageRouteResolver {
       candidates = makerCandidates;
     } else if (publisherCandidates.isNotEmpty) {
       candidates = publisherCandidates;
-    } else if (evidenceCandidates.isNotEmpty) {
-      candidates = evidenceCandidates;
     } else if (_hasIdentity(studio) || _hasIdentity(publisher)) {
       return const WorkImageRouteResolution.unclassified(
         WorkImageRouteFailureReason.metadataUnmapped,
@@ -100,13 +83,6 @@ final class WorkImageRouteResolver {
     }
 
     final selected = candidates.single;
-    if (evidenceCandidates.isNotEmpty &&
-        (evidenceCandidates.length != 1 ||
-            !evidenceCandidates.contains(selected))) {
-      return const WorkImageRouteResolution.unclassified(
-        WorkImageRouteFailureReason.evidenceConflict,
-      );
-    }
     return WorkImageRouteResolution.resolved(
       platform: selected.platform,
       family: selected.family,
@@ -129,6 +105,9 @@ final class WorkImageRouteResolver {
     if (_leadingOneAliases.contains(normalized)) {
       return {_RouteCandidate.dmmLeadingOne};
     }
+    if (_seikyouikuAliases.contains(normalized)) {
+      return {_RouteCandidate.mgstageSeikyouiku};
+    }
     if (_prestigeAliases.contains(normalized)) {
       return {_RouteCandidate.mgstagePrestige};
     }
@@ -147,69 +126,6 @@ final class WorkImageRouteResolver {
     return <_RouteCandidate>{};
   }
 
-  _EvidenceResult _evidenceCandidates(String code, List<Uri> uris) {
-    final candidates = <_RouteCandidate>{};
-    for (final uri in uris) {
-      final host = uri.host.toLowerCase();
-      final path = uri.path.toLowerCase();
-      if (!_isApprovedEvidenceHost(host, path)) {
-        continue;
-      }
-      if (!_evidenceMatchesCode(uri, code)) {
-        return const _EvidenceResult(
-          failureReason: WorkImageRouteFailureReason.evidenceMismatch,
-        );
-      }
-      if (host == 'image.mgstage.com') {
-        candidates.add(_RouteCandidate.mgstagePrestige);
-      } else if (path.contains('/h_346rebd')) {
-        candidates.add(_RouteCandidate.dmmRebeccaH346);
-      } else if (path.contains('/h_1711')) {
-        candidates.add(_RouteCandidate.dmmH1711);
-      } else {
-        final token = RegExp(
-          r'/digital/video/([^/]+)/',
-        ).firstMatch(path)?.group(1);
-        final identity = parseScrapeWorkCodeIdentity(code);
-        final expected = identity == null || !identity.isStructured
-            ? null
-            : identity.displayCode.split('-').first.toLowerCase() +
-                  identity.displayCode.split('-').last.padLeft(5, '0');
-        candidates.add(
-          token != null && expected != null && token == '1$expected'
-              ? _RouteCandidate.dmmLeadingOne
-              : _RouteCandidate.dmmStandard,
-        );
-      }
-    }
-    return _EvidenceResult(candidates: candidates);
-  }
-
-  bool _isApprovedEvidenceHost(String host, String path) {
-    if (host == 'awsimgsrc.dmm.co.jp' || host == 'pics.dmm.co.jp') {
-      return path.contains('/digital/video/') && path.endsWith('.jpg');
-    }
-    return host == 'image.mgstage.com' &&
-        path.contains('/images/') &&
-        path.endsWith('.jpg');
-  }
-
-  bool _evidenceMatchesCode(Uri uri, String code) {
-    final identity = parseScrapeWorkCodeIdentity(code);
-    if (identity == null || !identity.isStructured) {
-      return false;
-    }
-    final compactUri = uri.toString().toLowerCase().replaceAll(
-      RegExp(r'[^a-z0-9]+'),
-      '',
-    );
-    final compactPrefix = identity.displayCode.split('-').first.toLowerCase();
-    final digits = identity.displayCode.split('-').last;
-    final isMgStage = uri.host.toLowerCase() == 'image.mgstage.com';
-    return compactUri.contains(compactPrefix) &&
-        compactUri.contains(isMgStage ? digits : digits.padLeft(5, '0'));
-  }
-
   bool _hasIdentity(String? value) => _normalize(value).isNotEmpty;
 
   String _normalize(String? value) {
@@ -218,16 +134,6 @@ final class WorkImageRouteResolver {
       '',
     );
   }
-}
-
-final class _EvidenceResult {
-  const _EvidenceResult({
-    this.candidates = const <_RouteCandidate>{},
-    this.failureReason,
-  });
-
-  final Set<_RouteCandidate> candidates;
-  final WorkImageRouteFailureReason? failureReason;
 }
 
 final class _RouteCandidate {
@@ -253,6 +159,10 @@ final class _RouteCandidate {
     WorkImagePlatform.mgstage,
     WorkImageNormalizationFamily.mgstagePrestige,
   );
+  static const mgstageSeikyouiku = _RouteCandidate(
+    WorkImagePlatform.mgstage,
+    WorkImageNormalizationFamily.mgstageSeikyouiku,
+  );
 
   final WorkImagePlatform platform;
   final WorkImageNormalizationFamily family;
@@ -269,12 +179,9 @@ final class _RouteCandidate {
 
 const _s1Aliases = <String>{'s1', 's1no1style', 'エスワン', 'エスワンナンバーワンスタイル'};
 
-const _leadingOneAliases = <String>{
-  'sod',
-  'sodcreate',
-  'sodstar',
-  'sodクリエイト',
-};
+const _leadingOneAliases = <String>{'sod', 'sodcreate', 'sodstar', 'sodクリエイト'};
+
+const _seikyouikuAliases = <String>{'seikyouiku', 'セイキョウイク'};
 
 const _prestigeAliases = <String>{'prestige', 'プレステージ'};
 

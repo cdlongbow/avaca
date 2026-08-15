@@ -100,6 +100,23 @@ void main() {
       expect(urls.source, WorkImageSource.mgstage);
     });
 
+    test('applies the Seikyouiku publisher rule for MGStage', () {
+      final urls = policy.urlsFor(code: 'SEI-007', studio: 'セイキョウイク');
+
+      expect(
+        urls.card.toString(),
+        'https://image.mgstage.com/images/seikyouiku/502sei/007/'
+        'pf_e_502sei-007.jpg',
+      );
+      expect(
+        urls.detail.toString(),
+        'https://image.mgstage.com/images/seikyouiku/502sei/007/'
+        'pb_e_502sei-007.jpg',
+      );
+      expect(isApprovedWorkImageUri(urls.card), isTrue);
+      expect(isApprovedWorkImageUri(urls.detail), isTrue);
+    });
+
     test('refuses to guess when maker and publisher metadata are missing', () {
       expect(
         () => policy.urlsFor(code: 'ABF-183'),
@@ -107,35 +124,23 @@ void main() {
       );
     });
 
-    test('uses bounded JavBus evidence without a code-prefix route table', () {
-      final urls = policy.urlsFor(
-        code: 'SNOS-320',
-        evidenceUris: [
-          Uri.parse(
-            'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
-            'snos00320/snos00320ps.jpg',
-          ),
-        ],
-      );
-
+    test('does not infer a route from image evidence', () {
       expect(
-        urls.card.toString(),
-        'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
-        'snos00320/snos00320ps.jpg',
+        () => policy.urlsFor(
+          code: 'SNOS-320',
+          evidenceUris: [
+            Uri.parse(
+              'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
+              'snos00320/snos00320ps.jpg',
+            ),
+          ],
+        ),
+        throwsA(isA<WorkImageRouteException>()),
       );
-      expect(urls.source, WorkImageSource.dmm);
     });
 
-    test('recognizes the leading-one DMM family from evidence', () {
-      final urls = policy.urlsFor(
-        code: 'START-023',
-        evidenceUris: [
-          Uri.parse(
-            'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
-            '1start00023/1start00023ps.jpg',
-          ),
-        ],
-      );
+    test('recognizes the leading-one DMM family from publisher rules', () {
+      final urls = policy.urlsFor(code: 'START-023', studio: 'SOD Create');
 
       expect(
         urls.card.pathSegments[urls.card.pathSegments.length - 2],

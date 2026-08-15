@@ -797,6 +797,7 @@ class WorksScrapeService {
     final completedUris = <String>{};
     final summaries = <ScrapeWorkSummary>[];
     Object? lastError;
+    Object? lastSearchError;
     var matched = false;
     var traversed = false;
     for (final query in queries) {
@@ -807,7 +808,10 @@ class WorksScrapeService {
       try {
         results = await source.searchActresses(query);
       } catch (error) {
-        lastError = error;
+        // A single name/alias search can legitimately fail while a later
+        // alias still finds the exact actress. Do not turn that superseded
+        // query failure into a partial source result.
+        lastSearchError = error;
         continue;
       }
       if (_isCancelled(cancellationToken)) {
@@ -856,6 +860,9 @@ class WorksScrapeService {
           lastError = error;
         }
       }
+    }
+    if (!matched && lastError == null) {
+      lastError = lastSearchError;
     }
     final sourceDiagnostic = diagnostics?.lastRunDiagnostic;
     final state = _isCancelled(cancellationToken)
@@ -987,21 +994,62 @@ class WorksScrapeService {
       );
     }
 
+    var streamingCurrent = 0;
+    var streamingSaved = 0;
+    var streamingExcluded = 0;
+    var streamingFailed = 0;
+
+    void notifyStreamingProgress({String? workCode}) {
+      _notify(
+        onProgress,
+        streamingCurrent,
+        selection.candidates.length,
+        streamingSaved,
+        selection.preExcluded + streamingExcluded,
+        streamingFailed,
+        phase: WorksScrapePhase.downloadingImages,
+        source: sourceId,
+        workCode: workCode,
+      );
+    }
+
+    void recordStreamingOutcome(_StreamingWorkOutcome outcome) {
+      streamingCurrent++;
+      switch (outcome.status) {
+        case _CanonicalWorkStatus.saved:
+          streamingSaved++;
+        case _CanonicalWorkStatus.excluded:
+          streamingExcluded++;
+        case _CanonicalWorkStatus.failed:
+          streamingFailed++;
+      }
+      notifyStreamingProgress(workCode: outcome.code);
+    }
+
+    Future<_StreamingWorkOutcome> observeStreamingOutcome(
+      Future<_StreamingWorkOutcome> future,
+    ) async {
+      final outcome = await future;
+      recordStreamingOutcome(outcome);
+      return outcome;
+    }
+
     final streamingSaves = <Future<_StreamingWorkOutcome>>[];
     void enqueueImageSave(_FetchedWorkDetail fetched) {
       if (!streamImageSaves) {
         return;
       }
       streamingSaves.add(
-        _enqueueStreamingWork(
-          fetched: fetched,
-          actressId: actressId,
-          options: options,
-          exclusions: exclusions,
-          cancellationToken: cancellationToken,
-          imageQueue: imageQueue,
-          total: selection.candidates.length,
-          onProgress: onProgress,
+        observeStreamingOutcome(
+          _enqueueStreamingWork(
+            fetched: fetched,
+            actressId: actressId,
+            options: options,
+            exclusions: exclusions,
+            cancellationToken: cancellationToken,
+            imageQueue: imageQueue,
+            onImageDownload: (code) => notifyStreamingProgress(workCode: code),
+          ),
         ),
       );
     }
@@ -1034,7 +1082,9 @@ class WorksScrapeService {
           );
     if (streamImageSaves) {
       for (final failure in sourceResolution.failedCandidates) {
-        streamingSaves.add(Future.value(_streamingFailure(failure)));
+        streamingSaves.add(
+          observeStreamingOutcome(Future.value(_streamingFailure(failure))),
+        );
       }
     }
     return _SourcePipelineOutcome(
@@ -1055,8 +1105,7 @@ class WorksScrapeService {
     required PrefixExclusion exclusions,
     required WorksScrapeCancellationToken? cancellationToken,
     required _BoundedAsyncQueue imageQueue,
-    required int total,
-    void Function(WorksScrapeProgress progress)? onProgress,
+    void Function(String code)? onImageDownload,
   }) {
     final details = fetched.details;
     final code = preferredScrapeWorkCode([details.code]);
@@ -1119,17 +1168,7 @@ class WorksScrapeService {
           missingOnly: options.fillMissingOnly,
           cancellationToken: cancellationToken,
           onImageDownload: (imageCode, _) {
-            _notify(
-              onProgress,
-              0,
-              total,
-              0,
-              0,
-              0,
-              phase: WorksScrapePhase.downloadingImages,
-              source: fetched.sourceId,
-              workCode: imageCode,
-            );
+            onImageDownload?.call(imageCode);
           },
         );
         return _StreamingWorkOutcome.saved(
@@ -1236,7 +1275,7 @@ class WorksScrapeService {
     _notify(
       onProgress,
       streamedOutcomes.length,
-      streamedOutcomes.length + preExcluded,
+      streamedOutcomes.length,
       saved,
       excluded,
       failedOutcomes.length,
@@ -1693,10 +1732,8 @@ class WorksScrapeService {
       throw const _ScrapeCancelled();
     }
     final route = const WorkImageRouteResolver().resolve(
-      code: prepared.details.code,
       studio: prepared.details.studio,
       publisher: prepared.details.publisher,
-      evidenceUris: prepared.details.originalImageEvidenceUris,
     );
     final imageResults = await Future.wait<_WorkImageResult>([
       _downloadWorkImage(
@@ -1780,7 +1817,6 @@ class WorksScrapeService {
         code: details.code,
         studio: details.studio,
         publisher: details.publisher,
-        originalImageEvidenceUris: details.originalImageEvidenceUris,
         route: route,
         variant: variant,
         targetPath: targetPath,
