@@ -76,6 +76,7 @@ class HttpJavBusTransport implements JavBusTransport, JavBusBinarySession {
 
   Future<SafeHttpResponse> _getResponse(Uri uri, {Uri? referer}) async {
     for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+      var attemptDelay = retryDelay;
       try {
         var response = await _fetcher.get(uri, referer: referer);
         for (
@@ -123,6 +124,7 @@ class HttpJavBusTransport implements JavBusTransport, JavBusBinarySession {
             kind: _kindForStatus(response.statusCode),
           );
         }
+        attemptDelay = _retryDelayFor(response);
       } on TimeoutException {
         if (attempt == maxAttempts) {
           throw JavBusRequestException(
@@ -140,8 +142,8 @@ class HttpJavBusTransport implements JavBusTransport, JavBusBinarySession {
           );
         }
       }
-      if (retryDelay > Duration.zero) {
-        await Future<void>.delayed(retryDelay);
+      if (attemptDelay > Duration.zero) {
+        await Future<void>.delayed(attemptDelay);
       }
     }
     throw StateError('Unreachable JavBus retry state.');
@@ -153,6 +155,16 @@ class HttpJavBusTransport implements JavBusTransport, JavBusBinarySession {
 
   bool _isTransient(int statusCode) {
     return statusCode == 408 || statusCode == 429 || statusCode >= 500;
+  }
+
+  Duration _retryDelayFor(SafeHttpResponse response) {
+    final raw = response.headers['retry-after']?.trim();
+    final seconds = raw == null ? null : double.tryParse(raw);
+    if (seconds == null || seconds.isNegative) {
+      return retryDelay;
+    }
+    final serverDelay = Duration(milliseconds: (seconds * 1000).ceil());
+    return serverDelay > retryDelay ? serverDelay : retryDelay;
   }
 
   JavBusFailureKind _kindForStatus(int statusCode) {

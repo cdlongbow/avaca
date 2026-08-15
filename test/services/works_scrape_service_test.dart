@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:avaca/core/database.dart';
+import 'package:avaca/models/scrape_source_settings.dart';
 import 'package:avaca/models/scraped_actress_details.dart';
 import 'package:avaca/models/work.dart';
 import 'package:avaca/models/work_scrape_options.dart';
@@ -10,6 +12,7 @@ import 'package:avaca/services/javbus/javbus_models.dart';
 import 'package:avaca/services/javbus/prefix_exclusion.dart';
 import 'package:avaca/services/javbus/work_image_downloader.dart';
 import 'package:avaca/services/javbus/work_image_policy.dart';
+import 'package:avaca/services/javbus/work_image_route_resolver.dart';
 import 'package:avaca/services/works_scrape_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as image;
@@ -96,6 +99,7 @@ void main() {
           replaceActressImage: true,
           excludedPrefixes: ['fc2-ppv_123'],
         ),
+        sourceSettings: const ScrapeSourceSettings.legacyJavBus(),
       );
 
       expect(client.receivedExclusions, isEmpty);
@@ -126,6 +130,51 @@ void main() {
       expect(result.actressImageStatus, ActressImageSyncStatus.replaced);
     },
   );
+
+  test('overlaps image saving with the next JavBus detail request', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'avaca_javbus_image_overlap_test_',
+    );
+    final database = AppDatabase.forTesting(
+      baseDir: directory.path,
+      databaseFactory: databaseFactoryFfi,
+    );
+    addTearDown(() async {
+      await database.close();
+      await directory.delete(recursive: true);
+    });
+    await database.init();
+    await database.addActress(name: '涼森?��?');
+    final actressId =
+        (await (await database.database).query('actresses')).single['id']
+            as int;
+    final images = _OverlapWorkImageDownloader();
+    final client = _OverlapJavBusClient();
+    final service = WorksScrapeService(
+      db: database,
+      client: client,
+      workImageDownloader: images,
+      imageDirectory: directory.path,
+      javBusDetailDelay: Duration.zero,
+      imageDownloadConcurrency: 2,
+    );
+
+    final scrape = service.scrape(
+      actressId: actressId,
+      actressName: '涼森?��?',
+      options: const WorkScrapeOptions(syncDetails: false),
+      sourceSettings: const ScrapeSourceSettings.legacyJavBus(),
+    );
+
+    await images.firstDownloadStarted.future;
+    expect(client.detailRequests, ['OVR-001', 'OVR-002']);
+
+    images.releaseFirstDownload();
+    final result = await scrape;
+    expect(result.saved, 2);
+    expect(result.failed, 0);
+    expect(images.maxActive, greaterThan(1));
+  });
 
   test('missing-only mode keeps existing downloaded image files', () async {
     final directory = await Directory.systemTemp.createTemp(
@@ -173,6 +222,7 @@ void main() {
         fillMissingOnly: true,
         excludedPrefixes: ['FC2-PPV_123'],
       ),
+      sourceSettings: const ScrapeSourceSettings.legacyJavBus(),
     );
 
     expect(workImages.downloads, isEmpty);
@@ -210,6 +260,7 @@ void main() {
           actressId: 1,
           actressName: '涼森れむ',
           options: const WorkScrapeOptions(),
+          sourceSettings: const ScrapeSourceSettings.legacyJavBus(),
         ),
         throwsA(isA<WorksScrapeException>()),
       );
@@ -251,6 +302,7 @@ void main() {
           replaceActressImage: true,
           maxActressCount: 2,
         ),
+        sourceSettings: const ScrapeSourceSettings.legacyJavBus(),
       );
 
       expect(client.actressPageRequests, [
@@ -314,6 +366,7 @@ void main() {
         actressName: '涼森れむ',
         aliases: const ['  Remu  ', 'Remu', 'missing', 'Broken', '涼森れむ'],
         options: const WorkScrapeOptions(fillMissingOnly: false),
+        sourceSettings: const ScrapeSourceSettings.legacyJavBus(),
       );
 
       expect(client.searchRequests, ['涼森れむ', 'Remu', 'missing', 'Broken']);
@@ -373,6 +426,7 @@ void main() {
         actressName: '涼森れむ',
         aliases: const ['Remu'],
         options: const WorkScrapeOptions(excludedPrefixes: ['FC2']),
+        sourceSettings: const ScrapeSourceSettings.legacyJavBus(),
       );
 
       expect(client.pageRequests, 2);
@@ -424,6 +478,7 @@ void main() {
           replaceActressImage: true,
           excludedPrefixes: ['FC2-PPV_123'],
         ),
+        sourceSettings: const ScrapeSourceSettings.legacyJavBus(),
       );
 
       expect(
@@ -525,6 +580,99 @@ class _FakeJavBusClient extends JavBusClient {
       publisher: 'ABSOLUTELYFANTASIA',
       series: '系列',
     );
+  }
+}
+
+class _OverlapJavBusClient extends _FakeJavBusClient {
+  @override
+  Future<List<JavBusActressSearchResult>> searchActresses(String name) async {
+    return [
+      JavBusActressSearchResult(
+        name: name,
+        uri: Uri.parse('https://www.javbus.com/star/overlap'),
+      ),
+    ];
+  }
+
+  @override
+  Future<List<JavBusWorkSummary>> fetchAllActressWorks(
+    Uri actressUri, {
+    PrefixExclusion? exclusions,
+    bool Function()? isCancelled,
+    JavBusActressPage? firstPage,
+  }) async {
+    return [
+      JavBusWorkSummary(
+        code: 'OVR-001',
+        title: 'OVR-001',
+        detailUri: Uri.parse('https://www.javbus.com/OVR-001'),
+      ),
+      JavBusWorkSummary(
+        code: 'OVR-002',
+        title: 'OVR-002',
+        detailUri: Uri.parse('https://www.javbus.com/OVR-002'),
+      ),
+    ];
+  }
+
+  @override
+  Future<JavBusWorkDetails> fetchWorkDetails(Uri uri) async {
+    final code = uri.pathSegments.last.toUpperCase();
+    detailRequests.add(code);
+    return JavBusWorkDetails(
+      code: code,
+      title: code,
+      studio: 'S1',
+      publisher: 'S1',
+    );
+  }
+}
+
+class _OverlapWorkImageDownloader extends WorkImageDownloader {
+  _OverlapWorkImageDownloader() : super(transport: _NoBinaryTransport());
+
+  final firstDownloadStarted = Completer<void>();
+  final _release = Completer<void>();
+  var _blocked = false;
+  var active = 0;
+  var maxActive = 0;
+
+  void releaseFirstDownload() {
+    if (!_release.isCompleted) {
+      _release.complete();
+    }
+  }
+
+  @override
+  Future<DownloadedWorkImage> downloadToFile({
+    required String code,
+    String? studio,
+    String? publisher,
+    List<Uri> originalImageEvidenceUris = const [],
+    WorkImageRouteResolution? route,
+    required WorkImageVariant variant,
+    required String targetPath,
+  }) async {
+    active++;
+    if (active > maxActive) {
+      maxActive = active;
+    }
+    try {
+      if (!_blocked) {
+        _blocked = true;
+        firstDownloadStarted.complete();
+        await _release.future;
+      }
+      final file = File(targetPath);
+      await file.parent.create(recursive: true);
+      await file.writeAsBytes([1, 2, 3]);
+      return DownloadedWorkImage(
+        bytes: Uint8List.fromList([1, 2, 3]),
+        sourceUri: Uri.parse('https://example.test/$code.jpg'),
+      );
+    } finally {
+      active--;
+    }
   }
 }
 
@@ -750,6 +898,9 @@ class _FakeWorkImageDownloader extends WorkImageDownloader {
   Future<DownloadedWorkImage> downloadToFile({
     required String code,
     String? studio,
+    String? publisher,
+    List<Uri> originalImageEvidenceUris = const [],
+    WorkImageRouteResolution? route,
     required WorkImageVariant variant,
     required String targetPath,
   }) async {

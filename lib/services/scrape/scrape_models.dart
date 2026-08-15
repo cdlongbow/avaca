@@ -61,6 +61,7 @@ final class ScrapeWorkDetails {
     this.series,
     this.performerCount,
     this.imageUris = const [],
+    this.originalImageEvidenceUris = const [],
   });
 
   final ScrapeSourceId source;
@@ -74,6 +75,7 @@ final class ScrapeWorkDetails {
   final String? series;
   final int? performerCount;
   final List<Uri> imageUris;
+  final List<Uri> originalImageEvidenceUris;
 
   Work toWork({String? cardImagePath, String? detailImagePath}) {
     return Work(

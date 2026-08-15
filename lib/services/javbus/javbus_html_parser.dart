@@ -69,6 +69,11 @@ class JavBusHtmlParser {
       publisher: _field(fields, const ['發行商', '发行商', 'レーベル']),
       series: _field(fields, const ['系列', 'シリーズ']),
       actressUris: _actressUris(document, pageUri),
+      originalImageEvidenceUris: _originalImageEvidenceUris(
+        document,
+        pageUri,
+        code,
+      ),
     );
   }
 
@@ -106,6 +111,63 @@ class JavBusHtmlParser {
       }
     }
     return List.unmodifiable(result);
+  }
+
+  List<Uri> _originalImageEvidenceUris(
+    Document document,
+    Uri pageUri,
+    String code,
+  ) {
+    final result = <Uri>[];
+    final seen = <String>{};
+    for (final element in document.querySelectorAll('img, a')) {
+      for (final attribute in const [
+        'src',
+        'data-src',
+        'data-original',
+        'href',
+      ]) {
+        final raw = _clean(element.attributes[attribute]);
+        if (raw == null) {
+          continue;
+        }
+        final uri = pageUri.resolve(raw);
+        if (!_isImageEvidenceUri(uri) || !_evidenceMatchesCode(uri, code)) {
+          continue;
+        }
+        if (seen.add(uri.toString())) {
+          result.add(uri);
+        }
+      }
+    }
+    return List.unmodifiable(result);
+  }
+
+  bool _isImageEvidenceUri(Uri uri) {
+    final host = uri.host.toLowerCase();
+    final imagePath = uri.path.toLowerCase();
+    return uri.scheme == 'https' &&
+        uri.userInfo.isEmpty &&
+        imagePath.endsWith('.jpg') &&
+        (((host == 'awsimgsrc.dmm.co.jp' || host == 'pics.dmm.co.jp') &&
+                imagePath.contains('/digital/video/')) ||
+            (host == 'image.mgstage.com' && imagePath.contains('/images/')));
+  }
+
+  bool _evidenceMatchesCode(Uri uri, String code) {
+    final match = RegExp(r'^([A-Za-z0-9]+)-(\d+)$').firstMatch(code);
+    if (match == null) {
+      return false;
+    }
+    final prefix = match.group(1)!.toLowerCase();
+    final digits = match.group(2)!;
+    final compact = uri.toString().toLowerCase().replaceAll(
+      RegExp(r'[^a-z0-9]+'),
+      '',
+    );
+    final isMgStage = uri.host.toLowerCase() == 'image.mgstage.com';
+    return compact.contains(prefix) &&
+        compact.contains(isMgStage ? digits : digits.padLeft(5, '0'));
   }
 
   List<JavBusActressSearchResult> parseActressSearchResults(

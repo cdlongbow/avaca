@@ -12,9 +12,9 @@ class ScrapeSourceRegistry {
     WorksSourceSelection selection,
   ) {
     return switch (selection) {
-      WorksSourceSelection.all => List.unmodifiable(aggregatePriority),
+      WorksSourceSelection.all => const [ScrapeSourceId.javbus],
       WorksSourceSelection.javbus => const [ScrapeSourceId.javbus],
-      WorksSourceSelection.minnanoAv => const [ScrapeSourceId.minnanoAv],
+      WorksSourceSelection.minnanoAv => const [ScrapeSourceId.javbus],
     };
   }
 }

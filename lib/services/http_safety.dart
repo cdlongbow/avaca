@@ -8,11 +8,13 @@ class SafeHttpResponse {
     required this.statusCode,
     required this.bodyBytes,
     required this.finalUri,
+    this.headers = const {},
   });
 
   final int statusCode;
   final Uint8List bodyBytes;
   final Uri finalUri;
+  final Map<String, String> headers;
 }
 
 class UnsafeHttpUriException implements Exception {
@@ -137,6 +139,7 @@ class SafeHttpFetcher {
         statusCode: response.statusCode,
         bodyBytes: builder.takeBytes(),
         finalUri: current,
+        headers: Map.unmodifiable(response.headers),
       );
     }
     throw UnsafeHttpUriException(current);

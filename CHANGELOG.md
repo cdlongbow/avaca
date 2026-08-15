@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.6 - 2026-08-15
+
+- Changed the default JavBus detail-request interval to 600 milliseconds while
+  keeping image downloads bounded and parallel with the next detail request.
+- Made Minnano AV the default actress-details source and JavBus the works source;
+  removed title-based and cross-source work merging rules.
+- Routed approved DMM and MGStage work-image URLs from maker/publisher metadata
+  and bounded page evidence without using JavBus covers or prefix-based guesses.
+
 ## 0.8.5 - 2026-08-14
 
 - Updated scrape progress to show source names during collection and detail

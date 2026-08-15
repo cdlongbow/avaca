@@ -1314,11 +1314,6 @@ class _ScrapeSourcesSettingsBodyState
               title: localizations.scrapeSourceWorksTitle,
               value: settings.worksSource,
               options: [
-                (WorksSourceSelection.all, localizations.scrapeSourceAll),
-                (
-                  WorksSourceSelection.minnanoAv,
-                  localizations.scrapeSourceMinnanoAv,
-                ),
                 (WorksSourceSelection.javbus, localizations.scrapeSourceJavBus),
               ],
               onChanged: (value) => unawaited(_select(worksSource: value)),

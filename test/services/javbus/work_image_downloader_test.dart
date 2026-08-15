@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:avaca/services/javbus/work_image_downloader.dart';
 import 'package:avaca/services/javbus/work_image_policy.dart';
+import 'package:avaca/services/javbus/work_image_route_resolver.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as image;
 
@@ -49,7 +50,17 @@ void main() {
       };
 
       for (final entry in cases.entries) {
-        final urls = policy.urlsFor(code: entry.key);
+        final normalizedCode = entry.key.toUpperCase();
+        final studio =
+            normalizedCode.startsWith('START') ||
+                normalizedCode.startsWith('SDJS')
+            ? 'SOD Create'
+            : normalizedCode.startsWith('DEVR')
+            ? 'Document'
+            : normalizedCode.startsWith('REBD')
+            ? 'Rebecca'
+            : 'S1';
+        final urls = policy.urlsFor(code: entry.key, studio: studio);
         final path = urls.card.pathSegments;
         expect(path[path.length - 2], entry.value);
         expect(path.last, entry.value + 'ps.jpg');
@@ -60,16 +71,16 @@ void main() {
 
     test('normalizes separatorless SSIS and START forms without aliases', () {
       expect(
-        policy.urlsFor(code: 'SSIS875').card,
-        policy.urlsFor(code: 'SSIS-875').card,
+        policy.urlsFor(code: 'SSIS875', studio: 'S1').card,
+        policy.urlsFor(code: 'SSIS-875', studio: 'S1').card,
       );
       expect(
-        policy.urlsFor(code: 'START00023').card,
-        policy.urlsFor(code: 'START-023').card,
+        policy.urlsFor(code: 'START00023', studio: 'SOD Create').card,
+        policy.urlsFor(code: 'START-023', studio: 'SOD Create').card,
       );
       expect(
-        policy.urlsFor(code: 'SIVR00303').card,
-        policy.urlsFor(code: 'SIVR-00303').card,
+        policy.urlsFor(code: 'SIVR00303', studio: 'S1').card,
+        policy.urlsFor(code: 'SIVR-00303', studio: 'S1').card,
       );
     });
 
@@ -89,24 +100,53 @@ void main() {
       expect(urls.source, WorkImageSource.mgstage);
     });
 
-    test(
-      'uses the registered Prestige route when studio metadata is missing',
-      () {
-        final urls = policy.urlsFor(code: 'ABF-183');
+    test('refuses to guess when maker and publisher metadata are missing', () {
+      expect(
+        () => policy.urlsFor(code: 'ABF-183'),
+        throwsA(isA<WorkImageRouteException>()),
+      );
+    });
 
-        expect(urls.source, WorkImageSource.mgstage);
-        expect(
-          urls.card.toString(),
-          'https://image.mgstage.com/images/prestige/abf/183/'
-          'pf_e_abf-183.jpg',
-        );
-      },
-    );
+    test('uses bounded JavBus evidence without a code-prefix route table', () {
+      final urls = policy.urlsFor(
+        code: 'SNOS-320',
+        evidenceUris: [
+          Uri.parse(
+            'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
+            'snos00320/snos00320ps.jpg',
+          ),
+        ],
+      );
+
+      expect(
+        urls.card.toString(),
+        'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
+        'snos00320/snos00320ps.jpg',
+      );
+      expect(urls.source, WorkImageSource.dmm);
+    });
+
+    test('recognizes the leading-one DMM family from evidence', () {
+      final urls = policy.urlsFor(
+        code: 'START-023',
+        evidenceUris: [
+          Uri.parse(
+            'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
+            '1start00023/1start00023ps.jpg',
+          ),
+        ],
+      );
+
+      expect(
+        urls.card.pathSegments[urls.card.pathSegments.length - 2],
+        '1start00023',
+      );
+    });
 
     test('refuses an unregistered publisher prefix instead of guessing', () {
       expect(
         () => policy.urlsFor(code: 'ZZZZ-001'),
-        throwsA(isA<FormatException>()),
+        throwsA(isA<WorkImageRouteException>()),
       );
     });
 
@@ -132,7 +172,7 @@ void main() {
 
       final result = await WorkImageDownloader(
         transport: transport,
-      ).fetch(code: 'SSIS-875', variant: WorkImageVariant.detail);
+      ).fetch(code: 'SSIS-875', studio: 'S1', variant: WorkImageVariant.detail);
 
       expect(result.bytes, valid);
       expect(transport.requested, hasLength(1));
@@ -152,9 +192,11 @@ void main() {
       ]);
 
       await expectLater(
-        WorkImageDownloader(
-          transport: transport,
-        ).fetch(code: 'REBD-975', variant: WorkImageVariant.card),
+        WorkImageDownloader(transport: transport).fetch(
+          code: 'REBD-975',
+          studio: 'Rebecca',
+          variant: WorkImageVariant.card,
+        ),
         throwsA(isA<WorkImageDownloadException>()),
       );
       expect(transport.requested, hasLength(1));
@@ -169,9 +211,11 @@ void main() {
     ]);
 
     await expectLater(
-      WorkImageDownloader(
-        transport: transport,
-      ).fetch(code: 'START-196', variant: WorkImageVariant.card),
+      WorkImageDownloader(transport: transport).fetch(
+        code: 'START-196',
+        studio: 'SOD Create',
+        variant: WorkImageVariant.card,
+      ),
       throwsA(isA<WorkImageDownloadException>()),
     );
     expect(transport.requested, hasLength(1));
@@ -197,6 +241,7 @@ void main() {
       ]),
     ).downloadToFile(
       code: 'SONE-833',
+      studio: 'S1',
       variant: WorkImageVariant.card,
       targetPath: target,
     );

@@ -1,4 +1,5 @@
 import '../scrape/work_identity.dart';
+import 'work_image_route_resolver.dart';
 
 enum WorkImageSource { dmm, mgstage }
 
@@ -25,71 +26,6 @@ const approvedWorkImageEndpointExamples = <String>[
   'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
       'h_346rebd00975/h_346rebd00975ps.jpg',
 ];
-
-/// Explicitly registered DMM token families observed in the source samples
-/// and the high-volume publisher families used by the app. This is a lookup
-/// table, not a prefix-shaped fallback: a prefix outside this set is rejected
-/// until its token format is verified and added deliberately.
-const registeredLeadingOneDmmPrefixes = <String>{
-  'mist',
-  'sdab',
-  'sdjs',
-  'sdnm',
-  'start',
-};
-
-const registeredH1711DmmPrefixes = <String>{'devr'};
-
-/// Prefixes whose verified package images are hosted by Prestige/MGStage.
-/// Keep this explicit: a missing studio field must not silently send an ABF
-/// work to a guessed DMM token.
-const registeredPrestigePrefixes = <String>{'abf'};
-
-const registeredStandardDmmPrefixes = <String>{
-  '300mium',
-  '3dsvr',
-  'abw',
-  'abf',
-  'aquco',
-  'aqumam',
-  'atkd',
-  'dsvr',
-  'dsuvr',
-  'hez',
-  'hsm',
-  'ipx',
-  'jdh',
-  'jul',
-  'juf',
-  'jufe',
-  'juq',
-  'ktra',
-  'mfcw',
-  'meyd',
-  'miaa',
-  'mida',
-  'mide',
-  'midv',
-  'mmraa',
-  'oae',
-  'ofje',
-  'pred',
-  'pxvrg',
-  'rbd',
-  'saba',
-  'savr',
-  'scute',
-  'siro',
-  'sivr',
-  'snis',
-  'sone',
-  'stars',
-  'ssis',
-  'ssni',
-  'svvrt',
-  'vrkm',
-  'vrprd',
-};
 
 class WorkImageUrls {
   const WorkImageUrls({
@@ -153,10 +89,26 @@ class WorkImagePolicy {
     return imageCode + suffix + '.jpg';
   }
 
-  WorkImageUrls urlsFor({required String code, String? studio}) {
+  WorkImageUrls urlsFor({
+    required String code,
+    String? studio,
+    String? publisher,
+    List<Uri> evidenceUris = const [],
+    WorkImageRouteResolution? route,
+  }) {
     final parts = _parseCode(code);
-    if (_isPrestige(studio) ||
-        registeredPrestigePrefixes.contains(parts.prefix)) {
+    final resolved =
+        route ??
+        const WorkImageRouteResolver().resolve(
+          code: code,
+          studio: studio,
+          publisher: publisher,
+          evidenceUris: evidenceUris,
+        );
+    if (!resolved.isResolved) {
+      throw WorkImageRouteException(code, resolved.failureReason!);
+    }
+    if (resolved.family == WorkImageNormalizationFamily.mgstagePrestige) {
       final normalizedCode = parts.prefix + '-' + parts.number;
       final base =
           'https://image.mgstage.com/images/prestige/' +
@@ -172,7 +124,7 @@ class WorkImagePolicy {
       return urls;
     }
 
-    final imageCode = _dmmImageCode(parts);
+    final imageCode = _dmmImageCode(parts, resolved.family!);
     final base =
         'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/' +
         imageCode +
@@ -187,21 +139,51 @@ class WorkImagePolicy {
     return urls;
   }
 
-  String _dmmImageCode(({String prefix, String number}) parts) {
+  String _dmmImageCode(
+    ({String prefix, String number}) parts,
+    WorkImageNormalizationFamily family,
+  ) {
     final paddedNumber = parts.number.padLeft(5, '0');
-    return switch (_tokenFamilyForPrefix(parts.prefix)) {
-      WorkImageTokenFamily.standardDmm => parts.prefix + paddedNumber,
-      WorkImageTokenFamily.leadingOneDmm => '1' + parts.prefix + paddedNumber,
-      WorkImageTokenFamily.h1711Dmm => 'h_1711' + parts.prefix + paddedNumber,
-      WorkImageTokenFamily.rebeccaH346Dmm =>
+    return switch (family) {
+      WorkImageNormalizationFamily.dmmStandard => parts.prefix + paddedNumber,
+      WorkImageNormalizationFamily.dmmLeadingOne =>
+        '1' + parts.prefix + paddedNumber,
+      WorkImageNormalizationFamily.dmmH1711 =>
+        'h_1711' + parts.prefix + paddedNumber,
+      WorkImageNormalizationFamily.dmmRebeccaH346 =>
         'h_346' + parts.prefix + paddedNumber,
+      WorkImageNormalizationFamily.mgstagePrestige => throw StateError(
+        'MGStage route must not format a DMM URL.',
+      ),
     };
   }
 
-  WorkImageTokenFamily? tokenFamilyFor(String code) {
+  WorkImageTokenFamily? tokenFamilyFor(
+    String code, {
+    String? studio,
+    String? publisher,
+    List<Uri> evidenceUris = const [],
+  }) {
     try {
-      final parts = _parseCode(code);
-      return _tokenFamilyForPrefix(parts.prefix);
+      final route = const WorkImageRouteResolver().resolve(
+        code: code,
+        studio: studio,
+        publisher: publisher,
+        evidenceUris: evidenceUris,
+      );
+      if (!route.isResolved) {
+        return null;
+      }
+      return switch (route.family!) {
+        WorkImageNormalizationFamily.dmmStandard =>
+          WorkImageTokenFamily.standardDmm,
+        WorkImageNormalizationFamily.dmmLeadingOne =>
+          WorkImageTokenFamily.leadingOneDmm,
+        WorkImageNormalizationFamily.dmmH1711 => WorkImageTokenFamily.h1711Dmm,
+        WorkImageNormalizationFamily.dmmRebeccaH346 =>
+          WorkImageTokenFamily.rebeccaH346Dmm,
+        WorkImageNormalizationFamily.mgstagePrestige => null,
+      };
     } on FormatException {
       return null;
     }
@@ -237,29 +219,6 @@ class WorkImagePolicy {
       throw FormatException('Unsupported work code: ' + code);
     }
     return (prefix: match.group(1)!.toLowerCase(), number: match.group(2)!);
-  }
-
-  bool _isPrestige(String? studio) {
-    final normalized = studio?.trim().toLowerCase();
-    return normalized == 'プレステージ' || normalized == 'prestige';
-  }
-
-  WorkImageTokenFamily _tokenFamilyForPrefix(String prefix) {
-    if (prefix == 'rebd') {
-      return WorkImageTokenFamily.rebeccaH346Dmm;
-    }
-    if (registeredLeadingOneDmmPrefixes.contains(prefix)) {
-      return WorkImageTokenFamily.leadingOneDmm;
-    }
-    if (registeredH1711DmmPrefixes.contains(prefix)) {
-      return WorkImageTokenFamily.h1711Dmm;
-    }
-    if (registeredStandardDmmPrefixes.contains(prefix)) {
-      return WorkImageTokenFamily.standardDmm;
-    }
-    throw FormatException(
-      'No approved image token family for prefix: ' + prefix,
-    );
   }
 
   void _assertApproved(WorkImageUrls urls) {

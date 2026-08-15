@@ -42,7 +42,7 @@ enum WorksSourceSelection {
 final class ScrapeSourceSettings {
   const ScrapeSourceSettings({
     this.actressDetailsSource = ScrapeSourceId.minnanoAv,
-    this.worksSource = WorksSourceSelection.all,
+    this.worksSource = WorksSourceSelection.javbus,
   });
 
   const ScrapeSourceSettings.legacyJavBus()
@@ -87,7 +87,7 @@ final class ScrapeSourceSettings {
       );
       return ScrapeSourceSettings(
         actressDetailsSource: details ?? ScrapeSourceId.minnanoAv,
-        worksSource: works ?? WorksSourceSelection.all,
+        worksSource: works ?? WorksSourceSelection.javbus,
       );
     } on Object {
       return const ScrapeSourceSettings();

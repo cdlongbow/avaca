@@ -2,11 +2,11 @@ import 'package:avaca/models/scrape_source_settings.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('defaults to Minnano details and aggregate works sources', () {
+  test('defaults to Minnano details and JavBus works source', () {
     const settings = ScrapeSourceSettings();
 
     expect(settings.actressDetailsSource, ScrapeSourceId.minnanoAv);
-    expect(settings.worksSource, WorksSourceSelection.all);
+    expect(settings.worksSource, WorksSourceSelection.javbus);
   });
 
   test('round trips selections and tolerates malformed values', () {
@@ -25,7 +25,7 @@ void main() {
     );
     expect(
       ScrapeSourceSettings.decode('{"worksSource":"unknown"}').worksSource,
-      WorksSourceSelection.all,
+      WorksSourceSelection.javbus,
     );
     expect(
       ScrapeSourceSettings.decode('not-json').actressDetailsSource,

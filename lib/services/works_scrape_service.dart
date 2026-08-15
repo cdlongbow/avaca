@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:collection';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -13,6 +15,7 @@ import 'javbus/prefix_exclusion.dart';
 import 'javbus/javbus_verification.dart';
 import 'javbus/work_image_downloader.dart';
 import 'javbus/work_image_policy.dart';
+import 'javbus/work_image_route_resolver.dart';
 import 'safe_image.dart';
 import 'scrape/scrape_image_downloader.dart';
 import 'scrape/scrape_models.dart';
@@ -207,12 +210,15 @@ class WorksScrapeService {
     ActressImageDownloader? actressImageDownloader,
     this.imageUriDownloader,
     String? imageDirectory,
+    this.javBusDetailDelay = const Duration(milliseconds: 600),
+    this.imageDownloadConcurrency = 2,
   }) : client = client,
        sources = sources ?? _legacySources(client),
        workImageDownloader = workImageDownloader ?? WorkImageDownloader(),
        actressImageDownloader =
            actressImageDownloader ?? HttpActressImageDownloader(),
-       imageDirectory = imageDirectory ?? path.join(db.imgDir, 'scraped');
+       imageDirectory = imageDirectory ?? path.join(db.imgDir, 'scraped'),
+       assert(imageDownloadConcurrency > 0);
 
   final AppDatabase db;
   final JavBusClient? client;
@@ -221,6 +227,8 @@ class WorksScrapeService {
   final ActressImageDownloader actressImageDownloader;
   final ScrapeImageUriDownloader? imageUriDownloader;
   final String imageDirectory;
+  final Duration javBusDetailDelay;
+  final int imageDownloadConcurrency;
   final Map<ScrapeSourceId, WorksScrapeSourceProgress> _sourceProgress = {};
 
   static Map<ScrapeSourceId, ScrapeSource> _legacySources(
@@ -271,8 +279,7 @@ class WorksScrapeService {
       0,
       phase: WorksScrapePhase.collectingSources,
     );
-    final settings =
-        sourceSettings ?? const ScrapeSourceSettings.legacyJavBus();
+    final settings = sourceSettings ?? const ScrapeSourceSettings();
     final queries = _queries(name, aliases);
     final requestedWorkIds = ScrapeSourceRegistry.resolveWorksSources(
       settings.worksSource,
@@ -335,6 +342,12 @@ class WorksScrapeService {
     }
 
     final exclusions = PrefixExclusion(options.excludedPrefixes);
+    final streamImagesWhileFetching =
+        requestedWorkIds.isNotEmpty &&
+        requestedWorkIds.every((source) => source == ScrapeSourceId.javbus);
+    final imageQueue = _BoundedAsyncQueue(
+      maxConcurrent: imageDownloadConcurrency,
+    );
     final sourcePipelines = <Future<_SourcePipelineOutcome>>[
       for (final sourceId in requestedWorkIds)
         _runSourcePipeline(
@@ -344,6 +357,10 @@ class WorksScrapeService {
           exclusions: exclusions,
           cancellationToken: cancellationToken,
           onProgress: onProgress,
+          streamImageSaves: streamImagesWhileFetching,
+          actressId: actressId,
+          options: options,
+          imageQueue: imageQueue,
         ),
     ];
 
@@ -419,7 +436,7 @@ class WorksScrapeService {
       );
     }
 
-    if (_isCancelled(cancellationToken)) {
+    if (_isCancelled(cancellationToken) && !streamImagesWhileFetching) {
       return WorksScrapeResult(
         saved: 0,
         excluded: pipelineResults.fold(
@@ -433,11 +450,11 @@ class WorksScrapeService {
       );
     }
 
-    final successfulWorkSources = collectedById.values
+    final successfulWorkSources = pipelineResults
         .where(
-          (value) =>
-              requestedWorkIds.contains(value.source.id) &&
-              value.result.succeeded,
+          (pipeline) =>
+              requestedWorkIds.contains(pipeline.sourceId) &&
+              pipeline.collected?.result.succeeded == true,
         )
         .toList(growable: false);
     if (successfulWorkSources.isEmpty) {
@@ -450,6 +467,24 @@ class WorksScrapeService {
             ? 'Actress works could not be fetched: $name'
                   '${lastError == null ? '' : ' ($lastError)'}'
             : 'Exact actress was not found: $name',
+      );
+    }
+
+    if (streamImagesWhileFetching) {
+      final streamedOutcomes = await Future.wait(
+        pipelineResults.expand((pipeline) => pipeline.streamingSaves),
+      );
+      return _finishStreamingScrape(
+        streamedOutcomes: streamedOutcomes,
+        pipelineResults: pipelineResults,
+        preExcluded: pipelineResults.fold(
+          0,
+          (total, pipeline) => total + pipeline.preExcluded,
+        ),
+        actressImageStatus: actressImageStatus,
+        sourceResults: sourceResults,
+        cancellationToken: cancellationToken,
+        onProgress: onProgress,
       );
     }
 
@@ -908,6 +943,10 @@ class WorksScrapeService {
     required Future<_SourceCollectionOutcome> collectionFuture,
     required PrefixExclusion exclusions,
     required WorksScrapeCancellationToken? cancellationToken,
+    required bool streamImageSaves,
+    required int actressId,
+    required WorkScrapeOptions options,
+    required _BoundedAsyncQueue imageQueue,
     void Function(WorksScrapeProgress progress)? onProgress,
   }) async {
     final collectionOutcome = await collectionFuture;
@@ -948,6 +987,25 @@ class WorksScrapeService {
       );
     }
 
+    final streamingSaves = <Future<_StreamingWorkOutcome>>[];
+    void enqueueImageSave(_FetchedWorkDetail fetched) {
+      if (!streamImageSaves) {
+        return;
+      }
+      streamingSaves.add(
+        _enqueueStreamingWork(
+          fetched: fetched,
+          actressId: actressId,
+          options: options,
+          exclusions: exclusions,
+          cancellationToken: cancellationToken,
+          imageQueue: imageQueue,
+          total: selection.candidates.length,
+          onProgress: onProgress,
+        ),
+      );
+    }
+
     final detailResult = await _fetchDetailsForSourceSafely(
       source: source,
       candidates: selection.candidates,
@@ -957,6 +1015,7 @@ class WorksScrapeService {
         detailCurrent++;
         notifyDetailProgress();
       },
+      onDetailsFetched: enqueueImageSave,
     );
     final sourceResolution = _resolveSourceDetails(detailResult);
     final sourceErrors = <String>[
@@ -973,6 +1032,11 @@ class WorksScrapeService {
             discovered: collectionOutcome.result.discovered,
             error: sourceErrors.join('; '),
           );
+    if (streamImageSaves) {
+      for (final failure in sourceResolution.failedCandidates) {
+        streamingSaves.add(Future.value(_streamingFailure(failure)));
+      }
+    }
     return _SourcePipelineOutcome(
       sourceId: sourceId,
       collected: collected,
@@ -980,6 +1044,218 @@ class WorksScrapeService {
       fetched: sourceResolution.fetched,
       failedCandidates: sourceResolution.failedCandidates,
       preExcluded: selection.preExcluded,
+      streamingSaves: List.unmodifiable(streamingSaves),
+    );
+  }
+
+  Future<_StreamingWorkOutcome> _enqueueStreamingWork({
+    required _FetchedWorkDetail fetched,
+    required int actressId,
+    required WorkScrapeOptions options,
+    required PrefixExclusion exclusions,
+    required WorksScrapeCancellationToken? cancellationToken,
+    required _BoundedAsyncQueue imageQueue,
+    required int total,
+    void Function(WorksScrapeProgress progress)? onProgress,
+  }) {
+    final details = fetched.details;
+    final code = preferredScrapeWorkCode([details.code]);
+    final identityKey = code == null
+        ? 'stream:${fetched.sourceId.storageValue}:${fetched.candidate.summary.detailUri}'
+        : 'stream:${fetched.sourceId.storageValue}:${code.toLowerCase()}';
+    if (code == null) {
+      return Future.value(
+        _StreamingWorkOutcome.failed(
+          identityKey: identityKey,
+          code: details.code.isEmpty ? '未知番號' : details.code,
+          failure: WorksScrapeFailure(
+            code: details.code.isEmpty ? '未知番號' : details.code,
+            stage: WorksScrapeFailureStage.resolvingWorks,
+            reason: WorksScrapeFailureReason.invalidCode,
+            source: fetched.sourceId,
+          ),
+        ),
+      );
+    }
+    if (exclusions.matches(code)) {
+      return Future.value(
+        _StreamingWorkOutcome.excluded(identityKey: identityKey, code: code),
+      );
+    }
+    final performerCount = details.performerCount;
+    final maxActressCount = options.maxActressCount;
+    if (maxActressCount != null &&
+        (performerCount == null || performerCount <= 0)) {
+      return Future.value(
+        _StreamingWorkOutcome.failed(
+          identityKey: identityKey,
+          code: code,
+          failure: WorksScrapeFailure(
+            code: code,
+            stage: WorksScrapeFailureStage.resolvingWorks,
+            reason: WorksScrapeFailureReason.performerCountUnavailable,
+            source: fetched.sourceId,
+          ),
+        ),
+      );
+    }
+    if (maxActressCount != null && performerCount! > maxActressCount) {
+      return Future.value(
+        _StreamingWorkOutcome.excluded(identityKey: identityKey, code: code),
+      );
+    }
+
+    return imageQueue.add<_StreamingWorkOutcome>(() async {
+      if (_isCancelled(cancellationToken)) {
+        return _StreamingWorkOutcome.cancelled(
+          identityKey: identityKey,
+          code: code,
+        );
+      }
+      try {
+        final saved = await _saveWork(
+          actressId: actressId,
+          details: details,
+          missingOnly: options.fillMissingOnly,
+          cancellationToken: cancellationToken,
+          onImageDownload: (imageCode, _) {
+            _notify(
+              onProgress,
+              0,
+              total,
+              0,
+              0,
+              0,
+              phase: WorksScrapePhase.downloadingImages,
+              source: fetched.sourceId,
+              workCode: imageCode,
+            );
+          },
+        );
+        return _StreamingWorkOutcome.saved(
+          identityKey: identityKey,
+          code: code,
+          imageFailures: saved.failedVariants,
+        );
+      } on _ScrapeCancelled {
+        return _StreamingWorkOutcome.cancelled(
+          identityKey: identityKey,
+          code: code,
+        );
+      } catch (error) {
+        return _StreamingWorkOutcome.failed(
+          identityKey: identityKey,
+          code: code,
+          failure: WorksScrapeFailure(
+            code: code,
+            stage: WorksScrapeFailureStage.savingWorks,
+            reason: WorksScrapeFailureReason.databaseSaveFailed,
+            source: fetched.sourceId,
+            error: error,
+          ),
+        );
+      }
+    });
+  }
+
+  _StreamingWorkOutcome _streamingFailure(_FailedWorkCandidate failure) {
+    final rawCode = failure.candidate.summary.code?.trim() ?? '';
+    final code = rawCode.isEmpty
+        ? '未知番號'
+        : preferredScrapeWorkCode([rawCode]) ?? rawCode;
+    final identityKey =
+        'failed:${failure.candidate.source.id.storageValue}:${failure.candidate.summary.detailUri}';
+    return _StreamingWorkOutcome.failed(
+      identityKey: identityKey,
+      code: code,
+      failure: WorksScrapeFailure(
+        code: code,
+        stage: WorksScrapeFailureStage.fetchingDetails,
+        reason: failure.reason,
+        source: failure.candidate.source.id,
+        error: failure.error,
+      ),
+    );
+  }
+
+  WorksScrapeResult _finishStreamingScrape({
+    required List<_StreamingWorkOutcome> streamedOutcomes,
+    required List<_SourcePipelineOutcome> pipelineResults,
+    required int preExcluded,
+    required ActressImageSyncStatus actressImageStatus,
+    required Map<ScrapeSourceId, ScrapeSourceRunResult> sourceResults,
+    required WorksScrapeCancellationToken? cancellationToken,
+    void Function(WorksScrapeProgress progress)? onProgress,
+  }) {
+    final cancelled =
+        _isCancelled(cancellationToken) ||
+        streamedOutcomes.any((outcome) => outcome.cancelled);
+    if (cancelled) {
+      return WorksScrapeResult(
+        saved: 0,
+        excluded: preExcluded,
+        failed: 0,
+        cancelled: true,
+        actressImageStatus: actressImageStatus,
+        partialSuccess: true,
+        sourceResults: Map.unmodifiable(sourceResults),
+      );
+    }
+    final saved = streamedOutcomes
+        .where((outcome) => outcome.status == _CanonicalWorkStatus.saved)
+        .length;
+    final excluded =
+        preExcluded +
+        streamedOutcomes
+            .where((outcome) => outcome.status == _CanonicalWorkStatus.excluded)
+            .length;
+    final failedOutcomes = streamedOutcomes
+        .where((outcome) => outcome.status == _CanonicalWorkStatus.failed)
+        .toList(growable: false);
+    final imageFailures = streamedOutcomes
+        .where((outcome) => outcome.imageFailures.isNotEmpty)
+        .map(
+          (outcome) => WorksScrapeImageFailure(
+            code: outcome.code,
+            variants: List.unmodifiable(outcome.imageFailures),
+          ),
+        )
+        .toList(growable: false);
+    final partial =
+        sourceResults.values.any(
+          (result) =>
+              result.state == ScrapeSourceRunState.failed ||
+              result.state == ScrapeSourceRunState.unavailable ||
+              result.state == ScrapeSourceRunState.cancelled,
+        ) ||
+        failedOutcomes.isNotEmpty ||
+        imageFailures.isNotEmpty ||
+        pipelineResults.any(
+          (pipeline) => pipeline.result.state == ScrapeSourceRunState.partial,
+        );
+    _notify(
+      onProgress,
+      streamedOutcomes.length,
+      streamedOutcomes.length + preExcluded,
+      saved,
+      excluded,
+      failedOutcomes.length,
+      phase: WorksScrapePhase.completed,
+    );
+    return WorksScrapeResult(
+      saved: saved,
+      excluded: excluded,
+      failed: failedOutcomes.length,
+      cancelled: false,
+      actressImageStatus: actressImageStatus,
+      partialSuccess: partial,
+      sourceResults: Map.unmodifiable(sourceResults),
+      failedWorks: List.unmodifiable(
+        failedOutcomes
+            .map((outcome) => outcome.failure)
+            .whereType<WorksScrapeFailure>(),
+      ),
+      imageFailures: List.unmodifiable(imageFailures),
     );
   }
 
@@ -998,7 +1274,7 @@ class WorksScrapeService {
     PrefixExclusion exclusions,
   ) {
     final selected = <_WorkCandidate>[];
-    final selectedByTitle = <String, int>{};
+    final selectedKeys = <String>{};
     var preExcluded = 0;
 
     for (final summary in collected.summaries) {
@@ -1011,25 +1287,14 @@ class WorksScrapeService {
         source: collected.source,
         summary: summary,
       );
-      final identity = scrapeTitleIdentity(summary.title);
-      if (!identity.isUsable) {
+      // Only collapse an exact transport duplicate. Title similarity is not
+      // a work identity and must never remove a different edition.
+      final normalizedCode = preferredScrapeWorkCode([summaryCode]);
+      final key = normalizedCode == null || normalizedCode.isEmpty
+          ? 'uri:${summary.detailUri}'
+          : 'code:${normalizedCode.toLowerCase()}';
+      if (selectedKeys.add(key)) {
         selected.add(candidate);
-        continue;
-      }
-      final existingIndex = selectedByTitle[identity.key];
-      if (existingIndex == null) {
-        selectedByTitle[identity.key] = selected.length;
-        selected.add(candidate);
-        continue;
-      }
-
-      // When the title explicitly identifies an edition, keep the ordinary
-      // candidate. For equally classified titles, traversal order is the
-      // deterministic tie-break and no code is consulted.
-      final existing = selected[existingIndex];
-      final existingIdentity = scrapeTitleIdentity(existing.summary.title);
-      if (existingIdentity.isSpecialEdition && !identity.isSpecialEdition) {
-        selected[existingIndex] = candidate;
       }
     }
     return _SourceCandidateSelection(
@@ -1039,41 +1304,9 @@ class WorksScrapeService {
   }
 
   _SourceDetailResolution _resolveSourceDetails(_DetailQueueResult result) {
-    final resolvedFetched = <_FetchedWorkDetail>[];
-    final fetchedByKey = <String, int>{};
-    for (final fetched in result.fetched) {
-      final identity = scrapeTitleIdentity(fetched.details.title);
-      final key = identity.isUsable
-          ? 'title:${identity.key}'
-          : 'uri:${fetched.candidate.summary.detailUri}';
-      final existingIndex = fetchedByKey[key];
-      if (existingIndex == null) {
-        fetchedByKey[key] = resolvedFetched.length;
-        resolvedFetched.add(fetched);
-        continue;
-      }
-      final existing = resolvedFetched[existingIndex];
-      final existingIdentity = scrapeTitleIdentity(existing.details.title);
-      if (existingIdentity.isSpecialEdition && !identity.isSpecialEdition) {
-        resolvedFetched[existingIndex] = fetched;
-      }
-    }
-
-    final failed = <_FailedWorkCandidate>[];
-    final failedKeys = <String>{};
-    for (final failure in result.failedCandidates) {
-      final identity = scrapeTitleIdentity(failure.candidate.summary.title);
-      final key = identity.isUsable
-          ? 'title:${identity.key}'
-          : 'uri:${failure.candidate.summary.detailUri}';
-      if (fetchedByKey.containsKey(key) || !failedKeys.add(key)) {
-        continue;
-      }
-      failed.add(failure);
-    }
     return _SourceDetailResolution(
-      fetched: List.unmodifiable(resolvedFetched),
-      failedCandidates: List.unmodifiable(failed),
+      fetched: result.fetched,
+      failedCandidates: result.failedCandidates,
     );
   }
 
@@ -1083,6 +1316,7 @@ class WorksScrapeService {
     required WorksScrapeCancellationToken? cancellationToken,
     void Function(_WorkCandidate candidate)? onAttemptStart,
     void Function(_WorkCandidate candidate)? onAttemptComplete,
+    void Function(_FetchedWorkDetail detail)? onDetailsFetched,
   }) async {
     try {
       return await _fetchDetailsForSource(
@@ -1091,6 +1325,7 @@ class WorksScrapeService {
         cancellationToken: cancellationToken,
         onAttemptStart: onAttemptStart,
         onAttemptComplete: onAttemptComplete,
+        onDetailsFetched: onDetailsFetched,
       );
     } catch (error) {
       final failed = <_FailedWorkCandidate>[];
@@ -1115,28 +1350,30 @@ class WorksScrapeService {
     required WorksScrapeCancellationToken? cancellationToken,
     void Function(_WorkCandidate candidate)? onAttemptStart,
     void Function(_WorkCandidate candidate)? onAttemptComplete,
+    void Function(_FetchedWorkDetail detail)? onDetailsFetched,
   }) async {
     final fetched = <_FetchedWorkDetail>[];
     final failedCandidates = <_FailedWorkCandidate>[];
+    final fetchedKeys = <String>{};
+    var detailRequestsStarted = 0;
     for (final candidate in candidates) {
       if (_isCancelled(cancellationToken)) {
         break;
       }
       onAttemptStart?.call(candidate);
+      if (source.id == ScrapeSourceId.javbus &&
+          detailRequestsStarted > 0 &&
+          javBusDetailDelay > Duration.zero) {
+        await Future<void>.delayed(javBusDetailDelay);
+      }
+      detailRequestsStarted++;
       ScrapeWorkDetails? details;
       Object? lastError;
       try {
-        for (var attempt = 0; attempt < 2; attempt++) {
-          try {
-            details = await source.fetchWorkDetails(candidate.summary);
-            break;
-          } catch (error) {
-            lastError = error;
-            if (attempt == 0 && _shouldRetryDetailError(error)) {
-              continue;
-            }
-            break;
-          }
+        try {
+          details = await source.fetchWorkDetails(candidate.summary);
+        } catch (error) {
+          lastError = error;
         }
         final scrapedDetails = details;
         if (scrapedDetails == null) {
@@ -1149,18 +1386,20 @@ class WorksScrapeService {
           );
         } else {
           final code = preferredScrapeWorkCode([scrapedDetails.code]);
-          fetched.add(
-            _FetchedWorkDetail(
-              candidate: candidate,
-              sourceId: source.id,
-              details: _withScrapeCode(
-                scrapedDetails,
-                code ?? '',
-                fallbackTitle: candidate.summary.title,
-                fallbackReleaseDate: candidate.summary.releaseDate,
-              ),
+          final fetchedDetail = _FetchedWorkDetail(
+            candidate: candidate,
+            sourceId: source.id,
+            details: _withScrapeCode(
+              scrapedDetails,
+              code ?? '',
+              fallbackTitle: candidate.summary.title,
+              fallbackReleaseDate: candidate.summary.releaseDate,
             ),
           );
+          if (fetchedKeys.add(_fetchedDetailKey(fetchedDetail))) {
+            fetched.add(fetchedDetail);
+            onDetailsFetched?.call(fetchedDetail);
+          }
         }
       } finally {
         onAttemptComplete?.call(candidate);
@@ -1172,125 +1411,33 @@ class WorksScrapeService {
     );
   }
 
-  bool _shouldRetryDetailError(Object error) {
-    if (error is JavBusVerificationRequiredException ||
-        error is JavBusVerificationCancelledException) {
-      return false;
-    }
-    if (error is JavBusRequestException) {
-      return error.kind == JavBusFailureKind.rateLimited ||
-          error.kind == JavBusFailureKind.timeout ||
-          error.kind == JavBusFailureKind.transport ||
-          error.kind == JavBusFailureKind.transientTransport;
-    }
-    return false;
+  String _fetchedDetailKey(_FetchedWorkDetail detail) {
+    final code = preferredScrapeWorkCode([detail.details.code]);
+    return code == null || code.isEmpty
+        ? 'uri:${detail.candidate.summary.detailUri}'
+        : 'code:${code.toLowerCase()}';
   }
 
   List<_ResolvedWorkGroup> _resolveAcrossSources(
     List<_FetchedWorkDetail> fetched,
     List<_FailedWorkCandidate> failedCandidates,
   ) {
-    final parent = List<int>.generate(fetched.length, (index) => index);
-
-    int find(int index) {
-      var current = index;
-      while (parent[current] != current) {
-        parent[current] = parent[parent[current]];
-        current = parent[current];
-      }
-      return current;
-    }
-
-    void union(int left, int right) {
-      final leftRoot = find(left);
-      final rightRoot = find(right);
-      if (leftRoot != rightRoot) {
-        parent[rightRoot] = leftRoot;
-      }
-    }
-
-    for (var left = 0; left < fetched.length; left++) {
-      for (var right = left + 1; right < fetched.length; right++) {
-        final first = fetched[left];
-        final second = fetched[right];
-        if (first.sourceId == second.sourceId) {
-          continue;
-        }
-        final firstCode = preferredScrapeWorkCode([first.details.code]);
-        final secondCode = preferredScrapeWorkCode([second.details.code]);
-        final sameCode = scrapeWorkCodesEqual(firstCode, secondCode);
-        final firstHasCode = firstCode != null;
-        final secondHasCode = secondCode != null;
-        final sameMissingCodeMetadata =
-            firstHasCode != secondHasCode &&
-            scrapeWorkMetadataLikelySame(
-              firstTitle: first.details.title,
-              firstReleaseDate: first.details.releaseDate,
-              firstPublisher: first.details.publisher,
-              firstStudio: first.details.studio,
-              secondTitle: second.details.title,
-              secondReleaseDate: second.details.releaseDate,
-              secondPublisher: second.details.publisher,
-              secondStudio: second.details.studio,
-            );
-        final firstTitle = scrapeTitleIdentity(first.details.title);
-        final secondTitle = scrapeTitleIdentity(second.details.title);
-        final rebeccaTitleMatch =
-            isRebeccaPublisher(first.details.publisher) &&
-            isRebeccaPublisher(second.details.publisher) &&
-            firstTitle.isUsable &&
-            secondTitle.isUsable &&
-            firstTitle.key == secondTitle.key;
-        if (sameCode || sameMissingCodeMetadata || rebeccaTitleMatch) {
-          union(left, right);
-        }
-      }
-    }
-
-    final grouped = <int, List<_FetchedWorkDetail>>{};
-    for (var index = 0; index < fetched.length; index++) {
-      grouped
-          .putIfAbsent(find(index), () => <_FetchedWorkDetail>[])
-          .add(fetched[index]);
-    }
-
     final resolved = <_ResolvedWorkGroup>[];
-    var groupIndex = 0;
-    for (final details in grouped.values) {
-      details.sort(
-        (left, right) => _sourcePriority(
-          left.sourceId,
-        ).compareTo(_sourcePriority(right.sourceId)),
-      );
-      final detailValues = details
-          .map((item) => item.details)
-          .toList(growable: false);
-      final usesRebeccaCode = _hasRebeccaTitleMatch(detailValues);
-      final code = usesRebeccaCode
-          ? _preferredRebeccaCode(detailValues)
-          : preferredScrapeWorkCode(detailValues.map((item) => item.code)) ??
-                '';
+    for (final detail in fetched) {
+      final code = preferredScrapeWorkCode([detail.details.code]) ?? '';
       resolved.add(
         _ResolvedWorkGroup(
           code: code,
-          details: detailValues,
-          identityKey: 'resolved:$groupIndex',
+          details: <ScrapeWorkDetails>[detail.details],
+          identityKey: 'resolved:${detail.sourceId.storageValue}:$code',
           hadSourceFailure: false,
-          sourceId: details.first.sourceId,
+          sourceId: detail.sourceId,
         ),
       );
-      groupIndex++;
     }
 
-    for (var index = 0; index < failedCandidates.length; index++) {
-      final failed = failedCandidates[index];
+    for (final failed in failedCandidates) {
       final rawCode = failed.candidate.summary.code?.trim() ?? '';
-      final matchedSuccessfulGroup = resolved.any(
-        (group) => _failedCandidateMatchesGroup(failed, group),
-      );
-      if (matchedSuccessfulGroup) {
-        continue;
-      }
       final code = rawCode.isEmpty
           ? ''
           : preferredScrapeWorkCode([rawCode]) ?? '';
@@ -1302,7 +1449,9 @@ class WorksScrapeService {
               'failed:' +
               failed.candidate.source.id.storageValue +
               ':' +
-              index.toString(),
+              (rawCode.isEmpty
+                  ? failed.candidate.summary.detailUri.toString()
+                  : rawCode),
           hadSourceFailure: true,
           sourceId: failed.candidate.source.id,
           failureReason: failed.reason,
@@ -1311,83 +1460,6 @@ class WorksScrapeService {
       );
     }
     return List.unmodifiable(resolved);
-  }
-
-  bool _failedCandidateMatchesGroup(
-    _FailedWorkCandidate failed,
-    _ResolvedWorkGroup group,
-  ) {
-    final summaryCode = failed.candidate.summary.code;
-    for (final detail in group.details) {
-      if (scrapeWorkCodesEqual(summaryCode, detail.code)) {
-        return true;
-      }
-      if ((summaryCode == null || summaryCode.trim().isEmpty) &&
-          scrapeWorkMetadataLikelySame(
-            firstTitle: failed.candidate.summary.title,
-            firstReleaseDate: failed.candidate.summary.releaseDate,
-            firstPublisher: null,
-            firstStudio: null,
-            secondTitle: detail.title,
-            secondReleaseDate: detail.releaseDate,
-            secondPublisher: detail.publisher,
-            secondStudio: detail.studio,
-          )) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  bool _hasRebeccaTitleMatch(List<ScrapeWorkDetails> details) {
-    for (var left = 0; left < details.length; left++) {
-      for (var right = left + 1; right < details.length; right++) {
-        if (details[left].source == details[right].source) {
-          continue;
-        }
-        final firstTitle = scrapeTitleIdentity(details[left].title);
-        final secondTitle = scrapeTitleIdentity(details[right].title);
-        if (isRebeccaPublisher(details[left].publisher) &&
-            isRebeccaPublisher(details[right].publisher) &&
-            firstTitle.isUsable &&
-            firstTitle.key == secondTitle.key) {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
-  String _preferredRebeccaCode(List<ScrapeWorkDetails> details) {
-    final candidates = details
-        .map((item) => preferredScrapeWorkCode([item.code]))
-        .whereType<String>()
-        .toList();
-    candidates.sort((left, right) {
-      final length = left.length.compareTo(right.length);
-      if (length != 0) {
-        return length;
-      }
-      final sourcePriority = _sourcePriorityForCode(
-        left,
-        details,
-      ).compareTo(_sourcePriorityForCode(right, details));
-      if (sourcePriority != 0) {
-        return sourcePriority;
-      }
-      return left.compareTo(right);
-    });
-    return candidates.first;
-  }
-
-  int _sourcePriorityForCode(String code, List<ScrapeWorkDetails> details) {
-    for (final detail in details) {
-      final normalized = preferredScrapeWorkCode([detail.code]);
-      if (normalized == code) {
-        return _sourcePriority(detail.source);
-      }
-    }
-    return ScrapeSourceRegistry.aggregatePriority.length;
   }
 
   ScrapedActressDetails _mergeActressPages(
@@ -1573,14 +1645,12 @@ class WorksScrapeService {
     WorksScrapeCancellationToken? cancellationToken,
     void Function(String code, WorkImageVariant variant)? onImageDownload,
   }) async {
-    return db.runManagedImageLifecycle(
-      () => _saveWorkUnlocked(
-        actressId: actressId,
-        details: details,
-        missingOnly: missingOnly,
-        cancellationToken: cancellationToken,
-        onImageDownload: onImageDownload,
-      ),
+    return _saveWorkUnlocked(
+      actressId: actressId,
+      details: details,
+      missingOnly: missingOnly,
+      cancellationToken: cancellationToken,
+      onImageDownload: onImageDownload,
     );
   }
 
@@ -1606,62 +1676,77 @@ class WorksScrapeService {
         fallbackReleaseDate: details.releaseDate,
       );
     }
-    var work = details.toWork();
-    final workId = await db.upsertActressWork(
-      actressId: actressId,
-      work: work,
-      missingOnly: missingOnly,
-    );
-    final current = await db.getWorkById(workId);
-    final currentCard = current?['card_image_path']?.toString() ?? '';
-    final currentDetail = current?['detail_image_path']?.toString() ?? '';
+    final prepared = await db.runManagedImageLifecycle(() async {
+      final workId = await db.upsertActressWork(
+        actressId: actressId,
+        work: details.toWork(),
+        missingOnly: missingOnly,
+      );
+      final current = await db.getWorkById(workId);
+      return _PreparedWorkImage(
+        details: details,
+        currentCard: current?['card_image_path']?.toString() ?? '',
+        currentDetail: current?['detail_image_path']?.toString() ?? '',
+      );
+    });
     if (_isCancelled(cancellationToken)) {
       throw const _ScrapeCancelled();
     }
-    final cardPath = await _downloadWorkImage(
-      details: details,
-      variant: WorkImageVariant.card,
-      targetPath: path.join(
-        imageDirectory,
-        'works',
-        workImageDownloader.fileNameFor(
-          code: details.code,
-          variant: WorkImageVariant.card,
+    final route = const WorkImageRouteResolver().resolve(
+      code: prepared.details.code,
+      studio: prepared.details.studio,
+      publisher: prepared.details.publisher,
+      evidenceUris: prepared.details.originalImageEvidenceUris,
+    );
+    final imageResults = await Future.wait<_WorkImageResult>([
+      _downloadWorkImage(
+        details: prepared.details,
+        variant: WorkImageVariant.card,
+        targetPath: path.join(
+          imageDirectory,
+          'works',
+          workImageDownloader.fileNameFor(
+            code: prepared.details.code,
+            variant: WorkImageVariant.card,
+          ),
         ),
+        currentPath: prepared.currentCard,
+        missingOnly: missingOnly,
+        route: route,
+        onImageDownload: onImageDownload,
       ),
-      currentPath: currentCard,
-      missingOnly: missingOnly,
-      onImageDownload: onImageDownload,
-    );
-    if (_isCancelled(cancellationToken)) {
-      throw const _ScrapeCancelled();
-    }
-    final detailPath = await _downloadWorkImage(
-      details: details,
-      variant: WorkImageVariant.detail,
-      targetPath: path.join(
-        imageDirectory,
-        'works',
-        workImageDownloader.fileNameFor(
-          code: details.code,
-          variant: WorkImageVariant.detail,
+      _downloadWorkImage(
+        details: prepared.details,
+        variant: WorkImageVariant.detail,
+        targetPath: path.join(
+          imageDirectory,
+          'works',
+          workImageDownloader.fileNameFor(
+            code: prepared.details.code,
+            variant: WorkImageVariant.detail,
+          ),
         ),
+        currentPath: prepared.currentDetail,
+        missingOnly: missingOnly,
+        route: route,
+        onImageDownload: onImageDownload,
       ),
-      currentPath: currentDetail,
-      missingOnly: missingOnly,
-      onImageDownload: onImageDownload,
-    );
+    ]);
     if (_isCancelled(cancellationToken)) {
       throw const _ScrapeCancelled();
     }
-    work = details.toWork(
+    final cardPath = imageResults[0];
+    final detailPath = imageResults[1];
+    final work = prepared.details.toWork(
       cardImagePath: cardPath.path,
       detailImagePath: detailPath.path,
     );
-    await db.upsertActressWork(
-      actressId: actressId,
-      work: work,
-      missingOnly: missingOnly,
+    await db.runManagedImageLifecycle(
+      () => db.upsertActressWork(
+        actressId: actressId,
+        work: work,
+        missingOnly: missingOnly,
+      ),
     );
     return _WorkImageSaveResult(
       failedVariants: {
@@ -1677,6 +1762,7 @@ class WorksScrapeService {
     required String targetPath,
     required String currentPath,
     required bool missingOnly,
+    required WorkImageRouteResolution route,
     void Function(String code, WorkImageVariant variant)? onImageDownload,
   }) async {
     if (missingOnly &&
@@ -1693,6 +1779,9 @@ class WorksScrapeService {
       await workImageDownloader.downloadToFile(
         code: details.code,
         studio: details.studio,
+        publisher: details.publisher,
+        originalImageEvidenceUris: details.originalImageEvidenceUris,
+        route: route,
         variant: variant,
         targetPath: targetPath,
       );
@@ -1723,6 +1812,7 @@ class WorksScrapeService {
       series: details.series,
       performerCount: details.performerCount,
       imageUris: details.imageUris,
+      originalImageEvidenceUris: details.originalImageEvidenceUris,
     );
   }
 
@@ -1759,10 +1849,17 @@ class WorksScrapeService {
     }
     final imageUris = <Uri>[];
     final imageKeys = <String>{};
+    final evidenceUris = <Uri>[];
+    final evidenceKeys = <String>{};
     for (final item in details) {
       for (final uri in item.imageUris) {
         if (imageKeys.add(uri.toString())) {
           imageUris.add(uri);
+        }
+      }
+      for (final uri in item.originalImageEvidenceUris) {
+        if (evidenceKeys.add(uri.toString())) {
+          evidenceUris.add(uri);
         }
       }
     }
@@ -1778,6 +1875,7 @@ class WorksScrapeService {
       series: firstText((item) => item.series),
       performerCount: performerCount,
       imageUris: List.unmodifiable(imageUris),
+      originalImageEvidenceUris: List.unmodifiable(evidenceUris),
     );
   }
 
@@ -1788,11 +1886,6 @@ class WorksScrapeService {
           result.state == ScrapeSourceRunState.failed ||
           result.state == ScrapeSourceRunState.zeroResults,
     );
-  }
-
-  int _sourcePriority(ScrapeSourceId sourceId) {
-    final index = ScrapeSourceRegistry.aggregatePriority.indexOf(sourceId);
-    return index < 0 ? ScrapeSourceRegistry.aggregatePriority.length : index;
   }
 
   bool _isCancelled(WorksScrapeCancellationToken? token) =>
@@ -1869,6 +1962,7 @@ final class _SourcePipelineOutcome {
     this.fetched = const [],
     this.failedCandidates = const [],
     this.preExcluded = 0,
+    this.streamingSaves = const [],
   });
 
   final ScrapeSourceId sourceId;
@@ -1877,6 +1971,7 @@ final class _SourcePipelineOutcome {
   final List<_FetchedWorkDetail> fetched;
   final List<_FailedWorkCandidate> failedCandidates;
   final int preExcluded;
+  final List<Future<_StreamingWorkOutcome>> streamingSaves;
 }
 
 final class _SourceCandidateSelection {
@@ -1976,10 +2071,130 @@ final class _WorkImageResult {
   final bool failed;
 }
 
+final class _PreparedWorkImage {
+  const _PreparedWorkImage({
+    required this.details,
+    required this.currentCard,
+    required this.currentDetail,
+  });
+
+  final ScrapeWorkDetails details;
+  final String currentCard;
+  final String currentDetail;
+}
+
 final class _WorkImageSaveResult {
   const _WorkImageSaveResult({required this.failedVariants});
 
   final Set<WorkImageVariant> failedVariants;
+}
+
+final class _StreamingWorkOutcome {
+  const _StreamingWorkOutcome._({
+    required this.identityKey,
+    required this.code,
+    required this.status,
+    this.failure,
+    this.imageFailures = const <WorkImageVariant>{},
+    this.cancelled = false,
+  });
+
+  factory _StreamingWorkOutcome.saved({
+    required String identityKey,
+    required String code,
+    Set<WorkImageVariant> imageFailures = const <WorkImageVariant>{},
+  }) => _StreamingWorkOutcome._(
+    identityKey: identityKey,
+    code: code,
+    status: _CanonicalWorkStatus.saved,
+    imageFailures: imageFailures,
+  );
+
+  factory _StreamingWorkOutcome.excluded({
+    required String identityKey,
+    required String code,
+  }) => _StreamingWorkOutcome._(
+    identityKey: identityKey,
+    code: code,
+    status: _CanonicalWorkStatus.excluded,
+  );
+
+  factory _StreamingWorkOutcome.failed({
+    required String identityKey,
+    required String code,
+    required WorksScrapeFailure failure,
+  }) => _StreamingWorkOutcome._(
+    identityKey: identityKey,
+    code: code,
+    status: _CanonicalWorkStatus.failed,
+    failure: failure,
+  );
+
+  factory _StreamingWorkOutcome.cancelled({
+    required String identityKey,
+    required String code,
+  }) => _StreamingWorkOutcome._(
+    identityKey: identityKey,
+    code: code,
+    status: _CanonicalWorkStatus.failed,
+    cancelled: true,
+  );
+
+  final String identityKey;
+  final String code;
+  final _CanonicalWorkStatus status;
+  final WorksScrapeFailure? failure;
+  final Set<WorkImageVariant> imageFailures;
+  final bool cancelled;
+}
+
+final class _BoundedAsyncQueue {
+  _BoundedAsyncQueue({required this.maxConcurrent}) : assert(maxConcurrent > 0);
+
+  final int maxConcurrent;
+  final Queue<Future<void> Function()> _pending = Queue();
+  Completer<void>? _idleCompleter;
+  int _active = 0;
+
+  Future<T> add<T>(Future<T> Function() task) {
+    final completer = Completer<T>();
+    _pending.add(() async {
+      try {
+        completer.complete(await task());
+      } catch (error, stackTrace) {
+        completer.completeError(error, stackTrace);
+      }
+    });
+    _drain();
+    return completer.future;
+  }
+
+  Future<void> waitForIdle() async {
+    if (_active == 0 && _pending.isEmpty) {
+      return;
+    }
+    final completer = _idleCompleter ??= Completer<void>();
+    await completer.future;
+  }
+
+  void _drain() {
+    while (_active < maxConcurrent && _pending.isNotEmpty) {
+      final task = _pending.removeFirst();
+      _active++;
+      unawaited(
+        task().whenComplete(() {
+          _active--;
+          if (_active == 0 && _pending.isEmpty) {
+            final idle = _idleCompleter;
+            _idleCompleter = null;
+            idle?.complete();
+          } else {
+            _drain();
+          }
+        }),
+      );
+    }
+  }
 }
 
 class _ScrapeCancelled implements Exception {

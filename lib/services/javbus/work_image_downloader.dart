@@ -7,6 +7,7 @@ import 'package:image/image.dart' as image;
 import '../http_safety.dart';
 import '../safe_image.dart';
 import 'work_image_policy.dart';
+import 'work_image_route_resolver.dart';
 
 class BinaryResponse {
   const BinaryResponse({required this.statusCode, required this.bodyBytes});
@@ -94,9 +95,18 @@ class WorkImageDownloader {
   Future<DownloadedWorkImage> fetch({
     required String code,
     String? studio,
+    String? publisher,
+    List<Uri> originalImageEvidenceUris = const [],
+    WorkImageRouteResolution? route,
     required WorkImageVariant variant,
   }) async {
-    final urls = _policy.urlsFor(code: code, studio: studio);
+    final urls = _policy.urlsFor(
+      code: code,
+      studio: studio,
+      publisher: publisher,
+      evidenceUris: originalImageEvidenceUris,
+      route: route,
+    );
     final primaryUri = urls.forVariant(variant);
     if (!isApprovedWorkImageUri(primaryUri)) {
       throw WorkImageDownloadException(primaryUri);
@@ -114,12 +124,18 @@ class WorkImageDownloader {
   Future<DownloadedWorkImage> downloadToFile({
     required String code,
     String? studio,
+    String? publisher,
+    List<Uri> originalImageEvidenceUris = const [],
+    WorkImageRouteResolution? route,
     required WorkImageVariant variant,
     required String targetPath,
   }) async {
     final downloaded = await fetch(
       code: code,
       studio: studio,
+      publisher: publisher,
+      originalImageEvidenceUris: originalImageEvidenceUris,
+      route: route,
       variant: variant,
     );
     final file = File(targetPath);

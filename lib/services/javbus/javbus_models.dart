@@ -47,6 +47,7 @@ class JavBusWorkDetails {
     this.publisher,
     this.series,
     this.actressUris = const [],
+    this.originalImageEvidenceUris = const [],
   });
 
   final String code;
@@ -58,6 +59,7 @@ class JavBusWorkDetails {
   final String? publisher;
   final String? series;
   final List<Uri> actressUris;
+  final List<Uri> originalImageEvidenceUris;
 
   Work toWork({String? cardImagePath, String? detailImagePath}) {
     return Work(
