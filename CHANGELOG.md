@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.9.0 - 2026-08-16
+
+- Added related-performer metadata for works, including source links and
+  local actress/alias resolution for navigation to local actress pages.
+- Extended JavBus performer parsing and work persistence/merge handling while
+  preserving source scope and avoiding duplicate performer records.
+- Reworked Works scrape progress and result dialogs to separate actress
+  details, work-source progress, and image-download outcomes with explicit
+  partial-failure and completion states.
+- Refined responsive Works and Work Detail layouts, related-actress
+  navigation, Traditional Chinese/English/Japanese localization, and test
+  coverage.
+
 ## 0.8.7 - 2026-08-15
 
 - Made work-image routing metadata-only, added the Seikyouiku MGStage route,

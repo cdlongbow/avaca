@@ -4,6 +4,7 @@ import 'package:avaca/core/database.dart';
 import 'package:avaca/l10n/app_localizations.dart';
 import 'package:avaca/models/work_scrape_options.dart';
 import 'package:avaca/models/scrape_source_settings.dart';
+import 'package:avaca/services/scrape/scrape_models.dart';
 import 'package:avaca/services/works_scrape_service.dart';
 import 'package:avaca/services/javbus/work_image_policy.dart';
 import 'package:avaca/views/detail_view.dart';
@@ -85,7 +86,10 @@ class _WorksFeatureDatabase extends AppDatabase {
   }
 
   @override
-  Future<Map<String, Object?>?> getWorkById(int workId) async {
+  Future<Map<String, Object?>?> getWorkById(
+    int workId, {
+    int? currentActressId,
+  }) async {
     final rows = await getWorksForActress(7);
     for (final row in rows) {
       if (row['id'] == workId) {
@@ -826,7 +830,7 @@ void main() {
 
     expect(find.byType(CircularProgressIndicator), findsNothing);
 
-    expect(find.text('刮削完成：儲存 1、排除 0、失敗 0'), findsOneWidget);
+    expect(find.text('同步完成'), findsOneWidget);
 
     expect(find.byKey(const Key('scrape-result-dialog')), findsOneWidget);
 
@@ -972,13 +976,13 @@ void main() {
 
     await tester.pump();
 
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
 
     await tester.binding.handlePopRoute();
 
     await tester.pump();
 
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
 
     expect(find.byType(WorksView), findsOneWidget);
 
@@ -1085,6 +1089,13 @@ void main() {
             failed: 0,
             source: ScrapeSourceId.javbus,
             workCode: 'SHOULD-NOT-BE-SHOWN',
+            sourceProgress: {
+              ScrapeSourceId.javbus: WorksScrapeSourceProgress(
+                phase: WorksScrapePhase.fetchingDetails,
+                current: 0,
+                total: 1,
+              ),
+            },
           ),
         );
         await allowImageProgress.future;
@@ -1127,10 +1138,11 @@ void main() {
 
     allowImageProgress.complete();
     await tester.pump();
-    final imageOperation = tester.widget<Text>(
-      find.byKey(const Key('scrape-progress-operation')),
+    expect(
+      find.byKey(const Key('scrape-progress-current-work')),
+      findsOneWidget,
     );
-    expect(imageOperation.data, contains('REBD-975'));
+    expect(find.textContaining('REBD-975'), findsOneWidget);
 
     result.complete(
       const WorksScrapeResult(
@@ -1188,7 +1200,7 @@ void main() {
     expect(find.byKey(const Key('scrape-progress-sources')), findsOneWidget);
     expect(find.text('Minnano AV'), findsOneWidget);
     expect(find.text('JavBus'), findsOneWidget);
-    expect(find.text('3 / 10'), findsNWidgets(2));
+    expect(find.text('3 / 10'), findsOneWidget);
     expect(find.text('4 / 10'), findsOneWidget);
     expect(find.text('MINNANO-TITLE-MUST-NOT-SHOW'), findsNothing);
     expect(find.text('JAVBUS-TITLE-MUST-NOT-SHOW'), findsNothing);
@@ -1243,12 +1255,58 @@ void main() {
     expect(find.text('圖片下載失敗（1）'), findsOneWidget);
     expect(find.textContaining('SSIS-875'), findsOneWidget);
     expect(find.textContaining('SIVR00303'), findsNothing);
-    expect(find.textContaining('SIVR-303 —'), findsOneWidget);
+    expect(find.text('所有來源都無法取得作品詳情'), findsOneWidget);
     expect(find.byKey(const Key('scrape-result-scroll')), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('scrape-result-done')));
     await tester.pumpAndSettle();
   });
+
+  testWidgets(
+    'scrape result keeps actress details separate from work sources',
+    (tester) async {
+      await _pumpWorks(
+        tester,
+        scrapeExecutor: (options, token, onProgress) async {
+          return const WorksScrapeResult(
+            saved: 2,
+            excluded: 1,
+            failed: 0,
+            cancelled: false,
+            detailsSource: ScrapeSourceId.minnanoAv,
+            worksSources: [ScrapeSourceId.javbus],
+            sourceResults: {
+              ScrapeSourceId.minnanoAv: ScrapeSourceRunResult(
+                source: ScrapeSourceId.minnanoAv,
+                state: ScrapeSourceRunState.zeroResults,
+              ),
+              ScrapeSourceId.javbus: ScrapeSourceRunResult(
+                source: ScrapeSourceId.javbus,
+                state: ScrapeSourceRunState.success,
+                discovered: 3,
+              ),
+            },
+          );
+        },
+      );
+
+      await _openWorksScrapeSettings(tester);
+      await tester.tap(find.text('開始刮削'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('詳細資料'), findsOneWidget);
+      expect(find.text('作品'), findsOneWidget);
+      expect(find.text('下載'), findsOneWidget);
+      expect(find.text('Minnano AV'), findsOneWidget);
+      expect(find.text('JavBus'), findsOneWidget);
+      expect(find.text('完成，無新增作品'), findsNothing);
+      expect(find.text('已儲存'), findsOneWidget);
+      expect(find.text('排除'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('scrape-result-done')));
+      await tester.pumpAndSettle();
+    },
+  );
 
   testWidgets(
     'detail page shows the local work count inside the works button',

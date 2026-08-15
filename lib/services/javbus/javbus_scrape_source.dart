@@ -101,6 +101,7 @@ final class JavBusScrapeSource
       studio: details.studio,
       publisher: details.publisher,
       series: details.series,
+      performers: details.performers,
       performerCount: details.actressUris.length,
       originalImageEvidenceUris: details.originalImageEvidenceUris,
     );

@@ -1,0 +1,83 @@
+import 'package:avaca/core/database.dart';
+import 'package:avaca/l10n/app_localizations.dart';
+import 'package:avaca/views/work_detail_view.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  testWidgets(
+    'shows other performers, resolves local pages, and excludes current actress',
+    (tester) async {
+      final requestedRoutes = <String>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('zh', 'TW'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          onGenerateRoute: (settings) {
+            if (settings.name != null) {
+              requestedRoutes.add(settings.name!);
+            }
+            return MaterialPageRoute<void>(
+              builder: (_) => const SizedBox.shrink(),
+            );
+          },
+          home: WorkDetailView(
+            db: _WorkDetailDatabase(),
+            workId: 7,
+            currentActressId: 1,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('related-actresses-section')),
+        findsOneWidget,
+      );
+      expect(find.text('當前女優'), findsNothing);
+      expect(find.text('本地女優'), findsOneWidget);
+      expect(find.text('別名女優'), findsOneWidget);
+      expect(find.text('未建立頁面'), findsOneWidget);
+      expect(find.byKey(const ValueKey('related-actress-2')), findsOneWidget);
+      expect(
+        tester
+            .widget<ListTile>(
+              find.byKey(const ValueKey('related-actress-未建立頁面')),
+            )
+            .onTap,
+        isNull,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('related-actress-2')));
+      await tester.pumpAndSettle();
+      expect(requestedRoutes, ['/detail/2']);
+    },
+  );
+}
+
+class _WorkDetailDatabase extends AppDatabase {
+  @override
+  Future<Map<String, Object?>?> getWorkById(
+    int workId, {
+    int? currentActressId,
+  }) async {
+    return {
+      'id': workId,
+      'code': 'MULTI-007',
+      'title': '多人作品',
+      'release_date': '2026-01-01',
+      'duration_minutes': 120,
+      'studio': '工作室',
+      'publisher': '發行商',
+      'series': '系列',
+      'detail_image_path': '',
+      'related_performers': [
+        {'name': '當前女優', 'actress_id': 1, 'source': 'javbus'},
+        {'name': '本地女優', 'actress_id': 2, 'source': 'javbus'},
+        {'name': '別名女優', 'actress_id': 3, 'source': 'javbus'},
+        {'name': '未建立頁面', 'actress_id': null, 'source': 'javbus'},
+      ],
+    };
+  }
+}

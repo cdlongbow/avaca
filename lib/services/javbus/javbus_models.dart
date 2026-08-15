@@ -46,6 +46,7 @@ class JavBusWorkDetails {
     this.studio,
     this.publisher,
     this.series,
+    this.performers,
     this.actressUris = const [],
     this.originalImageEvidenceUris = const [],
   });
@@ -58,6 +59,7 @@ class JavBusWorkDetails {
   final String? studio;
   final String? publisher;
   final String? series;
+  final List<WorkPerformer>? performers;
   final List<Uri> actressUris;
   final List<Uri> originalImageEvidenceUris;
 

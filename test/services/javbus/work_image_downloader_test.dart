@@ -227,6 +227,195 @@ void main() {
     expect(transport.requested.single.toString(), contains('1start00196'));
   });
 
+  group('verified 0.8.7 DMM-standard metadata routes', () {
+    const resolver = WorkImageRouteResolver();
+    const publisherAliases = <String>[
+      'オーロラプロジェクト・アネックス',
+      'バビロン/妄想族',
+      'ビビアン',
+      'WANZ',
+      'kawaii',
+      'ピーターズ',
+      'CRYSTAL VR',
+      'ダスッ！',
+      'DOC DREAM',
+      'アリスJAPAN',
+      'flavors',
+      'DEEP’S',
+      'E-BODY',
+      'FALENO star',
+      'ふぇちぽいんと',
+      'FOCUS',
+      'ULTIMA',
+      '本中',
+      'h.m.p DORAMA',
+      '初代渋谷特別特攻本部',
+      'IENF',
+      'IENE',
+      'IESP',
+      'Fitch',
+      'Madonna',
+      'かぐや姫Pt',
+      'K-Tribe',
+      '黒髪美少女',
+      'ルナティックス',
+      'マゾマン',
+      '宇宙企画',
+      '溜池ゴロー',
+      'みんなのキカタン',
+      'MOODYZ Best',
+      'million（ミリオン）',
+      'ミコン',
+      'IRIS',
+      'MCP',
+      '無垢',
+      'M’s video Group',
+      'MAXING',
+      '七狗留',
+      'ONEZ',
+      'ONETIME',
+      'GLORY QUEST',
+      'パコパコ団とゆかいな仲間たち/妄想族',
+      'OPPAI',
+      'S-Cute',
+      '羞恥娘',
+      'TMA',
+      '円光タダまん',
+      'LEO',
+      'UMANAMI',
+      'まるっと！',
+      'ゾクゾク娘',
+    ];
+    const studioAliases = <String>[
+      'オーロラプロジェクト・アネックス',
+      'バビロン/妄想族',
+      'ビビアン',
+      'ワンズファクトリー',
+      'kawaii',
+      'ピーターズ',
+      'CRYSTAL VR',
+      'ダスッ！',
+      'DOC',
+      'アリスJAPAN',
+      'ディープス',
+      'E-BODY',
+      'エロタイム',
+      'FALENO',
+      'ABC/妄想族',
+      'VENUS',
+      '本中',
+      'h.m.p DORAMA',
+      'マーキュリー',
+      'アイエナジー',
+      'Fitch',
+      'マドンナ',
+      'かぐや姫Pt/妄想族',
+      'ケー・トライブ',
+      'メディアアーツ',
+      'LUNATICS',
+      '宇宙企画',
+      '溜池ゴロー',
+      'ムーディーズ',
+      'ケイ・エム・プロデュース',
+      'MARRION',
+      '無垢',
+      'エムズビデオグループ',
+      'MAXING',
+      'プラネットプラス',
+      'ONEMORE',
+      'ONETIME',
+      'グローリークエスト',
+      'パコパコ団とゆかいな仲間たち/妄想族',
+      'OPPAI',
+      'S-Cute',
+      '素人CLOVER',
+      'サディスティックヴィレッジ',
+      'TMA',
+      'First Star',
+      'LEO',
+      'ゾクゾク娘/妄想族',
+      'サディヴィレナウ！',
+    ];
+
+    test('maps every verified publisher alias to dmmStandard', () {
+      expect(publisherAliases, hasLength(55));
+      for (final alias in publisherAliases) {
+        final resolution = resolver.resolve(publisher: alias);
+        expect(
+          resolution.family,
+          WorkImageNormalizationFamily.dmmStandard,
+          reason: 'publisher alias: $alias',
+        );
+      }
+    });
+
+    test('maps every verified studio alias independently to dmmStandard', () {
+      expect(studioAliases, hasLength(48));
+      for (final alias in studioAliases) {
+        final resolution = resolver.resolve(studio: alias);
+        expect(
+          resolution.family,
+          WorkImageNormalizationFamily.dmmStandard,
+          reason: 'studio alias: $alias',
+        );
+      }
+    });
+
+    test('uses either metadata source and keeps conflict semantics', () {
+      expect(
+        resolver.resolve(studio: '素人CLOVER').family,
+        WorkImageNormalizationFamily.dmmStandard,
+      );
+      expect(
+        resolver.resolve(studio: 'unknown studio', publisher: 'WANZ').family,
+        WorkImageNormalizationFamily.dmmStandard,
+      );
+      expect(
+        resolver
+            .resolve(studio: 'CRYSTAL VR', publisher: 'unknown publisher')
+            .family,
+        WorkImageNormalizationFamily.dmmStandard,
+      );
+      expect(
+        resolver.resolve(studio: 'E-BODY', publisher: 'WANZ').family,
+        WorkImageNormalizationFamily.dmmStandard,
+      );
+      expect(
+        resolver.resolve(studio: 'SOD Create', publisher: 'S1').failureReason,
+        WorkImageRouteFailureReason.metadataConflict,
+      );
+      expect(
+        resolver
+            .resolve(studio: 'unknown studio', publisher: 'unknown publisher')
+            .failureReason,
+        WorkImageRouteFailureReason.metadataUnmapped,
+      );
+    });
+
+    test(
+      'formats blank-publisher routes with the existing DMM token policy',
+      () {
+        const policy = WorkImagePolicy();
+        const cases = <String, List<String>>{
+          'エロタイム': ['ETQR-408', 'etqr00408'],
+          '素人CLOVER': ['STCV-122', 'stcv00122'],
+          'サディヴィレナウ！': ['ZOZO-148', 'zozo00148'],
+        };
+        for (final entry in cases.entries) {
+          final urls = policy.urlsFor(code: entry.value[0], studio: entry.key);
+          expect(
+            urls.card.pathSegments[urls.card.pathSegments.length - 2],
+            entry.value[1],
+          );
+          expect(
+            urls.detail.pathSegments[urls.detail.pathSegments.length - 1],
+            '${entry.value[1]}pl.jpg',
+          );
+        }
+      },
+    );
+  });
+
   test('writes a downloaded image to the requested local file', () async {
     final directory = await Directory.systemTemp.createTemp(
       'avaca_image_download_test_',

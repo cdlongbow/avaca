@@ -600,7 +600,11 @@ class _WorksViewState extends State<WorksView> {
 
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (context) => WorkDetailView(db: widget.db, workId: workId),
+        builder: (context) => WorkDetailView(
+          db: widget.db,
+          workId: workId,
+          currentActressId: widget.actressId,
+        ),
       ),
     );
   }
@@ -680,6 +684,8 @@ class _WorksViewState extends State<WorksView> {
           child: _ScrapeProgressDialog(
             progress: progress,
 
+            actressName: controller.actressName,
+
             onCancel: token.cancel,
           ),
         );
@@ -732,34 +738,18 @@ class _WorksViewState extends State<WorksView> {
 
     final cancelled = completedResult.cancelled;
 
-    var message = cancelled
-        ? l10n.scrapeCancelled(
-            completedResult.saved,
-
-            completedResult.excluded,
-
-            completedResult.failed,
-          )
-        : l10n.scrapeComplete(
-            completedResult.saved,
-
-            completedResult.excluded,
-
-            completedResult.failed,
-          );
-
+    final notices = <String>[];
     if (!cancelled) {
-      message = switch (completedResult.actressImageStatus) {
-        ActressImageSyncStatus.unavailable =>
-          '$message ${l10n.scrapeAvatarUnavailable}',
-
-        ActressImageSyncStatus.downloadFailed ||
-        ActressImageSyncStatus.databaseFailed =>
-          '$message ${l10n.scrapeAvatarFailed}',
-
-        ActressImageSyncStatus.notRequested ||
-        ActressImageSyncStatus.replaced => message,
-      };
+      switch (completedResult.actressImageStatus) {
+        case ActressImageSyncStatus.unavailable:
+          notices.add(l10n.scrapeAvatarUnavailable);
+        case ActressImageSyncStatus.downloadFailed:
+        case ActressImageSyncStatus.databaseFailed:
+          notices.add(l10n.scrapeAvatarFailed);
+        case ActressImageSyncStatus.notRequested:
+        case ActressImageSyncStatus.replaced:
+          break;
+      }
     }
 
     final hasNoChanges =
@@ -769,16 +759,19 @@ class _WorksViewState extends State<WorksView> {
         completedResult.failed == 0 &&
         completedResult.imageFailures.isEmpty;
     if (hasNoChanges) {
-      message = l10n.scrapeZeroResults;
+      notices.add(l10n.scrapeZeroResults);
     } else if (completedResult.partialSuccess && !cancelled) {
-      message = '$message ${l10n.scrapePartial}';
+      notices.add(l10n.scrapePartial);
     }
 
-    await _showScrapeResultDialog(message, result: completedResult);
+    await _showScrapeResultDialog(
+      notices.isEmpty ? null : notices.join(' '),
+      result: completedResult,
+    );
   }
 
   Future<void> _showScrapeResultDialog(
-    String message, {
+    String? notice, {
     WorksScrapeResult? result,
   }) async {
     if (!mounted) {
@@ -789,7 +782,7 @@ class _WorksViewState extends State<WorksView> {
       barrierDismissible: false,
       builder: (dialogContext) => PopScope(
         canPop: false,
-        child: _ScrapeResultDialog(message: message, result: result),
+        child: _ScrapeResultDialog(notice: notice, result: result),
       ),
     );
   }
@@ -1364,186 +1357,239 @@ class _ScrapeSettingsDialogState extends State<_ScrapeSettingsDialog> {
 }
 
 class _ScrapeProgressDialog extends StatelessWidget {
-  const _ScrapeProgressDialog({required this.progress, required this.onCancel});
+  const _ScrapeProgressDialog({
+    required this.progress,
+    required this.actressName,
+    required this.onCancel,
+  });
 
   final ValueListenable<WorksScrapeProgress?> progress;
+  final String actressName;
   final VoidCallback onCancel;
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final padding = _scrapeDialogPadding(context);
     return AlertDialog(
-      content: ValueListenableBuilder<WorksScrapeProgress?>(
-        valueListenable: progress,
-        builder: (context, value, child) {
-          final total = value?.total ?? 0;
-          final current = value?.current ?? 0;
-          final l10n = AppLocalizations.of(context);
-          final phase = value?.phase ?? WorksScrapePhase.collectingSources;
-          final sourceProgress =
-              value?.sourceProgress.entries.toList(growable: false) ??
-              const <MapEntry<ScrapeSourceId, WorksScrapeSourceProgress>>[];
-          final operation = [
-            _scrapePhaseLabel(l10n, phase),
-            if (value?.source != null) _scrapeSourceLabel(l10n, value!.source!),
-            if (phase == WorksScrapePhase.downloadingImages &&
-                value?.workCode != null &&
-                value!.workCode!.trim().isNotEmpty)
-              value.workCode!,
-          ].join(' · ');
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircularProgressIndicator(
-                value: total > 0 ? current / total : null,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                operation,
-                key: const Key('scrape-progress-operation'),
-                textAlign: TextAlign.center,
-              ),
-              if (total > 0) ...[
-                const SizedBox(height: 8),
-                Text(
-                  '$current / $total',
-                  key: const Key('scrape-progress-count'),
-                ),
-              ],
-              const SizedBox(height: 8),
-              Text(
-                l10n.scrapeProgressSummary(
-                  value?.saved ?? 0,
-                  value?.excluded ?? 0,
-                  value?.failed ?? 0,
-                ),
-                key: const Key('scrape-progress-summary'),
-                textAlign: TextAlign.center,
-              ),
-              if (sourceProgress.length > 1) ...[
-                const SizedBox(height: 12),
-                Column(
-                  key: const Key('scrape-progress-sources'),
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (final entry in sourceProgress)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(_scrapeSourceLabel(l10n, entry.key)),
-                            Text(
-                              entry.value.total > 0
-                                  ? entry.value.current.toString() +
-                                        ' / ' +
-                                        entry.value.total.toString()
-                                  : _scrapePhaseLabel(l10n, entry.value.phase),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-              ],
-            ],
-          );
-        },
+      key: const Key('scrape-progress-dialog'),
+      insetPadding: EdgeInsets.symmetric(horizontal: padding, vertical: 24),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(_scrapeDialogRadius),
       ),
-      actions: [
-        TextButton(
-          onPressed: onCancel,
-          child: Text(AppLocalizations.of(context).cancel),
+      titlePadding: EdgeInsets.fromLTRB(padding, 24, padding, 0),
+      title: _ScrapeDialogHeading(
+        title: l10n.scrapeSyncingTitle,
+        subtitle: actressName.trim().isEmpty ? null : actressName.trim(),
+      ),
+      contentPadding: EdgeInsets.fromLTRB(padding, 16, padding, 0),
+      content: _ScrapeDialogViewport(
+        child: ValueListenableBuilder<WorksScrapeProgress?>(
+          valueListenable: progress,
+          builder: (context, value, child) {
+            return _ScrapeProgressContent(value: value);
+          },
         ),
+      ),
+      actionsPadding: EdgeInsets.fromLTRB(padding, 8, padding, 16),
+      actions: [TextButton(onPressed: onCancel, child: Text(l10n.stopScrape))],
+    );
+  }
+}
+
+class _ScrapeProgressContent extends StatelessWidget {
+  const _ScrapeProgressContent({required this.value});
+
+  final WorksScrapeProgress? value;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final phase = value?.phase ?? WorksScrapePhase.collectingSources;
+    final sourceProgress =
+        value?.sourceProgress ??
+        const <ScrapeSourceId, WorksScrapeSourceProgress>{};
+    final detailsSource = value?.detailsSource;
+    final inferredWorkSources = sourceProgress.keys
+        .where((source) => source != detailsSource)
+        .toList(growable: false);
+    final worksSources = value?.worksSources.isNotEmpty == true
+        ? value!.worksSources
+        : inferredWorkSources.isNotEmpty
+        ? inferredWorkSources
+        : value?.source != null && value!.source != detailsSource
+        ? [value!.source!]
+        : const <ScrapeSourceId>[];
+    final workCode = value?.workCode?.trim();
+    final operation = [
+      _scrapePhaseLabel(l10n, phase),
+      if (value?.source != null) _scrapeSourceLabel(l10n, value!.source!),
+    ].join(' · ');
+
+    final detailsBody = detailsSource == null
+        ? _ScrapeEmptyState(text: l10n.scrapeStatusWaiting)
+        : _ScrapeSourceRow(
+            label: _scrapeSourceLabel(l10n, detailsSource),
+            status: _scrapeDetailsProgressStatus(
+              l10n,
+              value,
+              detailsSource,
+              sourceProgress[detailsSource],
+            ),
+          );
+
+    final worksBody = Column(
+      key: const Key('scrape-progress-sources'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (worksSources.isEmpty)
+          _ScrapeEmptyState(text: l10n.scrapeStatusWaiting)
+        else
+          for (final source in worksSources)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _ScrapeSourceProgressRow(
+                source: source,
+                value: value,
+                progress: sourceProgress[source],
+                isActive: value?.source == source,
+              ),
+            ),
+        _ScrapeSummary(
+          key: const Key('scrape-progress-summary'),
+          saved: value?.saved ?? 0,
+          excluded: value?.excluded ?? 0,
+          failed: value?.failed ?? 0,
+        ),
+      ],
+    );
+
+    final downloadActive = phase == WorksScrapePhase.downloadingImages;
+    final downloadComplete =
+        phase.index > WorksScrapePhase.downloadingImages.index;
+    final downloadBody = _ScrapeSourceRow(
+      label: l10n.scrapeImagesLabel,
+      status: downloadActive
+          ? l10n.scrapeStatusSyncing
+          : downloadComplete
+          ? l10n.scrapeStatusCompleted
+          : l10n.scrapeStatusWaiting,
+      detail: downloadActive && workCode != null && workCode.isNotEmpty
+          ? l10n.scrapeCurrentWork(workCode)
+          : null,
+      detailKey: downloadActive
+          ? const Key('scrape-progress-current-work')
+          : null,
+      indeterminateProgress: downloadActive,
+    );
+    final hasDeterminateProgress = sourceProgress.values.any(
+      (item) => item.total > 0,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          operation,
+          key: const Key('scrape-progress-operation'),
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        if (workCode != null && workCode.isNotEmpty && !downloadActive) ...[
+          const SizedBox(height: 4),
+          Text(
+            l10n.scrapeCurrentWork(workCode),
+            key: const Key('scrape-progress-current-work'),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+        if (!hasDeterminateProgress && phase != WorksScrapePhase.completed) ...[
+          const SizedBox(height: 12),
+          const LinearProgressIndicator(minHeight: 4),
+        ],
+        _ScrapeSection(title: l10n.scrapeDetailsSection, child: detailsBody),
+        _ScrapeSection(title: l10n.scrapeWorksSection, child: worksBody),
+        _ScrapeSection(title: l10n.scrapeDownloadSection, child: downloadBody),
       ],
     );
   }
 }
 
 class _ScrapeResultDialog extends StatelessWidget {
-  const _ScrapeResultDialog({required this.message, this.result});
+  const _ScrapeResultDialog({required this.notice, this.result});
 
-  final String message;
+  final String? notice;
   final WorksScrapeResult? result;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final failedWorks = result?.failedWorks ?? const <WorksScrapeFailure>[];
-    final imageFailures =
-        result?.imageFailures ?? const <WorksScrapeImageFailure>[];
-    final sourceResults =
-        result?.sourceResults.entries.toList(growable: false) ??
-        const <MapEntry<ScrapeSourceId, ScrapeSourceRunResult>>[];
+    final padding = _scrapeDialogPadding(context);
+    final currentResult = result;
+    final detailsSource = currentResult == null
+        ? null
+        : _resultDetailsSource(currentResult);
+    final worksSources = currentResult == null
+        ? const <ScrapeSourceId>[]
+        : _resultWorksSources(currentResult, detailsSource);
+
     final body = <Widget>[
-      Text(message, key: const Key('scrape-result-message')),
-      if (sourceResults.isNotEmpty) ...[
-        const SizedBox(height: 20),
+      if (notice != null && notice!.trim().isNotEmpty)
         Text(
-          '來源結果',
-          key: const Key('scrape-source-results-title'),
-          style: Theme.of(context).textTheme.titleMedium,
+          notice!,
+          key: const Key('scrape-result-message'),
+          style: Theme.of(context).textTheme.bodyMedium,
         ),
-        const SizedBox(height: 8),
-        for (final entry in sourceResults)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Text(
-              '• ${_scrapeSourceLabel(l10n, entry.key)} — '
-              '${_scrapeSourceStateLabel(entry.value.state)}'
-              '${entry.value.error == null ? '' : '：${entry.value.error}'}',
-            ),
-          ),
-      ],
-      if (failedWorks.isNotEmpty) ...[
-        const SizedBox(height: 20),
-        Text(
-          l10n.scrapeFailedWorksTitle(failedWorks.length),
-          style: Theme.of(context).textTheme.titleMedium,
+      if (currentResult != null) ...[
+        _ScrapeSection(
+          title: l10n.scrapeDetailsSection,
+          child: detailsSource == null
+              ? _ScrapeEmptyState(text: l10n.scrapeStatusUnavailable)
+              : _ScrapeResultDetailsBody(
+                  source: detailsSource,
+                  result: currentResult,
+                ),
         ),
-        const SizedBox(height: 8),
-        for (final failure in failedWorks)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Text(
-              '• ' +
-                  failure.code +
-                  ' — ' +
-                  _scrapeFailureReasonLabel(l10n, failure.reason) +
-                  (failure.error == null ? '' : '：' + failure.error.toString()),
-            ),
+        _ScrapeSection(
+          title: l10n.scrapeWorksSection,
+          titleKey: const Key('scrape-source-results-title'),
+          child: _ScrapeResultWorksBody(
+            sources: worksSources,
+            result: currentResult,
           ),
-      ],
-      if (imageFailures.isNotEmpty) ...[
-        const SizedBox(height: 20),
-        Text(
-          l10n.scrapeImageFailuresTitle(imageFailures.length),
-          style: Theme.of(context).textTheme.titleMedium,
         ),
-        const SizedBox(height: 8),
-        for (final failure in imageFailures)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Text(
-              '• ${failure.code} — ${_scrapeImageFailureLabel(l10n, failure.variants)}',
-            ),
-          ),
+        _ScrapeSection(
+          title: l10n.scrapeDownloadSection,
+          child: _ScrapeResultDownloadBody(result: currentResult),
+        ),
       ],
     ];
+    if (body.isEmpty) {
+      body.add(
+        Text(l10n.scrapeFailed, key: const Key('scrape-result-message')),
+      );
+    }
+
     return AlertDialog(
       key: const Key('scrape-result-dialog'),
-      content: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.sizeOf(context).height * 0.62,
-        ),
-        child: SingleChildScrollView(
-          key: const Key('scrape-result-scroll'),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: body,
-          ),
+      insetPadding: EdgeInsets.symmetric(horizontal: padding, vertical: 24),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(_scrapeDialogRadius),
+      ),
+      titlePadding: EdgeInsets.fromLTRB(padding, 24, padding, 0),
+      title: _ScrapeDialogHeading(
+        title: _scrapeResultTitle(l10n, currentResult),
+      ),
+      contentPadding: EdgeInsets.fromLTRB(padding, 16, padding, 0),
+      content: _ScrapeDialogViewport(
+        key: const Key('scrape-result-scroll'),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: body,
         ),
       ),
+      actionsPadding: EdgeInsets.fromLTRB(padding, 8, padding, 16),
       actions: [
         FilledButton(
           key: const Key('scrape-result-done'),
@@ -1555,18 +1601,601 @@ class _ScrapeResultDialog extends StatelessWidget {
   }
 }
 
-String _scrapeSourceStateLabel(ScrapeSourceRunState state) {
+class _ScrapeResultDetailsBody extends StatelessWidget {
+  const _ScrapeResultDetailsBody({required this.source, required this.result});
+
+  final ScrapeSourceId source;
+  final WorksScrapeResult result;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final sourceResult = result.sourceResults[source];
+    final imageNotice = switch (result.actressImageStatus) {
+      ActressImageSyncStatus.unavailable => l10n.scrapeAvatarUnavailable,
+      ActressImageSyncStatus.downloadFailed ||
+      ActressImageSyncStatus.databaseFailed => l10n.scrapeAvatarFailed,
+      ActressImageSyncStatus.notRequested ||
+      ActressImageSyncStatus.replaced => null,
+    };
+    return _ScrapeSourceRow(
+      label: _scrapeSourceLabel(l10n, source),
+      status: sourceResult == null
+          ? result.cancelled
+                ? l10n.scrapeStatusCancelled
+                : l10n.scrapeStatusUnavailable
+          : _scrapeSourceStateLabel(
+              l10n,
+              sourceResult.state,
+              isDetailsSource: true,
+            ),
+      detail: imageNotice,
+    );
+  }
+}
+
+class _ScrapeResultWorksBody extends StatelessWidget {
+  const _ScrapeResultWorksBody({required this.sources, required this.result});
+
+  final List<ScrapeSourceId> sources;
+  final WorksScrapeResult result;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final rows = <Widget>[];
+    for (final source in sources) {
+      final sourceResult = result.sourceResults[source];
+      rows.add(
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: _ScrapeSourceRow(
+            label: _scrapeSourceLabel(l10n, source),
+            status: sourceResult == null
+                ? result.cancelled
+                      ? l10n.scrapeStatusCancelled
+                      : l10n.scrapeStatusUnavailable
+                : _scrapeSourceStateLabel(l10n, sourceResult.state),
+            detail: sourceResult?.error?.toString(),
+          ),
+        ),
+      );
+    }
+    if (rows.isEmpty) {
+      rows.add(_ScrapeEmptyState(text: l10n.scrapeStatusUnavailable));
+    }
+    rows.add(
+      _ScrapeSummary(
+        saved: result.saved,
+        excluded: result.excluded,
+        failed: result.failed,
+      ),
+    );
+    if (result.failedWorks.isNotEmpty) {
+      rows.add(const SizedBox(height: 16));
+      rows.add(
+        Text(
+          l10n.scrapeFailedWorksTitle(result.failedWorks.length),
+          style: Theme.of(context).textTheme.titleSmall,
+        ),
+      );
+      rows.add(const SizedBox(height: 8));
+      rows.add(
+        _ScrapeFailureList(
+          children: [
+            for (final failure in result.failedWorks)
+              _ScrapeFailureRow(
+                code: failure.code,
+                reason: _scrapeFailureReasonLabel(l10n, failure.reason),
+                error: failure.error,
+              ),
+          ],
+        ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: rows,
+    );
+  }
+}
+
+class _ScrapeResultDownloadBody extends StatelessWidget {
+  const _ScrapeResultDownloadBody({required this.result});
+
+  final WorksScrapeResult result;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final failures = result.imageFailures;
+    final status = result.cancelled
+        ? l10n.scrapeStatusCancelled
+        : failures.isEmpty
+        ? l10n.scrapeStatusCompleted
+        : l10n.scrapeStatusPartial;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _ScrapeSourceRow(
+          label: l10n.scrapeImagesLabel,
+          status: status,
+          detail: failures.isEmpty
+              ? null
+              : l10n.scrapeImageFailuresTitle(failures.length),
+        ),
+        if (failures.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          _ScrapeFailureList(
+            children: [
+              for (final failure in failures)
+                _ScrapeFailureRow(
+                  code: failure.code,
+                  reason: _scrapeImageFailureLabel(l10n, failure.variants),
+                ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ScrapeDialogHeading extends StatelessWidget {
+  const _ScrapeDialogHeading({required this.title, this.subtitle});
+
+  final String title;
+  final String? subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          title,
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            subtitle!,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ScrapeDialogViewport extends StatelessWidget {
+  const _ScrapeDialogViewport({required this.child, super.key});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxWidth: 640,
+        maxHeight: MediaQuery.sizeOf(context).height * 0.68,
+      ),
+      child: SingleChildScrollView(child: child),
+    );
+  }
+}
+
+class _ScrapeSection extends StatelessWidget {
+  const _ScrapeSection({
+    required this.title,
+    required this.child,
+    this.titleKey,
+  });
+
+  final String title;
+  final Widget child;
+  final Key? titleKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final tokens = AppLayoutPolicy.resolve(
+      BoxConstraints.tightFor(width: width),
+    );
+    final theme = Theme.of(context);
+    return Padding(
+      padding: EdgeInsets.only(top: tokens.sectionGap),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Divider(
+            height: tokens.sectionGap,
+            color: theme.colorScheme.outline.withValues(alpha: 0.35),
+          ),
+          Text(
+            title,
+            key: titleKey,
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 10),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _ScrapeSourceProgressRow extends StatelessWidget {
+  const _ScrapeSourceProgressRow({
+    required this.source,
+    required this.value,
+    required this.progress,
+    required this.isActive,
+  });
+
+  final ScrapeSourceId source;
+  final WorksScrapeProgress? value;
+  final WorksScrapeSourceProgress? progress;
+  final bool isActive;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final total = progress?.total ?? 0;
+    final current = _scrapeSafeProgressCurrent(progress?.current ?? 0, total);
+    final hasCount = total > 0;
+    return _ScrapeSourceRow(
+      label: _scrapeSourceLabel(l10n, source),
+      status: _scrapeWorkProgressStatus(l10n, value, progress, isActive),
+      count: hasCount ? '$current / $total' : null,
+      countKey: isActive && hasCount
+          ? const Key('scrape-progress-count')
+          : null,
+      progressValue: hasCount
+          ? _scrapeProgressValue(progress?.current ?? 0, total)
+          : null,
+    );
+  }
+}
+
+class _ScrapeSourceRow extends StatelessWidget {
+  const _ScrapeSourceRow({
+    required this.label,
+    required this.status,
+    this.count,
+    this.countKey,
+    this.detail,
+    this.detailKey,
+    this.progressValue,
+    this.indeterminateProgress = false,
+  });
+
+  final String label;
+  final String status;
+  final String? count;
+  final Key? countKey;
+  final String? detail;
+  final Key? detailKey;
+  final double? progressValue;
+  final bool indeterminateProgress;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: Text(label, style: theme.textTheme.bodyMedium)),
+            const SizedBox(width: 12),
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    status,
+                    textAlign: TextAlign.end,
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                  if (count != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      count!,
+                      key: countKey,
+                      textAlign: TextAlign.end,
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+        if (progressValue != null || indeterminateProgress) ...[
+          const SizedBox(height: 8),
+          LinearProgressIndicator(value: progressValue, minHeight: 4),
+        ],
+        if (detail != null && detail!.trim().isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            detail!,
+            key: detailKey,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ScrapeSummary extends StatelessWidget {
+  const _ScrapeSummary({
+    required this.saved,
+    required this.excluded,
+    required this.failed,
+    super.key,
+  });
+
+  final int saved;
+  final int excluded;
+  final int failed;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Wrap(
+      spacing: 18,
+      runSpacing: 8,
+      children: [
+        _ScrapeMetric(label: l10n.scrapeSavedCount, value: saved),
+        _ScrapeMetric(label: l10n.scrapeExcludedCount, value: excluded),
+        _ScrapeMetric(label: l10n.scrapeFailedCount, value: failed),
+      ],
+    );
+  }
+}
+
+class _ScrapeMetric extends StatelessWidget {
+  const _ScrapeMetric({required this.label, required this.value});
+
+  final String label;
+  final int value;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          value.toString(),
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        Text(
+          label,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ScrapeEmptyState extends StatelessWidget {
+  const _ScrapeEmptyState({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(text, style: Theme.of(context).textTheme.bodySmall);
+  }
+}
+
+class _ScrapeFailureList extends StatelessWidget {
+  const _ScrapeFailureList({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var index = 0; index < children.length; index++) ...[
+          if (index > 0) const SizedBox(height: 8),
+          children[index],
+        ],
+      ],
+    );
+  }
+}
+
+class _ScrapeFailureRow extends StatelessWidget {
+  const _ScrapeFailureRow({
+    required this.code,
+    required this.reason,
+    this.error,
+  });
+
+  final String code;
+  final String reason;
+  final Object? error;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(code, style: theme.textTheme.bodyMedium),
+        Text(
+          reason,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        if (error != null)
+          Text(
+            error.toString(),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+const _scrapeDialogRadius = 28.0;
+
+double _scrapeDialogPadding(BuildContext context) {
+  final width = MediaQuery.sizeOf(context).width;
+  final tokens = AppLayoutPolicy.resolve(BoxConstraints.tightFor(width: width));
+  return tokens.isCompact ? 20 : 24;
+}
+
+int _scrapeSafeProgressCurrent(int current, int total) {
+  final nonNegative = current < 0 ? 0 : current;
+  if (total <= 0) {
+    return nonNegative;
+  }
+  return nonNegative.clamp(0, total).toInt();
+}
+
+double _scrapeProgressValue(int current, int total) {
+  if (total <= 0) {
+    return 0;
+  }
+  return _scrapeSafeProgressCurrent(current, total) / total;
+}
+
+String _scrapeResultTitle(AppLocalizations l10n, WorksScrapeResult? result) {
+  if (result == null) {
+    return l10n.scrapeSyncFailed;
+  }
+  if (result.cancelled) {
+    return l10n.scrapeSyncStopped;
+  }
+  final hasWorkFailure = result.failed > 0;
+  final hasSourceFailure = result.sourceResults.values.any(
+    (source) =>
+        source.state != ScrapeSourceRunState.success &&
+        source.state != ScrapeSourceRunState.zeroResults,
+  );
+  if ((hasWorkFailure || hasSourceFailure) &&
+      result.saved == 0 &&
+      result.excluded == 0) {
+    return l10n.scrapeSyncFailed;
+  }
+  final hasPartialState =
+      result.partialSuccess ||
+      result.imageFailures.isNotEmpty ||
+      hasSourceFailure;
+  return hasPartialState ? l10n.scrapeSyncPartial : l10n.scrapeSyncCompleted;
+}
+
+ScrapeSourceId? _resultDetailsSource(WorksScrapeResult result) {
+  if (result.detailsSource != null) {
+    return result.detailsSource;
+  }
+  if (result.sourceResults.containsKey(ScrapeSourceId.minnanoAv) &&
+      !result.worksSources.contains(ScrapeSourceId.minnanoAv)) {
+    return ScrapeSourceId.minnanoAv;
+  }
+  return null;
+}
+
+List<ScrapeSourceId> _resultWorksSources(
+  WorksScrapeResult result,
+  ScrapeSourceId? detailsSource,
+) {
+  if (result.worksSources.isNotEmpty) {
+    return result.worksSources;
+  }
+  return result.sourceResults.keys
+      .where((source) => source != detailsSource)
+      .toList(growable: false);
+}
+
+String _scrapeDetailsProgressStatus(
+  AppLocalizations l10n,
+  WorksScrapeProgress? value,
+  ScrapeSourceId source,
+  WorksScrapeSourceProgress? progress,
+) {
+  if (value == null ||
+      value.phase.index < WorksScrapePhase.syncingActress.index) {
+    return l10n.scrapeStatusWaiting;
+  }
+  if (value.phase == WorksScrapePhase.syncingActress &&
+      (value.source == source ||
+          progress?.phase == WorksScrapePhase.syncingActress)) {
+    return l10n.scrapeStatusSyncing;
+  }
+  if (value.phase.index > WorksScrapePhase.syncingActress.index) {
+    return l10n.scrapeStatusCompleted;
+  }
+  return l10n.scrapeStatusWaiting;
+}
+
+String _scrapeWorkProgressStatus(
+  AppLocalizations l10n,
+  WorksScrapeProgress? value,
+  WorksScrapeSourceProgress? progress,
+  bool isActive,
+) {
+  if (value == null || progress == null) {
+    return l10n.scrapeStatusWaiting;
+  }
+  if (value.phase == WorksScrapePhase.completed) {
+    return l10n.scrapeStatusCompleted;
+  }
+  if (isActive) {
+    return l10n.scrapeStatusSyncing;
+  }
+  if (value.phase.index > progress.phase.index) {
+    return l10n.scrapeStatusCompleted;
+  }
+  return _scrapePhaseLabel(l10n, progress.phase);
+}
+
+String _scrapeSourceStateLabel(
+  AppLocalizations l10n,
+  ScrapeSourceRunState state, {
+  bool isDetailsSource = false,
+}) {
   return switch (state) {
-    ScrapeSourceRunState.success => '成功',
-    ScrapeSourceRunState.zeroResults => '完成，沒有作品',
-    ScrapeSourceRunState.partial => '部分成功，另有頁面失敗',
-    ScrapeSourceRunState.unavailable => '未設定',
-    ScrapeSourceRunState.failed => '失敗',
-    ScrapeSourceRunState.cancelled => '已取消',
-    ScrapeSourceRunState.verificationRequired => '需要驗證',
-    ScrapeSourceRunState.blocked => '頁面被阻擋',
-    ScrapeSourceRunState.rateLimited => '被限流',
-    ScrapeSourceRunState.timedOut => '逾時',
+    ScrapeSourceRunState.success => l10n.scrapeStatusCompleted,
+    ScrapeSourceRunState.zeroResults =>
+      isDetailsSource
+          ? l10n.scrapeStatusCompleted
+          : l10n.scrapeStatusNoNewWorks,
+    ScrapeSourceRunState.partial => l10n.scrapeStatusPartial,
+    ScrapeSourceRunState.unavailable => l10n.scrapeStatusUnavailable,
+    ScrapeSourceRunState.failed => l10n.scrapeStatusFailed,
+    ScrapeSourceRunState.cancelled => l10n.scrapeStatusCancelled,
+    ScrapeSourceRunState.verificationRequired =>
+      l10n.scrapeSourceVerificationRequired,
+    ScrapeSourceRunState.blocked => l10n.scrapeStatusBlocked,
+    ScrapeSourceRunState.rateLimited => l10n.scrapeStatusRateLimited,
+    ScrapeSourceRunState.timedOut => l10n.scrapeStatusTimedOut,
   };
 }
 

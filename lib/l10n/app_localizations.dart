@@ -673,6 +673,12 @@ abstract class AppLocalizations {
   /// **'作品'**
   String get works;
 
+  /// No description provided for @relatedActresses.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'關聯演員'**
+  String get relatedActresses;
+
   /// No description provided for @aliases.
   ///
   /// In zh_TW, this message translates to:
@@ -930,6 +936,156 @@ abstract class AppLocalizations {
   /// In zh_TW, this message translates to:
   /// **'刮削完成'**
   String get scrapePhaseCompleted;
+
+  /// No description provided for @scrapeSyncingTitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'正在同步'**
+  String get scrapeSyncingTitle;
+
+  /// No description provided for @scrapeSyncCompleted.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'同步完成'**
+  String get scrapeSyncCompleted;
+
+  /// No description provided for @scrapeSyncPartial.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'同步完成，但有部分項目失敗'**
+  String get scrapeSyncPartial;
+
+  /// No description provided for @scrapeSyncFailed.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'同步失敗'**
+  String get scrapeSyncFailed;
+
+  /// No description provided for @scrapeSyncStopped.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'已停止同步'**
+  String get scrapeSyncStopped;
+
+  /// No description provided for @scrapeDetailsSection.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'詳細資料'**
+  String get scrapeDetailsSection;
+
+  /// No description provided for @scrapeWorksSection.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'作品'**
+  String get scrapeWorksSection;
+
+  /// No description provided for @scrapeDownloadSection.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'下載'**
+  String get scrapeDownloadSection;
+
+  /// No description provided for @scrapeCurrentWork.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'目前處理：{code}'**
+  String scrapeCurrentWork(String code);
+
+  /// No description provided for @scrapeImagesLabel.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'作品圖片'**
+  String get scrapeImagesLabel;
+
+  /// No description provided for @scrapeSavedCount.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'已儲存'**
+  String get scrapeSavedCount;
+
+  /// No description provided for @scrapeExcludedCount.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'排除'**
+  String get scrapeExcludedCount;
+
+  /// No description provided for @scrapeFailedCount.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'失敗'**
+  String get scrapeFailedCount;
+
+  /// No description provided for @scrapeStatusWaiting.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'等待中'**
+  String get scrapeStatusWaiting;
+
+  /// No description provided for @scrapeStatusSyncing.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'同步中'**
+  String get scrapeStatusSyncing;
+
+  /// No description provided for @scrapeStatusCompleted.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'完成'**
+  String get scrapeStatusCompleted;
+
+  /// No description provided for @scrapeStatusPartial.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'部分完成'**
+  String get scrapeStatusPartial;
+
+  /// No description provided for @scrapeStatusFailed.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'失敗'**
+  String get scrapeStatusFailed;
+
+  /// No description provided for @scrapeStatusCancelled.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'已停止'**
+  String get scrapeStatusCancelled;
+
+  /// No description provided for @scrapeStatusNoNewWorks.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'完成，無新增作品'**
+  String get scrapeStatusNoNewWorks;
+
+  /// No description provided for @scrapeStatusUnavailable.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'無法使用'**
+  String get scrapeStatusUnavailable;
+
+  /// No description provided for @scrapeStatusBlocked.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'頁面被阻擋'**
+  String get scrapeStatusBlocked;
+
+  /// No description provided for @scrapeStatusRateLimited.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'被限流'**
+  String get scrapeStatusRateLimited;
+
+  /// No description provided for @scrapeStatusTimedOut.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'逾時'**
+  String get scrapeStatusTimedOut;
+
+  /// No description provided for @stopScrape.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'停止'**
+  String get stopScrape;
 
   /// No description provided for @scrapeProgressSummary.
   ///

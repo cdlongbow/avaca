@@ -2,6 +2,7 @@ import 'package:html/dom.dart';
 import 'package:html/parser.dart' as html;
 
 import '../../models/scraped_actress_details.dart';
+import '../../models/work.dart';
 import 'javbus_models.dart';
 import 'work_code.dart';
 
@@ -59,6 +60,7 @@ class JavBusHtmlParser {
         )
         .trim();
 
+    final performers = _actressPerformers(document, pageUri);
     return JavBusWorkDetails(
       code: code,
       rawCode: rawCode,
@@ -68,6 +70,7 @@ class JavBusHtmlParser {
       studio: _field(fields, const ['製作商', '制作商', 'メーカー']),
       publisher: _field(fields, const ['發行商', '发行商', 'レーベル']),
       series: _field(fields, const ['系列', 'シリーズ']),
+      performers: performers,
       actressUris: _actressUris(document, pageUri),
       originalImageEvidenceUris: _originalImageEvidenceUris(
         document,
@@ -107,6 +110,45 @@ class JavBusHtmlParser {
         final uri = pageUri.resolve(href);
         if (seen.add(uri.toString())) {
           result.add(uri);
+        }
+      }
+    }
+    return List.unmodifiable(result);
+  }
+
+  List<WorkPerformer>? _actressPerformers(Document document, Uri pageUri) {
+    final info = document.querySelector('.info');
+    if (info == null) {
+      return null;
+    }
+    final children = info.children;
+    final headerIndex = children.indexWhere((element) {
+      final header = element.querySelector('.header');
+      final key = header?.text.replaceAll(RegExp(r'[:：\s]'), '') ?? '';
+      return const {'演員', '演员', '出演者'}.contains(key);
+    });
+    if (headerIndex < 0) {
+      return null;
+    }
+
+    final result = <WorkPerformer>[];
+    final seenNames = <String>{};
+    for (final element in children.skip(headerIndex + 1)) {
+      final nextHeader = element.querySelector('.header');
+      if (nextHeader != null) {
+        break;
+      }
+      for (final anchor in element.querySelectorAll('a[href*="/star/"]')) {
+        final name = _clean(anchor.text);
+        final href = _clean(anchor.attributes['href']);
+        if (name == null || href == null) {
+          continue;
+        }
+        final key = name.toLowerCase();
+        if (seenNames.add(key)) {
+          result.add(
+            WorkPerformer(name: name, sourceUri: pageUri.resolve(href)),
+          );
         }
       }
     }

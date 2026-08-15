@@ -303,6 +303,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get works => 'Works';
 
   @override
+  String get relatedActresses => 'Related actresses';
+
+  @override
   String get aliases => 'Aliases';
 
   @override
@@ -443,6 +446,83 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get scrapePhaseCompleted => 'Scrape complete';
+
+  @override
+  String get scrapeSyncingTitle => 'Syncing';
+
+  @override
+  String get scrapeSyncCompleted => 'Sync complete';
+
+  @override
+  String get scrapeSyncPartial => 'Sync complete with some failures';
+
+  @override
+  String get scrapeSyncFailed => 'Sync failed';
+
+  @override
+  String get scrapeSyncStopped => 'Sync stopped';
+
+  @override
+  String get scrapeDetailsSection => 'Details';
+
+  @override
+  String get scrapeWorksSection => 'Works';
+
+  @override
+  String get scrapeDownloadSection => 'Downloads';
+
+  @override
+  String scrapeCurrentWork(String code) {
+    return 'Currently processing: $code';
+  }
+
+  @override
+  String get scrapeImagesLabel => 'Work images';
+
+  @override
+  String get scrapeSavedCount => 'Saved';
+
+  @override
+  String get scrapeExcludedCount => 'Excluded';
+
+  @override
+  String get scrapeFailedCount => 'Failed';
+
+  @override
+  String get scrapeStatusWaiting => 'Waiting';
+
+  @override
+  String get scrapeStatusSyncing => 'In progress';
+
+  @override
+  String get scrapeStatusCompleted => 'Complete';
+
+  @override
+  String get scrapeStatusPartial => 'Partial';
+
+  @override
+  String get scrapeStatusFailed => 'Failed';
+
+  @override
+  String get scrapeStatusCancelled => 'Stopped';
+
+  @override
+  String get scrapeStatusNoNewWorks => 'Complete, no new works';
+
+  @override
+  String get scrapeStatusUnavailable => 'Unavailable';
+
+  @override
+  String get scrapeStatusBlocked => 'Page blocked';
+
+  @override
+  String get scrapeStatusRateLimited => 'Rate limited';
+
+  @override
+  String get scrapeStatusTimedOut => 'Timed out';
+
+  @override
+  String get stopScrape => 'Stop';
 
   @override
   String scrapeProgressSummary(int saved, int excluded, int failed) {

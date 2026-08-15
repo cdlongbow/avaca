@@ -8,6 +8,7 @@ import 'package:path/path.dart' as path;
 import '../core/database.dart';
 import '../models/scrape_source_settings.dart';
 import '../models/scraped_actress_details.dart';
+import '../models/work.dart';
 import '../models/work_scrape_options.dart';
 import 'javbus/javbus_client.dart';
 import 'javbus/javbus_scrape_source.dart';
@@ -155,6 +156,8 @@ class WorksScrapeProgress {
     this.source,
     this.workCode,
     this.sourceProgress = const {},
+    this.detailsSource,
+    this.worksSources = const [],
   });
 
   final WorksScrapePhase phase;
@@ -166,6 +169,18 @@ class WorksScrapeProgress {
   final ScrapeSourceId? source;
   final String? workCode;
   final Map<ScrapeSourceId, WorksScrapeSourceProgress> sourceProgress;
+
+  /// The source currently responsible for actress profile synchronization.
+  ///
+  /// This is presentation metadata. It keeps a details-only source from being
+  /// rendered as a work source when the same source run result has no works.
+  final ScrapeSourceId? detailsSource;
+
+  /// Sources that participate in the aggregate work pipeline.
+  ///
+  /// The list is intentionally source-oriented so adding another works source
+  /// only adds another row to the dialog.
+  final List<ScrapeSourceId> worksSources;
 }
 
 class WorksScrapeResult {
@@ -179,6 +194,8 @@ class WorksScrapeResult {
     this.sourceResults = const {},
     this.failedWorks = const [],
     this.imageFailures = const [],
+    this.detailsSource,
+    this.worksSources = const [],
   });
 
   final int saved;
@@ -190,6 +207,12 @@ class WorksScrapeResult {
   final Map<ScrapeSourceId, ScrapeSourceRunResult> sourceResults;
   final List<WorksScrapeFailure> failedWorks;
   final List<WorksScrapeImageFailure> imageFailures;
+
+  /// The source that supplied actress details, separate from work sources.
+  final ScrapeSourceId? detailsSource;
+
+  /// Work sources whose results were merged into the aggregate counters.
+  final List<ScrapeSourceId> worksSources;
 }
 
 class WorksScrapeException implements Exception {
@@ -230,6 +253,8 @@ class WorksScrapeService {
   final Duration javBusDetailDelay;
   final int imageDownloadConcurrency;
   final Map<ScrapeSourceId, WorksScrapeSourceProgress> _sourceProgress = {};
+  ScrapeSourceId? _detailsSource;
+  List<ScrapeSourceId> _worksSources = const [];
 
   static Map<ScrapeSourceId, ScrapeSource> _legacySources(
     JavBusClient? client,
@@ -266,6 +291,8 @@ class WorksScrapeService {
     void Function(WorksScrapeProgress progress)? onProgress,
   }) async {
     _sourceProgress.clear();
+    _detailsSource = null;
+    _worksSources = const [];
     final name = actressName.trim();
     if (name.isEmpty) {
       throw const WorksScrapeException('Actress name is empty.');
@@ -284,6 +311,8 @@ class WorksScrapeService {
     final requestedWorkIds = ScrapeSourceRegistry.resolveWorksSources(
       settings.worksSource,
     );
+    _detailsSource = settings.actressDetailsSource;
+    _worksSources = List.unmodifiable(requestedWorkIds);
     final sourceResults = <ScrapeSourceId, ScrapeSourceRunResult>{};
     final collectedById = <ScrapeSourceId, _CollectedSource>{};
     final collectionFutures =
@@ -400,6 +429,8 @@ class WorksScrapeService {
           failed: 0,
           cancelled: true,
           sourceResults: Map.unmodifiable(sourceResults),
+          detailsSource: _detailsSource,
+          worksSources: _worksSources,
         );
       }
       final details = _mergeActressPages(
@@ -421,6 +452,8 @@ class WorksScrapeService {
           cancelled: true,
           actressImageStatus: actressImageStatus,
           sourceResults: Map.unmodifiable(sourceResults),
+          detailsSource: _detailsSource,
+          worksSources: _worksSources,
         );
       }
     }
@@ -447,6 +480,8 @@ class WorksScrapeService {
         cancelled: true,
         actressImageStatus: actressImageStatus,
         sourceResults: Map.unmodifiable(sourceResults),
+        detailsSource: _detailsSource,
+        worksSources: _worksSources,
       );
     }
 
@@ -508,6 +543,8 @@ class WorksScrapeService {
         actressImageStatus: actressImageStatus,
         partialSuccess: true,
         sourceResults: Map.unmodifiable(sourceResults),
+        detailsSource: _detailsSource,
+        worksSources: _worksSources,
       );
     }
 
@@ -767,6 +804,8 @@ class WorksScrapeService {
       sourceResults: Map.unmodifiable(sourceResults),
       failedWorks: List.unmodifiable(failedWorks),
       imageFailures: List.unmodifiable(imageFailures),
+      detailsSource: _detailsSource,
+      worksSources: _worksSources,
     );
   }
 
@@ -1238,6 +1277,8 @@ class WorksScrapeService {
         actressImageStatus: actressImageStatus,
         partialSuccess: true,
         sourceResults: Map.unmodifiable(sourceResults),
+        detailsSource: _detailsSource,
+        worksSources: _worksSources,
       );
     }
     final saved = streamedOutcomes
@@ -1295,6 +1336,8 @@ class WorksScrapeService {
             .whereType<WorksScrapeFailure>(),
       ),
       imageFailures: List.unmodifiable(imageFailures),
+      detailsSource: _detailsSource,
+      worksSources: _worksSources,
     );
   }
 
@@ -1715,11 +1758,17 @@ class WorksScrapeService {
         fallbackReleaseDate: details.releaseDate,
       );
     }
+    final performerSource = details.source == ScrapeSourceId.javbus
+        ? details.source.storageValue
+        : null;
+    final performers = performerSource == null ? null : details.performers;
     final prepared = await db.runManagedImageLifecycle(() async {
       final workId = await db.upsertActressWork(
         actressId: actressId,
         work: details.toWork(),
         missingOnly: missingOnly,
+        performerSource: performerSource,
+        performers: performers,
       );
       final current = await db.getWorkById(workId);
       return _PreparedWorkImage(
@@ -1783,6 +1832,8 @@ class WorksScrapeService {
         actressId: actressId,
         work: work,
         missingOnly: missingOnly,
+        performerSource: performerSource,
+        performers: performers,
       ),
     );
     return _WorkImageSaveResult(
@@ -1847,6 +1898,7 @@ class WorksScrapeService {
       publisher: details.publisher,
       series: details.series,
       performerCount: details.performerCount,
+      performers: details.performers,
       imageUris: details.imageUris,
       originalImageEvidenceUris: details.originalImageEvidenceUris,
     );
@@ -1883,6 +1935,22 @@ class WorksScrapeService {
         performerCount = value;
       }
     }
+    List<WorkPerformer>? performers;
+    final performerKeys = <String>{};
+    for (final item in details) {
+      final sourcePerformers = item.performers;
+      if (sourcePerformers == null) {
+        continue;
+      }
+      performers ??= <WorkPerformer>[];
+      for (final performer in sourcePerformers) {
+        final name = performer.name.trim();
+        final key = name.toLowerCase();
+        if (name.isNotEmpty && performerKeys.add(key)) {
+          performers.add(performer);
+        }
+      }
+    }
     final imageUris = <Uri>[];
     final imageKeys = <String>{};
     final evidenceUris = <Uri>[];
@@ -1910,6 +1978,7 @@ class WorksScrapeService {
       publisher: firstText((item) => item.publisher),
       series: firstText((item) => item.series),
       performerCount: performerCount,
+      performers: performers == null ? null : List.unmodifiable(performers),
       imageUris: List.unmodifiable(imageUris),
       originalImageEvidenceUris: List.unmodifiable(evidenceUris),
     );
@@ -1957,6 +2026,8 @@ class WorksScrapeService {
         source: source,
         workCode: workCode,
         sourceProgress: Map.unmodifiable(_sourceProgress),
+        detailsSource: _detailsSource,
+        worksSources: _worksSources,
       ),
     );
   }

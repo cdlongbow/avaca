@@ -112,7 +112,10 @@ class GoldenFixtureDatabase extends AppDatabase {
   }
 
   @override
-  Future<Map<String, Object?>?> getWorkById(int workId) async {
+  Future<Map<String, Object?>?> getWorkById(
+    int workId, {
+    int? currentActressId,
+  }) async {
     for (final work in await getWorksForActress(1)) {
       if (work['id'] == workId) return work;
     }

@@ -73,6 +73,153 @@ void main() {
     });
 
     test(
+      'stores source-scoped performers and resolves canonical names and aliases',
+      () async {
+        await database.addActress(name: '谷村凪咲');
+        await database.addActress(name: '另一位女優');
+        final sqlite = await database.database;
+        final rows = await sqlite.query(
+          'actresses',
+          columns: ['id', 'name'],
+          orderBy: 'id ASC',
+        );
+        final canonicalId =
+            rows.singleWhere((row) => row['name'] == '谷村凪咲')['id'] as int;
+        final aliasOwnerId =
+            rows.singleWhere((row) => row['name'] == '另一位女優')['id'] as int;
+        await database.replaceActressAliases(
+          actressId: aliasOwnerId,
+          aliases: const ['谷村別名', '重名'],
+        );
+        await database.replaceActressAliases(
+          actressId: actressId,
+          aliases: const ['重名'],
+        );
+
+        final workId = await database.upsertActressWork(
+          actressId: actressId,
+          work: const Work(code: 'MULTI-001', title: '多人作品'),
+          performerSource: 'javbus',
+          performers: [
+            WorkPerformer(
+              name: '涼森れむ',
+              sourceUri: Uri.parse('https://www.javbus.com/star/remu'),
+            ),
+            WorkPerformer(
+              name: '谷村凪咲',
+              sourceUri: Uri.parse('https://www.javbus.com/star/tanimura'),
+            ),
+            WorkPerformer(
+              name: '谷村別名',
+              sourceUri: Uri.parse('https://www.javbus.com/star/alias'),
+            ),
+            const WorkPerformer(name: '重名'),
+            const WorkPerformer(name: '重名'),
+          ],
+        );
+        await database.upsertActressWork(
+          actressId: actressId,
+          work: const Work(code: 'MULTI-001', title: '多人作品'),
+          performerSource: 'other',
+          performers: const [WorkPerformer(name: '其他來源演員')],
+        );
+
+        final first = await database.getWorkById(workId);
+        final performers = (first?['related_performers']! as List)
+            .cast<Map<String, Object?>>();
+        expect(performers, hasLength(5));
+        expect(
+          performers.map((performer) => performer['name']),
+          containsAll(['涼森れむ', '谷村凪咲', '谷村別名', '重名', '其他來源演員']),
+        );
+        expect(
+          performers.singleWhere(
+            (performer) => performer['name'] == '涼森れむ',
+          )['actress_id'],
+          actressId,
+        );
+        expect(
+          performers.singleWhere(
+            (performer) => performer['name'] == '谷村凪咲',
+          )['actress_id'],
+          canonicalId,
+        );
+        expect(
+          performers.singleWhere(
+            (performer) => performer['name'] == '谷村別名',
+          )['actress_id'],
+          aliasOwnerId,
+        );
+        expect(
+          performers.singleWhere(
+            (performer) => performer['name'] == '重名',
+          )['actress_id'],
+          isNull,
+        );
+        expect(
+          performers.singleWhere(
+            (performer) => performer['name'] == '其他來源演員',
+          )['source'],
+          'other',
+        );
+
+        await database.upsertActressWork(
+          actressId: actressId,
+          work: const Work(code: 'MULTI-001', title: '多人作品'),
+          performerSource: 'javbus',
+          performers: const [],
+        );
+        final afterClear = await database.getWorkById(workId);
+        final remaining = (afterClear?['related_performers']! as List)
+            .cast<Map<String, Object?>>();
+        expect(remaining, hasLength(1));
+        expect(remaining.single['name'], '其他來源演員');
+
+        await database.upsertActressWork(
+          actressId: actressId,
+          work: const Work(code: 'MULTI-001', title: '多人作品'),
+          performerSource: 'other',
+          performers: null,
+        );
+        expect(
+          ((await database.getWorkById(workId))!['related_performers']! as List)
+              .cast<Map<String, Object?>>(),
+          hasLength(1),
+        );
+
+        await database.upsertActressWork(
+          actressId: actressId,
+          work: const Work(code: 'MULTI-001', title: '多人作品'),
+          performerSource: 'javbus',
+          performers: const [
+            WorkPerformer(name: '涼森れむ'),
+            WorkPerformer(name: '重名'),
+            WorkPerformer(name: '谷村凪咲'),
+          ],
+        );
+        final currentActressView = await database.getWorkById(
+          workId,
+          currentActressId: actressId,
+        );
+        final currentActressPerformers =
+            (currentActressView?['related_performers']! as List)
+                .cast<Map<String, Object?>>();
+        expect(
+          currentActressPerformers.map((performer) => performer['name']),
+          containsAll(['谷村凪咲', '其他來源演員']),
+        );
+        expect(
+          currentActressPerformers.map((performer) => performer['name']),
+          isNot(contains('涼森れむ')),
+        );
+        expect(
+          currentActressPerformers.map((performer) => performer['name']),
+          isNot(contains('重名')),
+        );
+      },
+    );
+
+    test(
       'deduplicates codes and actress links without case sensitivity',
       () async {
         final firstId = await database.upsertActressWork(

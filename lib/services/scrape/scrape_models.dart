@@ -60,6 +60,7 @@ final class ScrapeWorkDetails {
     this.publisher,
     this.series,
     this.performerCount,
+    this.performers,
     this.imageUris = const [],
     this.originalImageEvidenceUris = const [],
   });
@@ -74,6 +75,7 @@ final class ScrapeWorkDetails {
   final String? publisher;
   final String? series;
   final int? performerCount;
+  final List<WorkPerformer>? performers;
   final List<Uri> imageUris;
   final List<Uri> originalImageEvidenceUris;
 

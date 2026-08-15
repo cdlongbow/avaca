@@ -296,7 +296,7 @@ void main() {
       await tester.tap(find.byType(FilledButton).last);
       await tester.pump();
 
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.byType(LinearProgressIndicator), findsOneWidget);
       await expectLater(
         find.byType(Scaffold),
         matchesGoldenFile('goldens/compact/works-scrape.png'),

@@ -1,3 +1,10 @@
+class WorkPerformer {
+  const WorkPerformer({required this.name, this.sourceUri});
+
+  final String name;
+  final Uri? sourceUri;
+}
+
 class Work {
   const Work({
     required this.code,

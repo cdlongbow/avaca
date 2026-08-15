@@ -572,6 +572,16 @@ class AppDatabase {
       )
     ''');
     await db.execute('''
+      CREATE TABLE IF NOT EXISTS work_performers (
+        work_id INTEGER NOT NULL,
+        source TEXT NOT NULL,
+        name TEXT NOT NULL COLLATE NOCASE,
+        source_uri TEXT,
+        PRIMARY KEY (work_id, source, name),
+        FOREIGN KEY (work_id) REFERENCES works(id) ON DELETE CASCADE
+      )
+    ''');
+    await db.execute('''
       CREATE TABLE IF NOT EXISTS actress_aliases (
         actress_id INTEGER NOT NULL,
         alias TEXT NOT NULL COLLATE NOCASE,
@@ -773,7 +783,10 @@ class AppDatabase {
   }
 
   // 依作品 id 取得詳細資料。
-  Future<Map<String, Object?>?> getWorkById(int workId) async {
+  Future<Map<String, Object?>?> getWorkById(
+    int workId, {
+    int? currentActressId,
+  }) async {
     final db = await database;
     final rows = await db.query(
       'works',
@@ -782,7 +795,97 @@ class AppDatabase {
       whereArgs: [workId],
       limit: 1,
     );
-    return rows.isEmpty ? null : rows.first;
+    if (rows.isEmpty) {
+      return null;
+    }
+    final work = Map<String, Object?>.from(rows.first);
+    work['related_performers'] = await _getRelatedPerformers(
+      db,
+      workId,
+      currentActressId: currentActressId,
+    );
+    return work;
+  }
+
+  Future<List<Map<String, Object?>>> _getRelatedPerformers(
+    DatabaseExecutor executor,
+    int workId,
+    {int? currentActressId}
+  ) async {
+    final rows = await executor.query(
+      'work_performers',
+      columns: ['name', 'source', 'source_uri'],
+      where: 'work_id = ?',
+      whereArgs: [workId],
+      orderBy: 'name COLLATE NOCASE ASC',
+    );
+    final currentActressNames = <String>{};
+    if (currentActressId != null) {
+      final currentRows = await executor.query(
+        'actresses',
+        columns: ['name'],
+        where: 'id = ?',
+        whereArgs: [currentActressId],
+        limit: 1,
+      );
+      final currentName = currentRows.firstOrNull?['name']?.toString().trim();
+      if (currentName != null && currentName.isNotEmpty) {
+        currentActressNames.add(currentName.toLowerCase());
+      }
+      final aliasRows = await executor.query(
+        'actress_aliases',
+        columns: ['alias'],
+        where: 'actress_id = ?',
+        whereArgs: [currentActressId],
+      );
+      for (final aliasRow in aliasRows) {
+        final alias = aliasRow['alias']?.toString().trim();
+        if (alias != null && alias.isNotEmpty) {
+          currentActressNames.add(alias.toLowerCase());
+        }
+      }
+    }
+    final result = <Map<String, Object?>>[];
+    for (final row in rows) {
+      final name = row['name']?.toString().trim() ?? '';
+      if (name.isEmpty) {
+        continue;
+      }
+      if (currentActressNames.contains(name.toLowerCase())) {
+        continue;
+      }
+      final canonicalRows = await executor.query(
+        'actresses',
+        columns: ['id'],
+        where: 'name = ? COLLATE NOCASE',
+        whereArgs: [name],
+      );
+      int? actressId;
+      if (canonicalRows.length == 1) {
+        actressId = canonicalRows.single['id'] as int;
+      } else if (canonicalRows.isEmpty) {
+        final aliasRows = await executor.rawQuery(
+          '''
+          SELECT DISTINCT a.id
+          FROM actresses a
+          INNER JOIN actress_aliases aa ON aa.actress_id = a.id
+          WHERE aa.alias = ? COLLATE NOCASE
+          ORDER BY a.id ASC
+          ''',
+          [name],
+        );
+        if (aliasRows.length == 1) {
+          actressId = aliasRows.single['id'] as int;
+        }
+      }
+      result.add({
+        'name': name,
+        'source': row['source'],
+        'source_uri': row['source_uri'],
+        'actress_id': actressId,
+      });
+    }
+    return List.unmodifiable(result);
   }
 
   // 計算指定女優目前在本機建立關聯的作品數。
@@ -811,6 +914,8 @@ class AppDatabase {
     required int actressId,
     required Work work,
     bool missingOnly = false,
+    String? performerSource,
+    Iterable<WorkPerformer>? performers,
   }) async {
     return runManagedImageLifecycle(() async {
       final db = await database;
@@ -824,9 +929,43 @@ class AppDatabase {
           'actress_id': actressId,
           'work_id': workId,
         }, conflictAlgorithm: ConflictAlgorithm.ignore);
+        if (performerSource != null && performers != null) {
+          await _replaceWorkPerformers(
+            transaction,
+            workId: workId,
+            source: performerSource,
+            performers: performers,
+          );
+        }
         return workId;
       });
     });
+  }
+
+  Future<void> _replaceWorkPerformers(
+    DatabaseExecutor executor, {
+    required int workId,
+    required String source,
+    required Iterable<WorkPerformer> performers,
+  }) async {
+    await executor.delete(
+      'work_performers',
+      where: 'work_id = ? AND source = ?',
+      whereArgs: [workId, source],
+    );
+    final seen = <String>{};
+    for (final performer in performers) {
+      final name = performer.name.trim();
+      if (name.isEmpty || !seen.add(name.toLowerCase())) {
+        continue;
+      }
+      await executor.insert('work_performers', {
+        'work_id': workId,
+        'source': source,
+        'name': name,
+        'source_uri': performer.sourceUri?.toString(),
+      });
+    }
   }
 
   /// Merge legacy work rows that are known aliases of [canonicalCode].
@@ -918,6 +1057,16 @@ class AppDatabase {
             '''
             INSERT OR IGNORE INTO actress_works (actress_id, work_id)
             SELECT actress_id, ? FROM actress_works WHERE work_id = ?
+            ''',
+            [canonicalId, aliasId],
+          );
+          await transaction.rawInsert(
+            '''
+            INSERT OR IGNORE INTO work_performers
+              (work_id, source, name, source_uri)
+            SELECT ?, source, name, source_uri
+            FROM work_performers
+            WHERE work_id = ?
             ''',
             [canonicalId, aliasId],
           );

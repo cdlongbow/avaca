@@ -95,6 +95,14 @@ void main() {
       'https://www.javbus.com/star/14jf',
       'https://www.javbus.com/star/1426',
     ]);
+    expect(work.performers?.map((performer) => performer.name), [
+      '喜多川みら',
+      '谷村凪咲',
+    ]);
+    expect(
+      work.performers?.map((performer) => performer.sourceUri.toString()),
+      ['https://www.javbus.com/star/14jf', 'https://www.javbus.com/star/1426'],
+    );
   });
 
   test('treats empty and placeholder actress images as unavailable', () {

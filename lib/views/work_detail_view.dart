@@ -9,10 +9,16 @@ import '../core/layout.dart';
 import '../l10n/app_localizations.dart';
 
 class WorkDetailView extends StatefulWidget {
-  const WorkDetailView({super.key, required this.db, required this.workId});
+  const WorkDetailView({
+    super.key,
+    required this.db,
+    required this.workId,
+    this.currentActressId,
+  });
 
   final AppDatabase db;
   final int workId;
+  final int? currentActressId;
 
   @override
   State<WorkDetailView> createState() => _WorkDetailViewState();
@@ -24,7 +30,10 @@ class _WorkDetailViewState extends State<WorkDetailView> {
   @override
   void initState() {
     super.initState();
-    workFuture = widget.db.getWorkById(widget.workId);
+    workFuture = widget.db.getWorkById(
+      widget.workId,
+      currentActressId: widget.currentActressId,
+    );
   }
 
   @override
@@ -154,9 +163,68 @@ class _WorkDetailViewState extends State<WorkDetailView> {
             _labeledValue(l10n.studio, work['studio']?.toString()),
             _labeledValue(l10n.publisher, work['publisher']?.toString()),
             _labeledValue(l10n.series, work['series']?.toString()),
+            _buildRelatedActresses(work),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildRelatedActresses(Map<String, Object?> work) {
+    final raw = work['related_performers'];
+    if (raw is! List) {
+      return const SizedBox.shrink();
+    }
+    final performers = raw
+        .whereType<Map>()
+        .map((item) => Map<String, Object?>.from(item))
+        .where((performer) {
+          final actressId = performer['actress_id'];
+          return widget.currentActressId == null ||
+              actressId != widget.currentActressId;
+        })
+        .toList(growable: false);
+    if (performers.isEmpty ||
+        (widget.currentActressId == null && performers.length < 2)) {
+      return const SizedBox.shrink();
+    }
+
+    final l10n = AppLocalizations.of(context);
+    return Padding(
+      key: const Key('related-actresses-section'),
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(l10n.relatedActresses),
+          const SizedBox(height: 4),
+          for (final performer in performers) _relatedActressTile(performer),
+        ],
+      ),
+    );
+  }
+
+  Widget _relatedActressTile(Map<String, Object?> performer) {
+    final name = performer['name']?.toString().trim() ?? '';
+    final actressId = performer['actress_id'];
+    if (name.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    if (actressId is int) {
+      return ListTile(
+        key: ValueKey('related-actress-$actressId'),
+        contentPadding: EdgeInsets.zero,
+        dense: true,
+        title: Text(name),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => Navigator.of(context).pushNamed('/detail/$actressId'),
+      );
+    }
+    return ListTile(
+      key: ValueKey('related-actress-$name'),
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      title: Text(name),
     );
   }
 

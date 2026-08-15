@@ -301,6 +301,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get works => '作品';
 
   @override
+  String get relatedActresses => '関連出演者';
+
+  @override
   String get aliases => '別名';
 
   @override
@@ -438,6 +441,83 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get scrapePhaseCompleted => '取得完了';
+
+  @override
+  String get scrapeSyncingTitle => '同期中';
+
+  @override
+  String get scrapeSyncCompleted => '同期が完了しました';
+
+  @override
+  String get scrapeSyncPartial => '同期完了（一部失敗）';
+
+  @override
+  String get scrapeSyncFailed => '同期に失敗しました';
+
+  @override
+  String get scrapeSyncStopped => '同期を停止しました';
+
+  @override
+  String get scrapeDetailsSection => '詳細情報';
+
+  @override
+  String get scrapeWorksSection => '作品';
+
+  @override
+  String get scrapeDownloadSection => 'ダウンロード';
+
+  @override
+  String scrapeCurrentWork(String code) {
+    return '処理中：$code';
+  }
+
+  @override
+  String get scrapeImagesLabel => '作品画像';
+
+  @override
+  String get scrapeSavedCount => '保存';
+
+  @override
+  String get scrapeExcludedCount => '除外';
+
+  @override
+  String get scrapeFailedCount => '失敗';
+
+  @override
+  String get scrapeStatusWaiting => '待機中';
+
+  @override
+  String get scrapeStatusSyncing => '処理中';
+
+  @override
+  String get scrapeStatusCompleted => '完了';
+
+  @override
+  String get scrapeStatusPartial => '一部完了';
+
+  @override
+  String get scrapeStatusFailed => '失敗';
+
+  @override
+  String get scrapeStatusCancelled => '停止済み';
+
+  @override
+  String get scrapeStatusNoNewWorks => '完了（新しい作品なし）';
+
+  @override
+  String get scrapeStatusUnavailable => '利用不可';
+
+  @override
+  String get scrapeStatusBlocked => 'ページがブロックされました';
+
+  @override
+  String get scrapeStatusRateLimited => 'レート制限';
+
+  @override
+  String get scrapeStatusTimedOut => 'タイムアウト';
+
+  @override
+  String get stopScrape => '停止';
 
   @override
   String scrapeProgressSummary(int saved, int excluded, int failed) {
@@ -1001,6 +1081,9 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
   String get works => '作品';
 
   @override
+  String get relatedActresses => '関連出演者';
+
+  @override
   String get aliases => '別名';
 
   @override
@@ -1138,6 +1221,83 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
 
   @override
   String get scrapePhaseCompleted => '取得完了';
+
+  @override
+  String get scrapeSyncingTitle => '同期中';
+
+  @override
+  String get scrapeSyncCompleted => '同期が完了しました';
+
+  @override
+  String get scrapeSyncPartial => '同期完了（一部失敗）';
+
+  @override
+  String get scrapeSyncFailed => '同期に失敗しました';
+
+  @override
+  String get scrapeSyncStopped => '同期を停止しました';
+
+  @override
+  String get scrapeDetailsSection => '詳細情報';
+
+  @override
+  String get scrapeWorksSection => '作品';
+
+  @override
+  String get scrapeDownloadSection => 'ダウンロード';
+
+  @override
+  String scrapeCurrentWork(String code) {
+    return '処理中：$code';
+  }
+
+  @override
+  String get scrapeImagesLabel => '作品画像';
+
+  @override
+  String get scrapeSavedCount => '保存';
+
+  @override
+  String get scrapeExcludedCount => '除外';
+
+  @override
+  String get scrapeFailedCount => '失敗';
+
+  @override
+  String get scrapeStatusWaiting => '待機中';
+
+  @override
+  String get scrapeStatusSyncing => '処理中';
+
+  @override
+  String get scrapeStatusCompleted => '完了';
+
+  @override
+  String get scrapeStatusPartial => '一部完了';
+
+  @override
+  String get scrapeStatusFailed => '失敗';
+
+  @override
+  String get scrapeStatusCancelled => '停止済み';
+
+  @override
+  String get scrapeStatusNoNewWorks => '完了（新しい作品なし）';
+
+  @override
+  String get scrapeStatusUnavailable => '利用不可';
+
+  @override
+  String get scrapeStatusBlocked => 'ページがブロックされました';
+
+  @override
+  String get scrapeStatusRateLimited => 'レート制限';
+
+  @override
+  String get scrapeStatusTimedOut => 'タイムアウト';
+
+  @override
+  String get stopScrape => '停止';
 
   @override
   String scrapeProgressSummary(int saved, int excluded, int failed) {

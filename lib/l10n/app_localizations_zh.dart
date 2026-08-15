@@ -300,6 +300,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get works => '作品';
 
   @override
+  String get relatedActresses => '關聯演員';
+
+  @override
   String get aliases => '別名';
 
   @override
@@ -437,6 +440,83 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get scrapePhaseCompleted => '刮削完成';
+
+  @override
+  String get scrapeSyncingTitle => '正在同步';
+
+  @override
+  String get scrapeSyncCompleted => '同步完成';
+
+  @override
+  String get scrapeSyncPartial => '同步完成，但有部分項目失敗';
+
+  @override
+  String get scrapeSyncFailed => '同步失敗';
+
+  @override
+  String get scrapeSyncStopped => '已停止同步';
+
+  @override
+  String get scrapeDetailsSection => '詳細資料';
+
+  @override
+  String get scrapeWorksSection => '作品';
+
+  @override
+  String get scrapeDownloadSection => '下載';
+
+  @override
+  String scrapeCurrentWork(String code) {
+    return '目前處理：$code';
+  }
+
+  @override
+  String get scrapeImagesLabel => '作品圖片';
+
+  @override
+  String get scrapeSavedCount => '已儲存';
+
+  @override
+  String get scrapeExcludedCount => '排除';
+
+  @override
+  String get scrapeFailedCount => '失敗';
+
+  @override
+  String get scrapeStatusWaiting => '等待中';
+
+  @override
+  String get scrapeStatusSyncing => '同步中';
+
+  @override
+  String get scrapeStatusCompleted => '完成';
+
+  @override
+  String get scrapeStatusPartial => '部分完成';
+
+  @override
+  String get scrapeStatusFailed => '失敗';
+
+  @override
+  String get scrapeStatusCancelled => '已停止';
+
+  @override
+  String get scrapeStatusNoNewWorks => '完成，無新增作品';
+
+  @override
+  String get scrapeStatusUnavailable => '無法使用';
+
+  @override
+  String get scrapeStatusBlocked => '頁面被阻擋';
+
+  @override
+  String get scrapeStatusRateLimited => '被限流';
+
+  @override
+  String get scrapeStatusTimedOut => '逾時';
+
+  @override
+  String get stopScrape => '停止';
 
   @override
   String scrapeProgressSummary(int saved, int excluded, int failed) {
@@ -996,6 +1076,9 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get works => '作品';
 
   @override
+  String get relatedActresses => '关联演员';
+
+  @override
   String get aliases => '别名';
 
   @override
@@ -1133,6 +1216,83 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get scrapePhaseCompleted => '刮削完成';
+
+  @override
+  String get scrapeSyncingTitle => '正在同步';
+
+  @override
+  String get scrapeSyncCompleted => '同步完成';
+
+  @override
+  String get scrapeSyncPartial => '同步完成，但有部分项目失败';
+
+  @override
+  String get scrapeSyncFailed => '同步失败';
+
+  @override
+  String get scrapeSyncStopped => '已停止同步';
+
+  @override
+  String get scrapeDetailsSection => '详细资料';
+
+  @override
+  String get scrapeWorksSection => '作品';
+
+  @override
+  String get scrapeDownloadSection => '下载';
+
+  @override
+  String scrapeCurrentWork(String code) {
+    return '目前处理：$code';
+  }
+
+  @override
+  String get scrapeImagesLabel => '作品图片';
+
+  @override
+  String get scrapeSavedCount => '已保存';
+
+  @override
+  String get scrapeExcludedCount => '排除';
+
+  @override
+  String get scrapeFailedCount => '失败';
+
+  @override
+  String get scrapeStatusWaiting => '等待中';
+
+  @override
+  String get scrapeStatusSyncing => '同步中';
+
+  @override
+  String get scrapeStatusCompleted => '完成';
+
+  @override
+  String get scrapeStatusPartial => '部分完成';
+
+  @override
+  String get scrapeStatusFailed => '失败';
+
+  @override
+  String get scrapeStatusCancelled => '已停止';
+
+  @override
+  String get scrapeStatusNoNewWorks => '完成，无新增作品';
+
+  @override
+  String get scrapeStatusUnavailable => '无法使用';
+
+  @override
+  String get scrapeStatusBlocked => '页面被阻挡';
+
+  @override
+  String get scrapeStatusRateLimited => '被限流';
+
+  @override
+  String get scrapeStatusTimedOut => '超时';
+
+  @override
+  String get stopScrape => '停止';
 
   @override
   String scrapeProgressSummary(int saved, int excluded, int failed) {
@@ -1692,6 +1852,9 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get works => '作品';
 
   @override
+  String get relatedActresses => '關聯演員';
+
+  @override
   String get aliases => '別名';
 
   @override
@@ -1829,6 +1992,83 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get scrapePhaseCompleted => '刮削完成';
+
+  @override
+  String get scrapeSyncingTitle => '正在同步';
+
+  @override
+  String get scrapeSyncCompleted => '同步完成';
+
+  @override
+  String get scrapeSyncPartial => '同步完成，但有部分項目失敗';
+
+  @override
+  String get scrapeSyncFailed => '同步失敗';
+
+  @override
+  String get scrapeSyncStopped => '已停止同步';
+
+  @override
+  String get scrapeDetailsSection => '詳細資料';
+
+  @override
+  String get scrapeWorksSection => '作品';
+
+  @override
+  String get scrapeDownloadSection => '下載';
+
+  @override
+  String scrapeCurrentWork(String code) {
+    return '目前處理：$code';
+  }
+
+  @override
+  String get scrapeImagesLabel => '作品圖片';
+
+  @override
+  String get scrapeSavedCount => '已儲存';
+
+  @override
+  String get scrapeExcludedCount => '排除';
+
+  @override
+  String get scrapeFailedCount => '失敗';
+
+  @override
+  String get scrapeStatusWaiting => '等待中';
+
+  @override
+  String get scrapeStatusSyncing => '同步中';
+
+  @override
+  String get scrapeStatusCompleted => '完成';
+
+  @override
+  String get scrapeStatusPartial => '部分完成';
+
+  @override
+  String get scrapeStatusFailed => '失敗';
+
+  @override
+  String get scrapeStatusCancelled => '已停止';
+
+  @override
+  String get scrapeStatusNoNewWorks => '完成，無新增作品';
+
+  @override
+  String get scrapeStatusUnavailable => '無法使用';
+
+  @override
+  String get scrapeStatusBlocked => '頁面被阻擋';
+
+  @override
+  String get scrapeStatusRateLimited => '被限流';
+
+  @override
+  String get scrapeStatusTimedOut => '逾時';
+
+  @override
+  String get stopScrape => '停止';
 
   @override
   String scrapeProgressSummary(int saved, int excluded, int failed) {

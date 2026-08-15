@@ -120,6 +120,16 @@ void main() {
         File(works.single['detail_image_path']! as String).existsSync(),
         isTrue,
       );
+      final relatedPerformers =
+          ((await database.getWorkById(
+                    works.single['id']! as int,
+                  ))!['related_performers']!
+                  as List)
+              .cast<Map<String, Object?>>();
+      expect(
+        relatedPerformers.map((performer) => performer['name']),
+        unorderedEquals(['追加女優', '涼森れむ']),
+      );
       expect(
         (await database.getActressById(actressId))?['img_path'],
         isNotEmpty,
@@ -595,6 +605,15 @@ class _FakeJavBusClient extends JavBusClient {
       studio: 'プレステージ',
       publisher: 'ABSOLUTELYFANTASIA',
       series: '系列',
+      performers: code == 'ABF-367'
+          ? [
+              WorkPerformer(
+                name: '追加女優',
+                sourceUri: Uri.parse('https://www.javbus.com/star/other'),
+              ),
+              const WorkPerformer(name: '涼森れむ'),
+            ]
+          : null,
     );
   }
 }
