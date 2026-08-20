@@ -10,6 +10,7 @@ import '../models/scrape_source_settings.dart';
 import '../models/scraped_actress_details.dart';
 import '../models/work.dart';
 import '../models/work_scrape_options.dart';
+import 'avbase/avbase_models.dart';
 import 'javbus/javbus_client.dart';
 import 'javbus/javbus_scrape_source.dart';
 import 'javbus/prefix_exclusion.dart';
@@ -1026,6 +1027,18 @@ class WorksScrapeService {
         JavBusFailureKind.transientTransport => ScrapeSourceRunState.failed,
       };
     }
+    if (error is AvBaseRequestException) {
+      return switch (error.kind) {
+        AvBaseFailureKind.blocked => ScrapeSourceRunState.blocked,
+        AvBaseFailureKind.rateLimited => ScrapeSourceRunState.rateLimited,
+        AvBaseFailureKind.timeout => ScrapeSourceRunState.timedOut,
+        AvBaseFailureKind.cancelled => ScrapeSourceRunState.cancelled,
+        AvBaseFailureKind.notFound ||
+        AvBaseFailureKind.parserInvalid ||
+        AvBaseFailureKind.transport ||
+        AvBaseFailureKind.transientTransport => ScrapeSourceRunState.failed,
+      };
+    }
     return ScrapeSourceRunState.failed;
   }
 
@@ -1503,7 +1516,8 @@ class WorksScrapeService {
         break;
       }
       onAttemptStart?.call(candidate);
-      if (source.id == ScrapeSourceId.javbus &&
+      if ((source.id == ScrapeSourceId.javbus ||
+              source.id == ScrapeSourceId.avbase) &&
           detailRequestsStarted > 0 &&
           javBusDetailDelay > Duration.zero) {
         await Future<void>.delayed(javBusDetailDelay);
@@ -1564,43 +1578,139 @@ class WorksScrapeService {
     List<_FetchedWorkDetail> fetched,
     List<_FailedWorkCandidate> failedCandidates,
   ) {
-    final resolved = <_ResolvedWorkGroup>[];
-    for (final detail in fetched) {
-      final code = preferredScrapeWorkCode([detail.details.code]) ?? '';
-      resolved.add(
-        _ResolvedWorkGroup(
+    final groups = <String, _ResolvedWorkGroup>{};
+
+    int sourcePriority(ScrapeSourceId source) {
+      final priority = ScrapeSourceRegistry.worksPriority.indexOf(source);
+      return priority < 0
+          ? ScrapeSourceRegistry.worksPriority.length
+          : priority;
+    }
+
+    String canonicalCode(String? rawCode) {
+      return preferredScrapeWorkCode([rawCode])?.trim() ?? '';
+    }
+
+    int compareSourceAndCode(
+      ScrapeSourceId leftSource,
+      String leftCode,
+      Uri leftUri,
+      ScrapeSourceId rightSource,
+      String rightCode,
+      Uri rightUri,
+    ) {
+      final sourceComparison = sourcePriority(
+        leftSource,
+      ).compareTo(sourcePriority(rightSource));
+      if (sourceComparison != 0) {
+        return sourceComparison;
+      }
+      final codeComparison = leftCode.toLowerCase().compareTo(
+        rightCode.toLowerCase(),
+      );
+      if (codeComparison != 0) {
+        return codeComparison;
+      }
+      return leftUri.toString().compareTo(rightUri.toString());
+    }
+
+    final sortedFetched = [...fetched]
+      ..sort(
+        (left, right) => compareSourceAndCode(
+          left.sourceId,
+          canonicalCode(left.details.code),
+          left.candidate.summary.detailUri,
+          right.sourceId,
+          canonicalCode(right.details.code),
+          right.candidate.summary.detailUri,
+        ),
+      );
+    for (final detail in sortedFetched) {
+      final code = canonicalCode(detail.details.code);
+      final sourceUri = detail.candidate.summary.detailUri.toString();
+      final identityKey = code.isEmpty
+          ? 'resolved:${detail.sourceId.storageValue}:$sourceUri'
+          : 'resolved:${code.toLowerCase()}';
+      final group = groups.putIfAbsent(
+        identityKey,
+        () => _ResolvedWorkGroup(
           code: code,
-          details: <ScrapeWorkDetails>[detail.details],
-          identityKey: 'resolved:${detail.sourceId.storageValue}:$code',
+          details: <ScrapeWorkDetails>[],
+          identityKey: identityKey,
           hadSourceFailure: false,
           sourceId: detail.sourceId,
         ),
       );
+      group.details.add(detail.details);
+      if (sourcePriority(detail.sourceId) < sourcePriority(group.sourceId)) {
+        group.sourceId = detail.sourceId;
+      }
     }
 
-    for (final failed in failedCandidates) {
+    final sortedFailures = [...failedCandidates]
+      ..sort(
+        (left, right) => compareSourceAndCode(
+          left.candidate.source.id,
+          canonicalCode(left.candidate.summary.code),
+          left.candidate.summary.detailUri,
+          right.candidate.source.id,
+          canonicalCode(right.candidate.summary.code),
+          right.candidate.summary.detailUri,
+        ),
+      );
+    for (final failed in sortedFailures) {
       final rawCode = failed.candidate.summary.code?.trim() ?? '';
-      final code = rawCode.isEmpty
-          ? ''
-          : preferredScrapeWorkCode([rawCode]) ?? '';
-      resolved.add(
-        _ResolvedWorkGroup(
+      final code = canonicalCode(rawCode);
+      final identityKey = code.isEmpty
+          ? 'failed:${failed.candidate.source.id.storageValue}:${failed.candidate.summary.detailUri}'
+          : 'resolved:${code.toLowerCase()}';
+      final group = groups.putIfAbsent(
+        identityKey,
+        () => _ResolvedWorkGroup(
           code: code,
-          details: const <ScrapeWorkDetails>[],
-          identityKey:
-              'failed:' +
-              failed.candidate.source.id.storageValue +
-              ':' +
-              (rawCode.isEmpty
-                  ? failed.candidate.summary.detailUri.toString()
-                  : rawCode),
+          details: <ScrapeWorkDetails>[],
+          identityKey: identityKey,
           hadSourceFailure: true,
           sourceId: failed.candidate.source.id,
           failureReason: failed.reason,
           failureError: failed.error,
         ),
       );
+      group.hadSourceFailure = true;
+      if (sourcePriority(failed.candidate.source.id) <
+          sourcePriority(group.sourceId)) {
+        group.sourceId = failed.candidate.source.id;
+        group.failureReason = failed.reason;
+        group.failureError = failed.error;
+      } else if (group.failureReason == null) {
+        group.failureReason = failed.reason;
+        group.failureError = failed.error;
+      }
     }
+
+    for (final group in groups.values) {
+      group.details.sort((left, right) {
+        final sourceComparison = sourcePriority(
+          left.source,
+        ).compareTo(sourcePriority(right.source));
+        if (sourceComparison != 0) {
+          return sourceComparison;
+        }
+        return (left.rawCode ?? left.code).compareTo(
+          right.rawCode ?? right.code,
+        );
+      });
+    }
+    final resolved = groups.values.toList()
+      ..sort((left, right) {
+        final sourceComparison = sourcePriority(
+          left.sourceId,
+        ).compareTo(sourcePriority(right.sourceId));
+        if (sourceComparison != 0) {
+          return sourceComparison;
+        }
+        return left.identityKey.compareTo(right.identityKey);
+      });
     return List.unmodifiable(resolved);
   }
 
@@ -1921,6 +2031,7 @@ class WorksScrapeService {
         code: details.code,
         studio: details.studio,
         publisher: details.publisher,
+        originalImageEvidenceUris: details.originalImageEvidenceUris,
         variant: variant,
         targetPath: targetPath,
       );
@@ -2215,7 +2326,7 @@ final class _ResolvedWorkGroup {
   final String code;
   final List<ScrapeWorkDetails> details;
   final String identityKey;
-  final ScrapeSourceId sourceId;
+  ScrapeSourceId sourceId;
   bool hadSourceFailure;
   WorksScrapeFailureReason? failureReason;
   Object? failureError;

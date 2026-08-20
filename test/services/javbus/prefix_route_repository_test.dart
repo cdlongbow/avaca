@@ -408,28 +408,33 @@ void main() {
     );
   });
 
-  test('same Prefix concurrent downloads share one probe', () async {
-    final repository = PrefixRouteRepository.inMemory();
-    final transport = _GateBinaryTransport(validImage);
-    final downloader = WorkImageDownloader(
-      transport: transport,
-      routeRepository: repository,
-    );
-    final first = downloader.fetch(
-      code: 'CON-001',
-      variant: WorkImageVariant.card,
-    );
-    await transport.firstRequest.future;
-    final second = downloader.fetch(
-      code: 'con-002',
-      variant: WorkImageVariant.card,
-    );
-    await Future<void>.delayed(Duration.zero);
-    expect(transport.requested, hasLength(1));
-    transport.release();
-    await Future.wait([first, second]);
-    expect(transport.requested, hasLength(1));
-  });
+  test(
+    'same Prefix concurrent downloads share route discovery, not image bytes',
+    () async {
+      final repository = PrefixRouteRepository.inMemory();
+      final transport = _GateBinaryTransport(validImage);
+      final downloader = WorkImageDownloader(
+        transport: transport,
+        routeRepository: repository,
+      );
+      final first = downloader.fetch(
+        code: 'CON-001',
+        variant: WorkImageVariant.card,
+      );
+      await transport.firstRequest.future;
+      final second = downloader.fetch(
+        code: 'con-002',
+        variant: WorkImageVariant.card,
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(transport.requested, hasLength(1));
+      transport.release();
+      await Future.wait([first, second]);
+      expect(transport.requested, hasLength(2));
+      expect(transport.requested[0].path, contains('con00001'));
+      expect(transport.requested[1].path, contains('con00002'));
+    },
+  );
 
   test(
     'card and detail share the learned family, not a variant-specific rule',

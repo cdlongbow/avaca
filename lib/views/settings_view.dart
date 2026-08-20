@@ -18,6 +18,8 @@ import '../core/layout.dart';
 import '../models/data_transfer_models.dart';
 import '../models/scrape_source_settings.dart';
 import '../services/data_transfer_service.dart';
+import '../services/avbase/avbase_client.dart';
+import '../services/avbase/avbase_transport.dart';
 import '../services/javbus/javbus_client.dart';
 import '../services/javbus/javbus_verification.dart';
 import '../services/javbus/prefix_route_repository.dart';
@@ -282,6 +284,8 @@ class _SettingsViewState extends State<SettingsView> {
           leading: _SettingsTapFeedback(
             id: 'settings-back',
             child: AlignedAppBarBackButton(
+              expandToToolbar: true,
+              verticalOffset: 0,
               onPressed: () => Navigator.pop(context),
             ),
           ),
@@ -488,78 +492,69 @@ class _SettingsViewState extends State<SettingsView> {
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        _settingsActionCard(
+        _settingsExpansionCard(
           context: context,
           feedbackId: 'other-software-update',
           icon: Icons.system_update_alt_outlined,
           title: localizations.softwareUpdate,
           subtitle: localizations.softwareUpdateDescription,
-          enabled: true,
-          onTap: () => _openCategory(
-            titleBuilder: (context) =>
-                AppLocalizations.of(context).softwareUpdate,
-            bodyBuilder: (context) =>
-                SoftwareUpdateView(controller: updateController),
+          child: SoftwareUpdateView(
+            controller: updateController,
+            shrinkWrap: true,
           ),
         ),
         const SizedBox(height: 8),
-        _settingsActionCard(
+        _settingsExpansionCard(
           context: context,
           feedbackId: 'other-scrape-sources',
           icon: Icons.source_outlined,
           title: localizations.scrapeSources,
           subtitle: null,
-          enabled: true,
-          onTap: () => _openCategory(
-            titleBuilder: (context) =>
-                AppLocalizations.of(context).scrapeSources,
-            bodyBuilder: _buildScrapeSourcesSettings,
-          ),
+          child: _buildScrapeSourcesSettings(context, shrinkWrap: true),
         ),
         const SizedBox(height: 8),
-        _settingsActionCard(
+        _settingsExpansionCard(
           context: context,
           feedbackId: 'other-prefix-route-rules',
           icon: Icons.route_outlined,
           title: localizations.prefixRouteRulesTitle,
           subtitle: localizations.prefixRouteRulesSubtitle,
-          enabled: true,
-          onTap: () => _openCategory(
-            titleBuilder: (context) =>
-                AppLocalizations.of(context).prefixRouteRulesTitle,
-            bodyBuilder: _buildPrefixRouteRulesSettings,
-          ),
+          child: _buildPrefixRouteRulesSettings(context, shrinkWrap: true),
         ),
         const SizedBox(height: 8),
-        _settingsActionCard(
+        _settingsExpansionCard(
           context: context,
           feedbackId: 'other-about',
           icon: Icons.info_outline,
           title: localizations.about,
           subtitle: null,
-          enabled: true,
-          onTap: () => _openCategory(
-            titleBuilder: (context) => AppLocalizations.of(context).about,
-            bodyBuilder: _buildAboutSettings,
-          ),
+          child: _buildAboutSettingsEmbedded(context),
         ),
       ],
     );
   }
 
-  Widget _buildScrapeSourcesSettings(BuildContext context) {
+  Widget _buildScrapeSourcesSettings(
+    BuildContext context, {
+    bool shrinkWrap = false,
+  }) {
     return _ScrapeSourcesSettingsBody(
       database: widget.db,
       connectionTester:
           widget.scrapeSourceConnectionTester ?? _checkScrapeSourceConnection,
+      shrinkWrap: shrinkWrap,
     );
   }
 
-  Widget _buildPrefixRouteRulesSettings(BuildContext context) {
+  Widget _buildPrefixRouteRulesSettings(
+    BuildContext context, {
+    bool shrinkWrap = false,
+  }) {
     return PrefixRouteRulesBody(
       database: widget.db,
       repository: PrefixRouteRepository.forDatabase(widget.db),
       filePicker: widget.prefixRouteFilePicker,
+      shrinkWrap: shrinkWrap,
     );
   }
 
@@ -600,6 +595,13 @@ class _SettingsViewState extends State<SettingsView> {
         } finally {
           client.close();
         }
+      case ScrapeSourceId.avbase:
+        final client = AvBaseClient(transport: HttpAvBaseTransport());
+        try {
+          await client.checkConnection();
+        } finally {
+          client.close();
+        }
     }
   }
 
@@ -617,34 +619,35 @@ class _SettingsViewState extends State<SettingsView> {
     );
   }
 
-  Widget _buildAboutSettings(BuildContext context) {
+  Widget _buildAboutSettingsEmbedded(BuildContext context) {
+    return Column(children: _aboutSettingsChildren(context));
+  }
+
+  List<Widget> _aboutSettingsChildren(BuildContext context) {
     final localizations = AppLocalizations.of(context);
-    return ListView(
-      padding: EdgeInsets.zero,
-      children: [
-        _settingsActionCard(
-          context: context,
-          feedbackId: 'about-github',
-          icon: Icons.code_outlined,
-          title: localizations.github,
-          subtitle: null,
-          enabled: true,
-          trailing: const Icon(Icons.open_in_new),
-          onTap: () => unawaited(_openExternalLink(_githubUri)),
-        ),
-        const SizedBox(height: 8),
-        _settingsActionCard(
-          context: context,
-          feedbackId: 'about-feedback-suggestions',
-          icon: Icons.feedback_outlined,
-          title: localizations.feedbackSuggestions,
-          subtitle: null,
-          enabled: true,
-          trailing: const Icon(Icons.open_in_new),
-          onTap: () => unawaited(_openExternalLink(_issuesUri)),
-        ),
-      ],
-    );
+    return [
+      _settingsActionCard(
+        context: context,
+        feedbackId: 'about-github',
+        icon: Icons.code_outlined,
+        title: localizations.github,
+        subtitle: null,
+        enabled: true,
+        trailing: const Icon(Icons.open_in_new),
+        onTap: () => unawaited(_openExternalLink(_githubUri)),
+      ),
+      const SizedBox(height: 8),
+      _settingsActionCard(
+        context: context,
+        feedbackId: 'about-feedback-suggestions',
+        icon: Icons.feedback_outlined,
+        title: localizations.feedbackSuggestions,
+        subtitle: null,
+        enabled: true,
+        trailing: const Icon(Icons.open_in_new),
+        onTap: () => unawaited(_openExternalLink(_issuesUri)),
+      ),
+    ];
   }
 
   Future<void> _openExternalLink(Uri uri) async {
@@ -679,6 +682,36 @@ class _SettingsViewState extends State<SettingsView> {
           trailing: trailing ?? const Icon(Icons.chevron_right),
           onTap: enabled ? onTap : null,
         ),
+      ),
+    );
+  }
+
+  Widget _settingsExpansionCard({
+    required BuildContext context,
+    required String feedbackId,
+    required IconData icon,
+    required String title,
+    String? subtitle,
+    required Widget child,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final shape = _settingsCardShape();
+    return _SettingsTapFeedback(
+      id: feedbackId,
+      child: ExpansionTile(
+        key: PageStorageKey(feedbackId),
+        tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+        childrenPadding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+        backgroundColor: colorScheme.surfaceContainerHighest,
+        collapsedBackgroundColor: colorScheme.surfaceContainerHighest,
+        shape: shape,
+        collapsedShape: shape,
+        clipBehavior: Clip.antiAlias,
+        expansionAnimationStyle: _expansionAnimationStyle,
+        leading: Icon(icon),
+        title: Text(title),
+        subtitle: subtitle == null ? null : Text(subtitle),
+        children: [child],
       ),
     );
   }
@@ -1174,10 +1207,12 @@ class _ScrapeSourcesSettingsBody extends StatefulWidget {
   const _ScrapeSourcesSettingsBody({
     required this.database,
     required this.connectionTester,
+    this.shrinkWrap = false,
   });
 
   final AppDatabase database;
   final ScrapeSourceConnectionTester connectionTester;
+  final bool shrinkWrap;
 
   @override
   State<_ScrapeSourcesSettingsBody> createState() =>
@@ -1321,6 +1356,10 @@ class _ScrapeSourcesSettingsBodyState
         return ListView(
           key: const PageStorageKey('scrape-source-settings-scroll'),
           padding: EdgeInsets.zero,
+          shrinkWrap: widget.shrinkWrap,
+          physics: widget.shrinkWrap
+              ? const NeverScrollableScrollPhysics()
+              : null,
           children: [
             _connectionStatusSelector(context),
             const SizedBox(height: 12),
@@ -1331,6 +1370,7 @@ class _ScrapeSourcesSettingsBodyState
               options: [
                 (ScrapeSourceId.minnanoAv, localizations.scrapeSourceMinnanoAv),
                 (ScrapeSourceId.javbus, localizations.scrapeSourceJavBus),
+                (ScrapeSourceId.avbase, localizations.scrapeSourceAvBase),
               ],
               onChanged: (value) =>
                   unawaited(_select(actressDetailsSource: value)),
@@ -1339,10 +1379,14 @@ class _ScrapeSourcesSettingsBodyState
             _sourceSelector<WorksSourceSelection>(
               key: const PageStorageKey('scrape-works-source'),
               title: localizations.scrapeSourceWorksTitle,
-              value: settings.worksSource,
-              options: [
-                (WorksSourceSelection.javbus, localizations.scrapeSourceJavBus),
-              ],
+               value: settings.worksSource == WorksSourceSelection.minnanoAv
+                   ? WorksSourceSelection.javbus
+                   : settings.worksSource,
+               options: [
+                 (WorksSourceSelection.all, localizations.scrapeSourceAll),
+                 (WorksSourceSelection.javbus, localizations.scrapeSourceJavBus),
+                 (WorksSourceSelection.avbase, localizations.scrapeSourceAvBase),
+               ],
               onChanged: (value) => unawaited(_select(worksSource: value)),
             ),
           ],
@@ -1447,6 +1491,7 @@ class _ScrapeSourcesSettingsBodyState
     return switch (source) {
       ScrapeSourceId.minnanoAv => localizations.scrapeSourceMinnanoAv,
       ScrapeSourceId.javbus => localizations.scrapeSourceJavBus,
+      ScrapeSourceId.avbase => localizations.scrapeSourceAvBase,
     };
   }
 
@@ -1532,6 +1577,8 @@ class _SettingsCategoryPage extends StatelessWidget {
           leading: _SettingsTapFeedback(
             id: 'category-back',
             child: AlignedAppBarBackButton(
+              expandToToolbar: true,
+              verticalOffset: 0,
               onPressed: () => Navigator.pop(context),
             ),
           ),

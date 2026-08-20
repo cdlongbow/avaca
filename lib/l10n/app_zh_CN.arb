@@ -250,6 +250,7 @@
   "scrapeSourceWorksTitle": "作品来源",
   "scrapeSourceMinnanoAv": "Minnano AV",
   "scrapeSourceJavBus": "JavBus",
+   "scrapeSourceAvBase": "AvBase",
   "scrapeSourceAll": "所有来源（按番号整合并去重）",
   "scrapeSourceSaveFailed": "无法保存刮削来源设置。",
   "scrapeSourceConnectionTitle": "网站连接状态",

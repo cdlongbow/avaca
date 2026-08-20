@@ -4,6 +4,7 @@ import 'work_image_policy.dart';
 import 'work_image_route_models.dart';
 import 'work_image_route_resolver.dart';
 import 'prefix_route_repository.dart';
+import '../scrape/work_code_canonicalizer.dart';
 
 enum WorkImageRouteProbeFailureKind {
   definitiveMiss,
@@ -62,11 +63,15 @@ final class WorkImageRouteDecision {
     required this.family,
     this.probeResult,
     this.probeVariant,
+    this.probeWorkCode,
+    this.revisionToken,
   });
 
   final WorkImageNormalizationFamily family;
   final WorkImageRouteProbeResult? probeResult;
   final WorkImageVariant? probeVariant;
+  final String? probeWorkCode;
+  final PrefixRouteRevisionToken? revisionToken;
 }
 
 typedef WorkImageRouteProbe =
@@ -88,20 +93,27 @@ final class WorkImagePrefixRouter {
     required String prefix,
     required WorkImageVariant variant,
     required WorkImageRouteProbe probe,
+    String? probeWorkCode,
   }) async {
-    final existing = _inFlight[prefix];
+    final normalizedPrefix = normalizeWorkImagePrefix(prefix) ?? prefix;
+    final existing = _inFlight[normalizedPrefix];
     if (existing != null) {
       return existing;
     }
 
     late final Future<WorkImageRouteDecision> operation;
-    operation = _resolve(prefix: prefix, variant: variant, probe: probe);
-    _inFlight[prefix] = operation;
+    operation = _resolve(
+      prefix: normalizedPrefix,
+      variant: variant,
+      probe: probe,
+      probeWorkCode: probeWorkCode,
+    );
+    _inFlight[normalizedPrefix] = operation;
     try {
       return await operation;
     } finally {
-      if (identical(_inFlight[prefix], operation)) {
-        _inFlight.remove(prefix);
+      if (identical(_inFlight[normalizedPrefix], operation)) {
+        _inFlight.remove(normalizedPrefix);
       }
     }
   }
@@ -110,9 +122,11 @@ final class WorkImagePrefixRouter {
     required String prefix,
     required WorkImageVariant variant,
     required WorkImageRouteProbe probe,
+    String? probeWorkCode,
   }) async {
     await repository.ensureLoaded();
     final ruleAtStart = repository.ruleFor(prefix);
+    final revisionTokenAtStart = repository.revisionTokenFor(prefix);
     final attempted = <WorkImageNormalizationFamily>[];
     final definitiveFailures = <WorkImageNormalizationFamily>[];
     WorkImageRouteProbeException? lastFailure;
@@ -125,11 +139,14 @@ final class WorkImagePrefixRouter {
           prefix: prefix,
           family: family,
           definitiveFailures: definitiveFailures,
+          expectedRevisionToken: revisionTokenAtStart,
         );
         return WorkImageRouteDecision(
           family: family,
           probeResult: result,
           probeVariant: variant,
+          probeWorkCode: probeWorkCode,
+          revisionToken: repository.revisionTokenFor(prefix),
         );
       } on WorkImageRouteProbeException catch (error) {
         lastFailure = error;
@@ -141,6 +158,7 @@ final class WorkImagePrefixRouter {
             prefix,
             ruleAtStart,
             definitiveFailures,
+            revisionTokenAtStart,
           );
           rethrow;
         }
@@ -157,6 +175,7 @@ final class WorkImagePrefixRouter {
       prefix,
       ruleAtStart,
       definitiveFailures,
+      revisionTokenAtStart,
     );
     throw WorkImageRouteResolutionException(
       prefix: prefix,
@@ -169,12 +188,15 @@ final class WorkImagePrefixRouter {
     String prefix,
     WorkImagePrefixRouteRule? ruleAtStart,
     Iterable<WorkImageNormalizationFamily> families,
+    PrefixRouteRevisionToken expectedRevisionToken,
   ) async {
     if (ruleAtStart == null) {
       return;
     }
-    for (final family in families) {
-      await repository.recordDefinitiveFailure(prefix: prefix, family: family);
-    }
+    await repository.recordDefinitiveFailures(
+      prefix: prefix,
+      families: families,
+      expectedRevisionToken: expectedRevisionToken,
+    );
   }
 }

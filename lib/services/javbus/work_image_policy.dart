@@ -1,4 +1,6 @@
 import '../scrape/work_identity.dart';
+import '../scrape/work_code_canonicalizer.dart';
+import 'work_image_learned_route.dart';
 import 'work_image_route_resolver.dart';
 
 enum WorkImageSource { dmm, mgstage }
@@ -40,6 +42,35 @@ class WorkImageUrls {
 
   Uri forVariant(WorkImageVariant variant) {
     return variant == WorkImageVariant.card ? card : detail;
+  }
+}
+
+/// Validates an evidence-derived URL against the descriptor that generated
+/// it.  Comparing with the fully rendered expected URI is intentional: it
+/// prevents a persisted descriptor from turning into an arbitrary URL even if
+/// the descriptor JSON was edited outside the app.
+bool isApprovedGeneratedLearnedWorkImageUri({
+  required Uri uri,
+  required String code,
+  required WorkImageLearnedRouteDescriptor descriptor,
+  required WorkImageVariant variant,
+}) {
+  try {
+    final urls = _renderLearnedUrls(code: code, descriptor: descriptor);
+    final expected = urls.forVariant(variant);
+    final expectedHost =
+        descriptor.source == WorkImageLearnedRouteSource.dmmDigitalVideo
+        ? 'awsimgsrc.dmm.co.jp'
+        : 'image.mgstage.com';
+    return uri == expected &&
+        uri.scheme == 'https' &&
+        uri.host.toLowerCase() == expectedHost &&
+        uri.userInfo.isEmpty &&
+        (uri.port == 0 || uri.port == 443) &&
+        uri.query.isEmpty &&
+        uri.fragment.isEmpty;
+  } on Object {
+    return false;
   }
 }
 
@@ -167,6 +198,13 @@ class WorkImagePolicy {
     return urls;
   }
 
+  WorkImageUrls urlsForLearnedDescriptor({
+    required String code,
+    required WorkImageLearnedRouteDescriptor descriptor,
+  }) {
+    return _renderLearnedUrls(code: code, descriptor: descriptor);
+  }
+
   String _dmmImageCode(
     ({String prefix, String number}) parts,
     WorkImageNormalizationFamily family,
@@ -261,4 +299,103 @@ class WorkImagePolicy {
       throw StateError('Work image policy generated an unapproved endpoint.');
     }
   }
+}
+
+WorkImageUrls _renderLearnedUrls({
+  required String code,
+  required WorkImageLearnedRouteDescriptor descriptor,
+}) {
+  final parts = _learnedCodeParts(code);
+  if (parts == null) {
+    throw FormatException('Unsupported work code: $code');
+  }
+  List<String> renderPath(List<WorkImageTemplateSegment> path) {
+    if (path.isEmpty || path.length > 8) {
+      throw const FormatException('Invalid learned route path.');
+    }
+    final rendered = [
+      for (final segment in path)
+        segment.render(prefix: parts.prefix, number: parts.number),
+    ];
+    if (rendered.any(
+      (segment) =>
+          segment.isEmpty ||
+          segment == '.' ||
+          segment == '..' ||
+          segment.length > 128 ||
+          !RegExp(r'^[a-z0-9_.-]+$').hasMatch(segment),
+    )) {
+      throw const FormatException('Invalid learned route segment.');
+    }
+    return rendered;
+  }
+
+  final cardSegments = renderPath(descriptor.cardPath);
+  final detailSegments = renderPath(descriptor.detailPath);
+  final baseHost =
+      descriptor.source == WorkImageLearnedRouteSource.dmmDigitalVideo
+      ? 'awsimgsrc.dmm.co.jp'
+      : 'image.mgstage.com';
+  if (descriptor.source == WorkImageLearnedRouteSource.dmmDigitalVideo) {
+    if (descriptor.variantMode != WorkImageLearnedVariantMode.dmmPsPl ||
+        !_hasPrefix(cardSegments, const ['pics_dig', 'digital', 'video']) ||
+        !_hasPrefix(detailSegments, const ['pics_dig', 'digital', 'video']) ||
+        !_samePrefix(cardSegments, detailSegments, 4) ||
+        !cardSegments.last.endsWith('ps.jpg') ||
+        !detailSegments.last.endsWith('pl.jpg')) {
+      throw const FormatException('Invalid DMM learned route.');
+    }
+  } else {
+    if (descriptor.variantMode == WorkImageLearnedVariantMode.dmmPsPl ||
+        cardSegments.first != 'images' ||
+        detailSegments.first != 'images') {
+      throw const FormatException('Invalid MGStage learned route.');
+    }
+    if (descriptor.variantMode == WorkImageLearnedVariantMode.mgstagePfPb &&
+        (!cardSegments.last.startsWith('pf_e_') ||
+            !detailSegments.last.startsWith('pb_e_') ||
+            !_samePrefix(
+              cardSegments,
+              detailSegments,
+              cardSegments.length - 1,
+            ))) {
+      throw const FormatException('Invalid MGStage paired route.');
+    }
+    if (descriptor.variantMode == WorkImageLearnedVariantMode.singleCover &&
+        !_samePrefix(cardSegments, detailSegments, cardSegments.length)) {
+      throw const FormatException('Invalid MGStage single-cover route.');
+    }
+  }
+
+  return WorkImageUrls(
+    card: Uri.https(baseHost, '/${cardSegments.join('/')}'),
+    detail: Uri.https(baseHost, '/${detailSegments.join('/')}'),
+    source: descriptor.source == WorkImageLearnedRouteSource.dmmDigitalVideo
+        ? WorkImageSource.dmm
+        : WorkImageSource.mgstage,
+  );
+}
+
+bool _hasPrefix(List<String> value, List<String> expected) {
+  if (value.length < expected.length) return false;
+  for (var index = 0; index < expected.length; index++) {
+    if (value[index] != expected[index]) return false;
+  }
+  return true;
+}
+
+bool _samePrefix(List<String> left, List<String> right, int length) {
+  if (left.length < length || right.length < length) return false;
+  for (var index = 0; index < length; index++) {
+    if (left[index] != right[index]) return false;
+  }
+  return true;
+}
+
+({String prefix, String number})? _learnedCodeParts(String code) {
+  final canonical = canonicalizeWorkCode(code);
+  if (canonical == null) return null;
+  final match = RegExp(r'^([A-Z]+)-(\d+)$').firstMatch(canonical);
+  if (match == null) return null;
+  return (prefix: match.group(1)!.toLowerCase(), number: match.group(2)!);
 }

@@ -250,6 +250,7 @@
   "scrapeSourceWorksTitle": "Works source",
   "scrapeSourceMinnanoAv": "Minnano AV",
   "scrapeSourceJavBus": "JavBus",
+   "scrapeSourceAvBase": "AvBase",
   "scrapeSourceAll": "All sources (merge and deduplicate by code)",
   "scrapeSourceSaveFailed": "Could not save scrape source settings.",
   "scrapeSourceConnectionTitle": "Scrape source connections",

@@ -39,7 +39,19 @@ void main() {
     expect(find.text('Pure Black AMOLED'), findsNothing);
   });
 
-  testWidgets('about exposes GitHub and feedback links', (tester) async {
+  testWidgets('settings back button aligns with the app bar title', (
+    tester,
+  ) async {
+    await _pumpSettings(tester);
+    await tester.tap(find.text('Theme & Colors'));
+    await tester.pumpAndSettle();
+
+    final backRect = tester.getRect(find.byIcon(Icons.arrow_back));
+    final titleRect = tester.getRect(find.text('Theme & Colors'));
+    expect(backRect.center.dy, closeTo(titleRect.center.dy, 0.5));
+  });
+
+  testWidgets('about expands GitHub and feedback links inline', (tester) async {
     final openedUrls = <Uri>[];
 
     await _pumpSettings(
@@ -59,7 +71,8 @@ void main() {
     await tester.tap(find.text('About'));
     await tester.pumpAndSettle();
 
-    expect(find.widgetWithText(AppBar, 'About'), findsOneWidget);
+    expect(find.widgetWithText(AppBar, 'Other'), findsOneWidget);
+    expect(find.widgetWithText(AppBar, 'About'), findsNothing);
     expect(find.text('github'), findsOneWidget);
     expect(find.text('Feedback'), findsOneWidget);
     expect(find.byIcon(Icons.open_in_new), findsNWidgets(2));
@@ -75,9 +88,7 @@ void main() {
     ]);
   });
 
-  testWidgets('other exposes Prefix route rules and opens its formal page', (
-    tester,
-  ) async {
+  testWidgets('other expands Prefix route rules inline', (tester) async {
     await _pumpSettings(tester);
 
     await tester.tap(find.text('Other'));
@@ -87,7 +98,8 @@ void main() {
     await tester.tap(find.text('Prefix route rules'));
     await tester.pumpAndSettle();
 
-    expect(find.widgetWithText(AppBar, 'Prefix route rules'), findsOneWidget);
+    expect(find.widgetWithText(AppBar, 'Other'), findsOneWidget);
+    expect(find.widgetWithText(AppBar, 'Prefix route rules'), findsNothing);
     expect(find.text('0 learned Prefix rules'), findsOneWidget);
     expect(find.byKey(const ValueKey('prefix-route-import')), findsOneWidget);
     expect(find.byKey(const ValueKey('prefix-route-export')), findsOneWidget);
@@ -112,7 +124,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Prefix route rules'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('SONE'));
+    final sone = find.text('SONE');
+    await tester.ensureVisible(sone);
+    await tester.pumpAndSettle();
+    await tester.tap(sone);
     await tester.pumpAndSettle();
 
     expect(find.text('Known candidates'), findsOneWidget);
@@ -194,6 +209,8 @@ void main() {
     // restoring either source's default.
     await tester.pageBack();
     await tester.pumpAndSettle();
+    await tester.tap(find.text('Other'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Scrape sources'));
     await tester.pumpAndSettle();
     if (find
@@ -253,13 +270,21 @@ void main() {
       find.byKey(const ValueKey('scrape-source-status-javbus')),
       findsOneWidget,
     );
-    expect(find.text('Not tested'), findsNWidgets(2));
+    expect(
+      find.byKey(const ValueKey('scrape-source-status-avbase')),
+      findsOneWidget,
+    );
+    expect(find.text('Not tested'), findsNWidgets(3));
 
     await tester.tap(find.byKey(const ValueKey('scrape-source-retest-button')));
     await tester.pumpAndSettle();
 
-    expect(testedSources, [ScrapeSourceId.minnanoAv, ScrapeSourceId.javbus]);
-    expect(find.text('Connected'), findsOneWidget);
+    expect(testedSources, [
+      ScrapeSourceId.minnanoAv,
+      ScrapeSourceId.javbus,
+      ScrapeSourceId.avbase,
+    ]);
+    expect(find.text('Connected'), findsNWidgets(2));
     expect(find.text('Verification required'), findsOneWidget);
   });
 
@@ -793,7 +818,7 @@ void _expectBorderlessExpansionTile(
   ShapeBorder? expectedShape,
   bool expectAnimationStyle = true,
 }) {
-  final tileFinder = find.widgetWithText(ExpansionTile, label);
+  final tileFinder = find.widgetWithText(ExpansionTile, label).first;
 
   expect(tileFinder, findsOneWidget);
 

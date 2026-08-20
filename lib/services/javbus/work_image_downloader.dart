@@ -9,6 +9,7 @@ import '../http_safety.dart';
 import '../safe_image.dart';
 import '../scrape/work_code_canonicalizer.dart';
 import 'prefix_route_repository.dart';
+import 'work_image_learned_route.dart';
 import 'work_image_policy.dart';
 import 'work_image_prefix_router.dart';
 import 'work_image_route_resolver.dart';
@@ -92,6 +93,7 @@ class WorkImageDownloader {
     WorkImagePolicy policy = const WorkImagePolicy(),
     PrefixRouteRepository? routeRepository,
     WorkImagePrefixRouter? routeRouter,
+    this.evidenceRouteLearningEnabled = true,
   }) : _transport = transport ?? HttpBinaryTransport(),
        _policy = policy {
     final repository = routeRepository ?? PrefixRouteRepository.inMemory();
@@ -105,7 +107,10 @@ class WorkImageDownloader {
 
   final BinaryTransport _transport;
   final WorkImagePolicy _policy;
+  final bool evidenceRouteLearningEnabled;
   late final WorkImagePrefixRouter _routeRouter;
+  final WorkImageEvidenceRouteParser _evidenceParser =
+      const WorkImageEvidenceRouteParser();
 
   String fileNameFor({
     required String code,
@@ -157,15 +162,49 @@ class WorkImageDownloader {
       );
     }
 
+    final canonicalCode =
+        canonicalizeWorkCode(code) ?? code.trim().toUpperCase();
+    final repository = _routeRouter.repository;
+    await repository.ensureLoaded();
+    final legacyRuleAtStart = repository.ruleFor(prefix);
+
+    if (evidenceRouteLearningEnabled &&
+        legacyRuleAtStart?.manualOverride == null) {
+      final learned = await _tryLearnedCandidates(
+        code: canonicalCode,
+        prefix: prefix,
+        variant: variant,
+      );
+      if (learned != null) return learned;
+    }
+
+    // An unknown Prefix has no trustworthy legacy route ordering.  When the
+    // source page supplied official image evidence, use that evidence before
+    // trying the six historical guessed families.
+    if (evidenceRouteLearningEnabled &&
+        legacyRuleAtStart == null &&
+        originalImageEvidenceUris.isNotEmpty) {
+      final evidenceResult = await _tryEvidenceRoutes(
+        code: canonicalCode,
+        prefix: prefix,
+        variant: variant,
+        evidenceUris: originalImageEvidenceUris,
+      );
+      if (evidenceResult != null) return evidenceResult;
+    }
+
     try {
       final decision = await _routeRouter.resolve(
         prefix: prefix,
         variant: variant,
+        probeWorkCode: canonicalCode,
         probe: (family) =>
             _probeFamily(code: code, family: family, variant: variant),
       );
       final probeResult = decision.probeResult;
-      if (probeResult != null && decision.probeVariant == variant) {
+      if (probeResult != null &&
+          decision.probeVariant == variant &&
+          decision.probeWorkCode == canonicalCode) {
         return _downloaded(probeResult);
       }
       try {
@@ -187,11 +226,14 @@ class WorkImageDownloader {
         final fallback = await _routeRouter.resolve(
           prefix: prefix,
           variant: variant,
+          probeWorkCode: canonicalCode,
           probe: (family) =>
               _probeFamily(code: code, family: family, variant: variant),
         );
         final fallbackResult = fallback.probeResult;
-        if (fallbackResult != null && fallback.probeVariant == variant) {
+        if (fallbackResult != null &&
+            fallback.probeVariant == variant &&
+            fallback.probeWorkCode == canonicalCode) {
           return _downloaded(fallbackResult);
         }
         return _downloaded(
@@ -205,11 +247,120 @@ class WorkImageDownloader {
     } on WorkImageRouteProbeException catch (error) {
       throw _downloadException(error);
     } on WorkImageRouteResolutionException catch (error) {
+      if (evidenceRouteLearningEnabled &&
+          originalImageEvidenceUris.isNotEmpty &&
+          legacyRuleAtStart?.manualOverride == null) {
+        final evidenceResult = await _tryEvidenceRoutes(
+          code: canonicalCode,
+          prefix: prefix,
+          variant: variant,
+          evidenceUris: originalImageEvidenceUris,
+        );
+        if (evidenceResult != null) return evidenceResult;
+      }
       throw WorkImageDownloadException(
         error.lastUri ?? _diagnosticUri,
         kind: WorkImageDownloadFailureKind.definitiveRouteMiss,
       );
     }
+  }
+
+  Future<DownloadedWorkImage?> _tryLearnedCandidates({
+    required String code,
+    required String prefix,
+    required WorkImageVariant variant,
+  }) async {
+    final candidates = _routeRouter.repository
+        .orderedLearnedCandidatesFor(prefix)
+        .where((candidate) => candidate.isUsable)
+        .toList(growable: false);
+    for (final candidate in candidates) {
+      final revisionToken = _routeRouter.repository.revisionTokenFor(prefix);
+      try {
+        final result = await _probeLearnedDescriptor(
+          code: code,
+          descriptor: candidate.descriptor,
+          variant: variant,
+        );
+        await _routeRouter.repository.recordLearnedSuccess(
+          prefix: prefix,
+          descriptor: candidate.descriptor,
+          workCode: code,
+          evidenceUri: result.sourceUri,
+          expectedRevisionToken: revisionToken,
+        );
+        return _downloaded(result);
+      } on WorkImageRouteProbeException catch (error) {
+        if (error.kind != WorkImageRouteProbeFailureKind.definitiveMiss) {
+          throw _downloadException(error);
+        }
+        await _routeRouter.repository.recordLearnedDefinitiveFailure(
+          prefix: prefix,
+          descriptor: candidate.descriptor,
+          workCode: code,
+          expectedRevisionToken: revisionToken,
+        );
+      }
+    }
+    return null;
+  }
+
+  Future<DownloadedWorkImage?> _tryEvidenceRoutes({
+    required String code,
+    required String prefix,
+    required WorkImageVariant variant,
+    required List<Uri> evidenceUris,
+  }) async {
+    final descriptors = <String, _EvidenceDescriptor>{};
+    for (final evidenceUri in evidenceUris) {
+      final descriptor = _evidenceParser.parse(
+        evidenceUri: evidenceUri,
+        code: code,
+      );
+      if (descriptor == null) continue;
+      final key = descriptor.canonicalKey;
+      final existing = descriptors[key];
+      if (existing == null ||
+          evidenceUri.toString().compareTo(existing.evidenceUri.toString()) <
+              0) {
+        descriptors[key] = _EvidenceDescriptor(
+          descriptor: descriptor,
+          evidenceUri: evidenceUri,
+        );
+      }
+    }
+    final ordered = descriptors.values.toList()
+      ..sort(
+        (left, right) => left.descriptor.canonicalKey.compareTo(
+          right.descriptor.canonicalKey,
+        ),
+      );
+    for (final item in ordered) {
+      final revisionToken = _routeRouter.repository.revisionTokenFor(prefix);
+      try {
+        final result = await _probeLearnedDescriptor(
+          code: code,
+          descriptor: item.descriptor,
+          variant: variant,
+        );
+        await _routeRouter.repository.recordLearnedSuccess(
+          prefix: prefix,
+          descriptor: item.descriptor,
+          workCode: code,
+          evidenceUri: item.evidenceUri,
+          expectedRevisionToken: revisionToken,
+        );
+        return _downloaded(result);
+      } on WorkImageRouteProbeException catch (error) {
+        if (error.kind != WorkImageRouteProbeFailureKind.definitiveMiss) {
+          throw _downloadException(error);
+        }
+        // Evidence is authoritative for route shape only; a definitive miss
+        // still allows the next independently proven descriptor or the legacy
+        // family fallback to run.
+      }
+    }
+    return null;
   }
 
   Future<DownloadedWorkImage> downloadToFile({
@@ -265,6 +416,43 @@ class WorkImageDownloader {
       );
     }
 
+    return _probeUri(uri);
+  }
+
+  Future<WorkImageRouteProbeResult> _probeLearnedDescriptor({
+    required String code,
+    required WorkImageLearnedRouteDescriptor descriptor,
+    required WorkImageVariant variant,
+  }) async {
+    late final Uri uri;
+    try {
+      final urls = _policy.urlsForLearnedDescriptor(
+        code: code,
+        descriptor: descriptor,
+      );
+      uri = urls.forVariant(variant);
+    } on Object catch (error) {
+      throw WorkImageRouteProbeException(
+        uri: _diagnosticUri,
+        kind: WorkImageRouteProbeFailureKind.policyViolation,
+        cause: error,
+      );
+    }
+    if (!isApprovedGeneratedLearnedWorkImageUri(
+      uri: uri,
+      code: code,
+      descriptor: descriptor,
+      variant: variant,
+    )) {
+      throw WorkImageRouteProbeException(
+        uri: uri,
+        kind: WorkImageRouteProbeFailureKind.policyViolation,
+      );
+    }
+    return _probeUri(uri);
+  }
+
+  Future<WorkImageRouteProbeResult> _probeUri(Uri uri) async {
     late final BinaryResponse response;
     try {
       response = await _transport.get(uri);
@@ -366,4 +554,14 @@ class WorkImageDownloader {
   static final Uri _diagnosticUri = Uri.parse(
     'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/',
   );
+}
+
+final class _EvidenceDescriptor {
+  const _EvidenceDescriptor({
+    required this.descriptor,
+    required this.evidenceUri,
+  });
+
+  final WorkImageLearnedRouteDescriptor descriptor;
+  final Uri evidenceUri;
 }

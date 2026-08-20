@@ -7,9 +7,14 @@ import '../controllers/software_update_controller.dart';
 import '../models/software_update_models.dart';
 
 class SoftwareUpdateView extends StatefulWidget {
-  const SoftwareUpdateView({super.key, required this.controller});
+  const SoftwareUpdateView({
+    super.key,
+    required this.controller,
+    this.shrinkWrap = false,
+  });
 
   final SoftwareUpdateController controller;
+  final bool shrinkWrap;
 
   @override
   State<SoftwareUpdateView> createState() => _SoftwareUpdateViewState();
@@ -35,7 +40,12 @@ class _SoftwareUpdateViewState extends State<SoftwareUpdateView> {
         final latest = controller.latestRelease?.version.toString() ?? '—';
 
         return ListView(
+          key: const PageStorageKey('software-update-settings-scroll'),
           padding: EdgeInsets.zero,
+          shrinkWrap: widget.shrinkWrap,
+          physics: widget.shrinkWrap
+              ? const NeverScrollableScrollPhysics()
+              : null,
           children: [
             Text(
               localizations.softwareUpdateDescription,

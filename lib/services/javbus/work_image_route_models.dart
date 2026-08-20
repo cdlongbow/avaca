@@ -1,5 +1,7 @@
 import 'work_image_route_resolver.dart';
 
+export 'work_image_learned_route.dart';
+
 enum WorkImageRouteCandidateStatus { untested, healthy, degraded, failed }
 
 enum WorkImagePrefixRouteStatus {

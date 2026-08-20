@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.2 - 2026-08-21
+
+- Added AvBase as a guarded actress-details and works source, including
+  pagination, metadata parsing, DMM avatar/image evidence, and deterministic
+  merging with JavBus results.
+- Extended learned work-image routing with evidence-derived descriptors,
+  persisted candidate health, safe validation, and route-aware downloads.
+- Refined source selection, scrape progress, responsive Settings and Works
+  layouts, localization, and regression coverage for the new scrape and image
+  flows.
+
 ## 0.9.1 - 2026-08-20
 
 - Added learned Prefix-based work-image routing with automatic probing,

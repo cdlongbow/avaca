@@ -675,6 +675,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get scrapeSourceJavBus => 'JavBus';
 
   @override
+  String get scrapeSourceAvBase => 'AvBase';
+
+  @override
   String get scrapeSourceAll => '所有來源（依番號整合並去重複）';
 
   @override
@@ -1622,6 +1625,9 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get scrapeSourceJavBus => 'JavBus';
 
   @override
+  String get scrapeSourceAvBase => 'AvBase';
+
+  @override
   String get scrapeSourceAll => '所有来源（按番号整合并去重）';
 
   @override
@@ -2567,6 +2573,9 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get scrapeSourceJavBus => 'JavBus';
+
+  @override
+  String get scrapeSourceAvBase => 'AvBase';
 
   @override
   String get scrapeSourceAll => '所有來源（依番號整合並去重複）';

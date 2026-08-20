@@ -697,6 +697,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get scrapeSourceJavBus => 'JavBus';
 
   @override
+  String get scrapeSourceAvBase => 'AvBase';
+
+  @override
   String get scrapeSourceAll => 'All sources (merge and deduplicate by code)';
 
   @override

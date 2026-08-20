@@ -677,6 +677,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get scrapeSourceJavBus => 'JavBus';
 
   @override
+  String get scrapeSourceAvBase => 'AvBase';
+
+  @override
   String get scrapeSourceAll => 'すべての取得元（品番で統合・重複排除）';
 
   @override
@@ -1630,6 +1633,9 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
 
   @override
   String get scrapeSourceJavBus => 'JavBus';
+
+  @override
+  String get scrapeSourceAvBase => 'AvBase';
 
   @override
   String get scrapeSourceAll => 'すべての取得元（品番で統合・重複排除）';

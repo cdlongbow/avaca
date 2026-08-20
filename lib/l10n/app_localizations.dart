@@ -1375,6 +1375,12 @@ abstract class AppLocalizations {
   /// **'JavBus'**
   String get scrapeSourceJavBus;
 
+  /// No description provided for @scrapeSourceAvBase.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'AvBase'**
+  String get scrapeSourceAvBase;
+
   /// No description provided for @scrapeSourceAll.
   ///
   /// In zh_TW, this message translates to:

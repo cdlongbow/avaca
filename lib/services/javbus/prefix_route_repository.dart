@@ -7,6 +7,7 @@ import 'work_image_route_models.dart';
 import 'work_image_route_resolver.dart';
 
 const workImagePrefixRouteSettingKey = 'work_image_prefix_route_rules';
+const workImageLearnedRouteSettingKey = 'work_image_learned_routes';
 
 enum PrefixRouteStoreLoadStatus {
   ready,
@@ -16,6 +17,26 @@ enum PrefixRouteStoreLoadStatus {
 }
 
 enum PrefixRouteImportMode { merge, replace }
+
+final class PrefixRouteRevisionToken {
+  const PrefixRouteRevisionToken({
+    required this.generation,
+    required this.prefixRevision,
+  });
+
+  final int generation;
+  final int prefixRevision;
+
+  @override
+  bool operator ==(Object other) {
+    return other is PrefixRouteRevisionToken &&
+        other.generation == generation &&
+        other.prefixRevision == prefixRevision;
+  }
+
+  @override
+  int get hashCode => Object.hash(generation, prefixRevision);
+}
 
 final class PrefixRouteRepositoryException implements Exception {
   const PrefixRouteRepositoryException(this.code, this.message);
@@ -75,9 +96,15 @@ final class PrefixRouteRepository {
     required _ReadPrefixRouteDocument read,
     required _WritePrefixRouteDocument write,
     required _RemovePrefixRouteDocument remove,
+    required _ReadPrefixRouteDocument readLearned,
+    required _WritePrefixRouteDocument writeLearned,
+    required _RemovePrefixRouteDocument removeLearned,
   }) : _read = read,
        _write = write,
-       _remove = remove;
+       _remove = remove,
+       _readLearned = readLearned,
+       _writeLearned = writeLearned,
+       _removeLearned = removeLearned;
 
   static final Expando<PrefixRouteRepository> _databaseRepositories =
       Expando<PrefixRouteRepository>('prefixRouteRepositories');
@@ -90,37 +117,69 @@ final class PrefixRouteRepository {
       read: () => db.getSetting(workImagePrefixRouteSettingKey),
       write: (value) => db.setSetting(workImagePrefixRouteSettingKey, value),
       remove: () => db.removeSetting(workImagePrefixRouteSettingKey),
+      readLearned: () => db.getSetting(workImageLearnedRouteSettingKey),
+      writeLearned: (value) =>
+          db.setSetting(workImageLearnedRouteSettingKey, value),
+      removeLearned: () => db.removeSetting(workImageLearnedRouteSettingKey),
     );
     _databaseRepositories[db] = repository;
     return repository;
   }
 
-  factory PrefixRouteRepository.inMemory({String? initialJson}) {
+  factory PrefixRouteRepository.inMemory({
+    String? initialJson,
+    String? initialLearnedJson,
+  }) {
     var raw = initialJson;
+    var learnedRaw = initialLearnedJson;
     return PrefixRouteRepository._(
       read: () async => raw,
       write: (value) async => raw = value,
       remove: () async => raw = null,
+      readLearned: () async => learnedRaw,
+      writeLearned: (value) async => learnedRaw = value,
+      removeLearned: () async => learnedRaw = null,
     );
   }
 
   final _ReadPrefixRouteDocument _read;
   final _WritePrefixRouteDocument _write;
   final _RemovePrefixRouteDocument _remove;
+  final _ReadPrefixRouteDocument _readLearned;
+  final _WritePrefixRouteDocument _writeLearned;
+  final _RemovePrefixRouteDocument _removeLearned;
 
   WorkImageRouteDocument _document = WorkImageRouteDocument.empty();
   PrefixRouteStoreLoadStatus _loadStatus = PrefixRouteStoreLoadStatus.ready;
   String? _loadError;
   Future<void>? _loadFuture;
+  Future<void>? _learnedLoadFuture;
   Future<void> _writeTail = Future<void>.value();
   final Map<String, int> _prefixRevisions = <String, int>{};
+  WorkImageLearnedRouteDocument _learnedDocument =
+      WorkImageLearnedRouteDocument.empty();
+  PrefixRouteStoreLoadStatus _learnedLoadStatus =
+      PrefixRouteStoreLoadStatus.ready;
+  String? _learnedLoadError;
+  int _generation = 0;
 
   PrefixRouteStoreLoadStatus get loadStatus => _loadStatus;
   String? get loadError => _loadError;
   bool get isReady => _loadStatus == PrefixRouteStoreLoadStatus.ready;
+  PrefixRouteStoreLoadStatus get learnedLoadStatus => _learnedLoadStatus;
+  String? get learnedLoadError => _learnedLoadError;
+  bool get learnedRoutesReady =>
+      _learnedLoadStatus == PrefixRouteStoreLoadStatus.ready;
 
   Future<void> ensureLoaded() {
-    return _loadFuture ??= _loadInternal();
+    return _loadFuture ??= Future.wait<void>([
+      _loadInternal(),
+      ensureLearnedRoutesLoaded(),
+    ]);
+  }
+
+  Future<void> ensureLearnedRoutesLoaded() {
+    return _learnedLoadFuture ??= _loadLearnedInternal();
   }
 
   List<WorkImagePrefixRouteRule> get rules {
@@ -135,6 +194,188 @@ final class PrefixRouteRepository {
   int revisionFor(String prefix) {
     final normalized = normalizeWorkImagePrefix(prefix) ?? prefix;
     return _prefixRevisions[normalized] ?? 0;
+  }
+
+  PrefixRouteRevisionToken revisionTokenFor(String prefix) {
+    final normalized = normalizeWorkImagePrefix(prefix) ?? prefix;
+    return PrefixRouteRevisionToken(
+      generation: _generation,
+      prefixRevision: _prefixRevisions[normalized] ?? 0,
+    );
+  }
+
+  WorkImageLearnedPrefixRoute? learnedRuleFor(String prefix) {
+    return _learnedDocument.routes[normalizeWorkImagePrefix(prefix)];
+  }
+
+  List<WorkImageLearnedRouteCandidate> orderedLearnedCandidatesFor(
+    String prefix,
+  ) {
+    final route = learnedRuleFor(prefix);
+    if (route == null) return const [];
+    final candidates = [...route.candidates]
+      ..sort(compareLearnedRouteCandidates);
+    if (route.preferredDescriptorKey != null) {
+      final preferred = route.candidateFor(route.preferredDescriptorKey!);
+      if (preferred != null) {
+        candidates.remove(preferred);
+        candidates.insert(0, preferred);
+      }
+    }
+    return List.unmodifiable(candidates);
+  }
+
+  Future<void> recordLearnedSuccess({
+    required String prefix,
+    required WorkImageLearnedRouteDescriptor descriptor,
+    required String workCode,
+    Uri? evidenceUri,
+    DateTime? at,
+    PrefixRouteRevisionToken? expectedRevisionToken,
+  }) {
+    final normalized = _requirePrefix(prefix);
+    final canonicalCode = canonicalizeWorkCode(workCode);
+    if (canonicalCode == null) return Future<void>.value();
+    final timestamp = (at ?? DateTime.now()).toUtc();
+    final observedUri =
+        evidenceUri ??
+        Uri.parse('https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/');
+    return _enqueue(() async {
+      await _ensureLoadedForMutation();
+      if (!isReady || !learnedRoutesReady) return;
+      if (!_matchesRevision(normalized, expectedRevisionToken)) return;
+      final existing = _learnedDocument.routes[normalized];
+      final key = descriptor.canonicalKey;
+      final current = existing?.candidateFor(key);
+      final nextCandidate =
+          (current ?? WorkImageLearnedRouteCandidate(descriptor: descriptor))
+              .withSuccess(
+                workCode: canonicalCode,
+                at: timestamp,
+                evidenceUri: observedUri,
+              );
+      final candidates = <WorkImageLearnedRouteCandidate>[
+        for (final candidate in existing?.candidates ?? const [])
+          if (candidate.descriptor.canonicalKey != key) candidate,
+        nextCandidate,
+      ];
+      candidates.sort(compareLearnedRouteCandidates);
+      final preferred = _preferredLearnedKey(
+        existing?.preferredDescriptorKey,
+        candidates,
+      );
+      await _persistLearned(
+        _replaceLearnedRule(
+          normalized,
+          WorkImageLearnedPrefixRoute(
+            prefix: normalized,
+            candidates: candidates.take(
+              WorkImageLearnedRouteDocumentCodec.maxCandidatesPerPrefix,
+            ),
+            preferredDescriptorKey: preferred,
+          ),
+        ),
+      );
+    });
+  }
+
+  Future<void> recordLearnedDefinitiveFailure({
+    required String prefix,
+    required WorkImageLearnedRouteDescriptor descriptor,
+    String? workCode,
+    DateTime? at,
+    PrefixRouteRevisionToken? expectedRevisionToken,
+  }) {
+    final normalized = _requirePrefix(prefix);
+    final timestamp = (at ?? DateTime.now()).toUtc();
+    return _enqueue(() async {
+      await _ensureLoadedForMutation();
+      if (!isReady || !learnedRoutesReady) return;
+      if (!_matchesRevision(normalized, expectedRevisionToken)) return;
+      final existing = _learnedDocument.routes[normalized];
+      final key = descriptor.canonicalKey;
+      final current = existing?.candidateFor(key);
+      if (current == null) return;
+      final nextCandidate = current.withDefinitiveFailure(
+        workCode: workCode,
+        at: timestamp,
+      );
+      final candidates = [
+        for (final candidate in existing!.candidates)
+          if (candidate.descriptor.canonicalKey != key) candidate,
+        nextCandidate,
+      ];
+      await _persistLearned(
+        _replaceLearnedRule(
+          normalized,
+          WorkImageLearnedPrefixRoute(
+            prefix: normalized,
+            candidates: candidates,
+            preferredDescriptorKey: _preferredLearnedKey(
+              existing.preferredDescriptorKey,
+              candidates,
+            ),
+          ),
+        ),
+      );
+    });
+  }
+
+  Future<void> quarantineLearnedCandidate({
+    required String prefix,
+    required WorkImageLearnedRouteDescriptor descriptor,
+    DateTime? at,
+  }) {
+    final normalized = _requirePrefix(prefix);
+    final timestamp = (at ?? DateTime.now()).toUtc();
+    return _enqueue(() async {
+      await _ensureLoadedForMutation();
+      if (!isReady || !learnedRoutesReady) return;
+      final existing = _learnedDocument.routes[normalized];
+      final key = descriptor.canonicalKey;
+      final current = existing?.candidateFor(key);
+      if (current == null) return;
+      final candidates = [
+        for (final candidate in existing!.candidates)
+          candidate.descriptor.canonicalKey == key
+              ? candidate.quarantine(timestamp)
+              : candidate,
+      ];
+      await _persistLearned(
+        _replaceLearnedRule(
+          normalized,
+          WorkImageLearnedPrefixRoute(
+            prefix: normalized,
+            candidates: candidates,
+            preferredDescriptorKey: existing.preferredDescriptorKey == key
+                ? null
+                : existing.preferredDescriptorKey,
+          ),
+        ),
+      );
+    });
+  }
+
+  bool _matchesRevision(String prefix, PrefixRouteRevisionToken? expected) {
+    return expected == null || revisionTokenFor(prefix) == expected;
+  }
+
+  String? _preferredLearnedKey(
+    String? current,
+    Iterable<WorkImageLearnedRouteCandidate> candidates,
+  ) {
+    final existing = current == null
+        ? null
+        : candidates.where((item) => item.descriptor.canonicalKey == current);
+    if (existing != null && existing.isNotEmpty && existing.first.isUsable) {
+      return current;
+    }
+    for (final candidate in candidates) {
+      if (candidate.status == WorkImageLearnedCandidateStatus.verified) {
+        return candidate.descriptor.canonicalKey;
+      }
+    }
+    return null;
   }
 
   List<WorkImageNormalizationFamily> orderedFamiliesFor(String prefix) {
@@ -165,6 +406,7 @@ final class PrefixRouteRepository {
     DateTime? at,
     Iterable<WorkImageNormalizationFamily> definitiveFailures = const [],
     int? expectedRevision,
+    PrefixRouteRevisionToken? expectedRevisionToken,
   }) {
     final normalized = _requirePrefix(prefix);
     final timestamp = (at ?? DateTime.now()).toUtc();
@@ -175,6 +417,7 @@ final class PrefixRouteRepository {
           revisionFor(normalized) != expectedRevision) {
         return;
       }
+      if (!_matchesRevision(normalized, expectedRevisionToken)) return;
 
       final existing = _document.routes[normalized];
       final candidates =
@@ -208,12 +451,28 @@ final class PrefixRouteRepository {
     required String prefix,
     required WorkImageNormalizationFamily family,
     DateTime? at,
+    PrefixRouteRevisionToken? expectedRevisionToken,
+  }) {
+    return recordDefinitiveFailures(
+      prefix: prefix,
+      families: [family],
+      at: at,
+      expectedRevisionToken: expectedRevisionToken,
+    );
+  }
+
+  Future<void> recordDefinitiveFailures({
+    required String prefix,
+    required Iterable<WorkImageNormalizationFamily> families,
+    DateTime? at,
+    PrefixRouteRevisionToken? expectedRevisionToken,
   }) {
     final normalized = _requirePrefix(prefix);
     final timestamp = (at ?? DateTime.now()).toUtc();
     return _enqueue(() async {
       await _ensureLoadedForMutation();
       if (!isReady) return;
+      if (!_matchesRevision(normalized, expectedRevisionToken)) return;
       final existing = _document.routes[normalized];
       // An unknown Prefix must not be persisted just because every candidate
       // failed.  A rule exists only after a validated success, or an explicit
@@ -224,9 +483,11 @@ final class PrefixRouteRepository {
             for (final candidate in existing.candidates)
               candidate.family: candidate,
           };
-      final candidate =
-          candidates[family] ?? WorkImageRouteCandidate(family: family);
-      candidates[family] = candidate.withFailure(timestamp);
+      for (final family in families) {
+        final candidate =
+            candidates[family] ?? WorkImageRouteCandidate(family: family);
+        candidates[family] = candidate.withFailure(timestamp);
+      }
       final nextRule = WorkImagePrefixRouteRule(
         prefix: normalized,
         candidates: candidates.values,
@@ -288,6 +549,10 @@ final class PrefixRouteRepository {
       _requireReadyForExplicitMutation();
       _bumpRevision(normalized);
       await _persist(_removeRule(normalized));
+      await _persistLearned(
+        _removeLearnedRule(normalized),
+        allowCorruptRecovery: true,
+      );
     });
   }
 
@@ -314,7 +579,16 @@ final class PrefixRouteRepository {
         );
         _bumpRevision(rule.prefix);
       }
+      for (final prefix in _learnedDocument.routes.keys) {
+        if (!_document.routes.containsKey(prefix)) {
+          _bumpRevision(prefix);
+        }
+      }
       await _persist(_document.copyWith(routes: nextRoutes));
+      await _persistLearned(
+        WorkImageLearnedRouteDocument.empty(),
+        allowCorruptRecovery: true,
+      );
     });
   }
 
@@ -327,24 +601,30 @@ final class PrefixRouteRepository {
       await _ensureLoadedForMutation();
       _requireReadyForExplicitMutation();
       final existing = _document.routes[normalized];
-      if (existing == null) return;
-      final manual = existing.manualOverride;
-      if (manual == null) {
-        _bumpRevision(normalized);
-        await _persist(_removeRule(normalized));
-        return;
+      if (existing != null) {
+        final manual = existing.manualOverride;
+        if (manual == null) {
+          _bumpRevision(normalized);
+          await _persist(_removeRule(normalized));
+        } else {
+          await _persist(
+            _replaceRule(
+              normalized,
+              WorkImagePrefixRouteRule(
+                prefix: normalized,
+                candidates: [WorkImageRouteCandidate(family: manual)],
+                manualOverride: manual,
+                createdAt: existing.createdAt,
+                updatedAt: DateTime.now().toUtc(),
+              ),
+            ),
+          );
+        }
       }
-      await _persist(
-        _replaceRule(
-          normalized,
-          WorkImagePrefixRouteRule(
-            prefix: normalized,
-            candidates: [WorkImageRouteCandidate(family: manual)],
-            manualOverride: manual,
-            createdAt: existing.createdAt,
-            updatedAt: DateTime.now().toUtc(),
-          ),
-        ),
+      _bumpRevision(normalized);
+      await _persistLearned(
+        _removeLearnedRule(normalized),
+        allowCorruptRecovery: true,
       );
     });
   }
@@ -355,6 +635,11 @@ final class PrefixRouteRepository {
       _document,
       includeStatistics: includeStatistics,
     );
+  }
+
+  Future<String> exportLearnedJson() async {
+    await ensureLearnedRoutesLoaded();
+    return WorkImageLearnedRouteDocumentCodec.encode(_learnedDocument);
   }
 
   PrefixRouteImportPreview previewImport(String rawJson) {
@@ -425,10 +710,15 @@ final class PrefixRouteRepository {
       await _ensureLoadedForMutation();
       _requireReadyForExplicitMutation();
       _document = WorkImageRouteDocument.empty();
+      _learnedDocument = WorkImageLearnedRouteDocument.empty();
       _loadStatus = PrefixRouteStoreLoadStatus.ready;
       _loadError = null;
+      _learnedLoadStatus = PrefixRouteStoreLoadStatus.ready;
+      _learnedLoadError = null;
+      _generation++;
       _prefixRevisions.clear();
       await _remove();
+      await _removeLearned();
     });
   }
 
@@ -454,6 +744,29 @@ final class PrefixRouteRepository {
       _document = WorkImageRouteDocument.empty();
       _loadStatus = PrefixRouteStoreLoadStatus.readError;
       _loadError = error.toString();
+    }
+  }
+
+  Future<void> _loadLearnedInternal() async {
+    try {
+      final raw = await _readLearned();
+      if (raw == null || raw.trim().isEmpty) {
+        _learnedDocument = WorkImageLearnedRouteDocument.empty();
+        _learnedLoadStatus = PrefixRouteStoreLoadStatus.ready;
+        _learnedLoadError = null;
+        return;
+      }
+      _learnedDocument = WorkImageLearnedRouteDocumentCodec.decode(raw);
+      _learnedLoadStatus = PrefixRouteStoreLoadStatus.ready;
+      _learnedLoadError = null;
+    } on FormatException catch (error) {
+      _learnedDocument = WorkImageLearnedRouteDocument.empty();
+      _learnedLoadStatus = PrefixRouteStoreLoadStatus.corrupt;
+      _learnedLoadError = error.message;
+    } on Object catch (error) {
+      _learnedDocument = WorkImageLearnedRouteDocument.empty();
+      _learnedLoadStatus = PrefixRouteStoreLoadStatus.readError;
+      _learnedLoadError = error.toString();
     }
   }
 
@@ -491,6 +804,21 @@ final class PrefixRouteRepository {
     _loadError = null;
   }
 
+  Future<void> _persistLearned(
+    WorkImageLearnedRouteDocument next, {
+    bool allowCorruptRecovery = false,
+  }) async {
+    if (!learnedRoutesReady && !allowCorruptRecovery) return;
+    if (next.routes.isEmpty) {
+      await _removeLearned();
+    } else {
+      await _writeLearned(WorkImageLearnedRouteDocumentCodec.encode(next));
+    }
+    _learnedDocument = next;
+    _learnedLoadStatus = PrefixRouteStoreLoadStatus.ready;
+    _learnedLoadError = null;
+  }
+
   WorkImageRouteDocument _replaceRule(
     String prefix,
     WorkImagePrefixRouteRule rule,
@@ -505,6 +833,30 @@ final class PrefixRouteRepository {
     final routes = <String, WorkImagePrefixRouteRule>{..._document.routes}
       ..remove(prefix);
     return _document.copyWith(routes: routes);
+  }
+
+  WorkImageLearnedRouteDocument _replaceLearnedRule(
+    String prefix,
+    WorkImageLearnedPrefixRoute route,
+  ) {
+    final routes = <String, WorkImageLearnedPrefixRoute>{
+      ..._learnedDocument.routes,
+      prefix: route,
+    };
+    return WorkImageLearnedRouteDocument(
+      schemaVersion: WorkImageLearnedRouteDocument.currentSchemaVersion,
+      routes: routes,
+    );
+  }
+
+  WorkImageLearnedRouteDocument _removeLearnedRule(String prefix) {
+    final routes = <String, WorkImageLearnedPrefixRoute>{
+      ..._learnedDocument.routes,
+    }..remove(prefix);
+    return WorkImageLearnedRouteDocument(
+      schemaVersion: WorkImageLearnedRouteDocument.currentSchemaVersion,
+      routes: routes,
+    );
   }
 
   void _bumpRevision(String prefix) {

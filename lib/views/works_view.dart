@@ -13,6 +13,9 @@ import '../core/layout.dart';
 import '../l10n/app_localizations.dart';
 import '../models/scrape_source_settings.dart';
 import '../models/work_scrape_options.dart';
+import '../services/avbase/avbase_client.dart';
+import '../services/avbase/avbase_scrape_source.dart';
+import '../services/avbase/avbase_transport.dart';
 import '../services/javbus/javbus_client.dart';
 import '../services/javbus/javbus_scrape_source.dart';
 import '../services/javbus/javbus_verification.dart';
@@ -810,6 +813,9 @@ class _WorksViewState extends State<WorksView> {
     HttpMinnanoTransport? minnanoTransport;
     MinnanoClient? minnanoClient;
     HttpBinaryTransport? minnanoAvatarTransport;
+    HttpAvBaseTransport? avbaseTransport;
+    AvBaseClient? avbaseClient;
+    HttpBinaryTransport? avbaseAvatarTransport;
     HttpScrapeImageUriDownloader? imageUriDownloader;
 
     if (requestedSourceIds.contains(ScrapeSourceId.javbus)) {
@@ -845,11 +851,29 @@ class _WorksViewState extends State<WorksView> {
         ),
       );
     }
+    if (requestedSourceIds.contains(ScrapeSourceId.avbase)) {
+      avbaseTransport = HttpAvBaseTransport();
+      avbaseClient = AvBaseClient(transport: avbaseTransport);
+      configuredSources[ScrapeSourceId.avbase] = AvBaseScrapeSource(
+        avbaseClient,
+      );
+      avbaseAvatarTransport = HttpBinaryTransport(
+        allowedHosts: const {'pics.dmm.co.jp'},
+        maxBytes: 5 * 1024 * 1024,
+      );
+    }
 
-    final detailsImageDownloader =
-        sourceSettings.actressDetailsSource == ScrapeSourceId.minnanoAv
-        ? HttpActressImageDownloader(transport: minnanoAvatarTransport)
-        : HttpActressImageDownloader(authenticatedTransport: javBusTransport);
+    final detailsImageDownloader = switch (sourceSettings.actressDetailsSource) {
+      ScrapeSourceId.minnanoAv => HttpActressImageDownloader(
+        transport: minnanoAvatarTransport,
+      ),
+      ScrapeSourceId.avbase => HttpActressImageDownloader(
+        transport: avbaseAvatarTransport,
+      ),
+      ScrapeSourceId.javbus => HttpActressImageDownloader(
+        authenticatedTransport: javBusTransport,
+      ),
+    };
     final service = WorksScrapeService(
       db: widget.db,
       sources: configuredSources,
@@ -1370,44 +1394,38 @@ class _ScrapeProgressDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final padding = _scrapeDialogPadding(context);
+    final padding = _scrapeProgressDialogPadding(context);
     final viewportSize = MediaQuery.sizeOf(context);
     final dialogWidth = (viewportSize.width - padding * 2)
         .clamp(240.0, 640.0)
         .toDouble();
-    final dialogMaxHeight = (viewportSize.height - 48)
-        .clamp(180.0, viewportSize.height)
-        .toDouble();
-    final contentHeight = (viewportSize.height - 220)
-        .clamp(180.0, 520.0)
-        .toDouble();
+    final contentWidth = dialogWidth - padding * 2;
     return AlertDialog(
       key: const Key('scrape-progress-dialog'),
-      constraints: BoxConstraints(
-        minWidth: dialogWidth,
-        maxWidth: dialogWidth,
-        maxHeight: dialogMaxHeight,
-      ),
-      insetPadding: EdgeInsets.symmetric(horizontal: padding, vertical: 24),
+      insetPadding: EdgeInsets.symmetric(horizontal: padding, vertical: 16),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(_scrapeDialogRadius),
       ),
-      titlePadding: EdgeInsets.fromLTRB(padding, 24, padding, 0),
+      titlePadding: EdgeInsets.fromLTRB(padding, 16, padding, 0),
       title: _ScrapeDialogHeading(
         title: l10n.scrapeSyncingTitle,
         subtitle: actressName.trim().isEmpty ? null : actressName.trim(),
+        compact: true,
       ),
-      contentPadding: EdgeInsets.fromLTRB(padding, 16, padding, 0),
-      content: _ScrapeDialogViewport(
-        height: contentHeight,
-        child: ValueListenableBuilder<WorksScrapeProgress?>(
-          valueListenable: progress,
-          builder: (context, value, child) {
-            return _ScrapeProgressContent(value: value);
-          },
+      contentPadding: EdgeInsets.fromLTRB(padding, 8, padding, 0),
+      content: SizedBox(
+        width: contentWidth,
+        child: _ScrapeDialogViewport(
+          shrinkWrap: true,
+          child: ValueListenableBuilder<WorksScrapeProgress?>(
+            valueListenable: progress,
+            builder: (context, value, child) {
+              return _ScrapeProgressContent(value: value);
+            },
+          ),
         ),
       ),
-      actionsPadding: EdgeInsets.fromLTRB(padding, 8, padding, 16),
+      actionsPadding: EdgeInsets.fromLTRB(padding, 4, padding, 8),
       actions: [TextButton(onPressed: onCancel, child: Text(l10n.stopScrape))],
     );
   }
@@ -1448,6 +1466,7 @@ class _ScrapeProgressContent extends StatelessWidget {
               detailsSource,
               sourceProgress[detailsSource],
             ),
+            compact: true,
           );
 
     final worksBody = Column(
@@ -1459,7 +1478,7 @@ class _ScrapeProgressContent extends StatelessWidget {
         else
           for (final source in worksSources)
             Padding(
-              padding: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.only(bottom: 8),
               child: _ScrapeSourceProgressRow(
                 source: source,
                 value: value,
@@ -1472,6 +1491,7 @@ class _ScrapeProgressContent extends StatelessWidget {
           saved: value?.saved ?? 0,
           excluded: value?.excluded ?? 0,
           failed: value?.failed ?? 0,
+          compact: true,
         ),
       ],
     );
@@ -1497,15 +1517,29 @@ class _ScrapeProgressContent extends StatelessWidget {
           ? const Key('scrape-progress-download-circular')
           : null,
       reserveProgressIndicator: true,
+      reserveDetailSlot: true,
+      compact: true,
     );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        _ScrapeSection(title: l10n.scrapeDetailsSection, child: detailsBody),
-        _ScrapeSection(title: l10n.scrapeWorksSection, child: worksBody),
-        _ScrapeSection(title: l10n.scrapeDownloadSection, child: downloadBody),
+        _ScrapeSection(
+          title: l10n.scrapeDetailsSection,
+          compact: true,
+          child: detailsBody,
+        ),
+        _ScrapeSection(
+          title: l10n.scrapeWorksSection,
+          compact: true,
+          child: worksBody,
+        ),
+        _ScrapeSection(
+          title: l10n.scrapeDownloadSection,
+          compact: true,
+          child: downloadBody,
+        ),
       ],
     );
   }
@@ -1738,10 +1772,15 @@ class _ScrapeResultDownloadBody extends StatelessWidget {
 }
 
 class _ScrapeDialogHeading extends StatelessWidget {
-  const _ScrapeDialogHeading({required this.title, this.subtitle});
+  const _ScrapeDialogHeading({
+    required this.title,
+    this.subtitle,
+    this.compact = false,
+  });
 
   final String title;
   final String? subtitle;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -1757,7 +1796,7 @@ class _ScrapeDialogHeading extends StatelessWidget {
           ),
         ),
         if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
-          const SizedBox(height: 4),
+          SizedBox(height: compact ? 2 : 4),
           Text(
             subtitle!,
             style: theme.textTheme.bodySmall?.copyWith(
@@ -1771,17 +1810,20 @@ class _ScrapeDialogHeading extends StatelessWidget {
 }
 
 class _ScrapeDialogViewport extends StatelessWidget {
-  const _ScrapeDialogViewport({required this.child, this.height, super.key});
+  const _ScrapeDialogViewport({
+    required this.child,
+    this.shrinkWrap = false,
+    super.key,
+  });
 
   final Widget child;
-  final double? height;
+  final bool shrinkWrap;
 
   @override
   Widget build(BuildContext context) {
     final scrollable = SingleChildScrollView(child: child);
-    final fixedHeight = height;
-    if (fixedHeight != null) {
-      return SizedBox(height: fixedHeight, child: scrollable);
+    if (shrinkWrap) {
+      return scrollable;
     }
     return ConstrainedBox(
       constraints: BoxConstraints(
@@ -1798,11 +1840,13 @@ class _ScrapeSection extends StatelessWidget {
     required this.title,
     required this.child,
     this.titleKey,
+    this.compact = false,
   });
 
   final String title;
   final Widget child;
   final Key? titleKey;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -1810,14 +1854,15 @@ class _ScrapeSection extends StatelessWidget {
     final tokens = AppLayoutPolicy.resolve(
       BoxConstraints.tightFor(width: width),
     );
+    final sectionGap = compact ? 8.0 : tokens.sectionGap;
     final theme = Theme.of(context);
     return Padding(
-      padding: EdgeInsets.only(top: tokens.sectionGap),
+      padding: EdgeInsets.only(top: sectionGap),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Divider(
-            height: tokens.sectionGap,
+            height: sectionGap,
             color: theme.colorScheme.outline.withValues(alpha: 0.35),
           ),
           Text(
@@ -1827,7 +1872,7 @@ class _ScrapeSection extends StatelessWidget {
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: compact ? 6 : 10),
           child,
         ],
       ),
@@ -1872,6 +1917,7 @@ class _ScrapeSourceProgressRow extends StatelessWidget {
           : null,
       reserveProgressIndicator: true,
       reserveCountSlot: true,
+      compact: true,
     );
   }
 }
@@ -1889,6 +1935,8 @@ class _ScrapeSourceRow extends StatelessWidget {
     this.progressIndicatorKey,
     this.reserveProgressIndicator = false,
     this.reserveCountSlot = false,
+    this.reserveDetailSlot = false,
+    this.compact = false,
   });
 
   final String label;
@@ -1902,6 +1950,8 @@ class _ScrapeSourceRow extends StatelessWidget {
   final Key? progressIndicatorKey;
   final bool reserveProgressIndicator;
   final bool reserveCountSlot;
+  final bool reserveDetailSlot;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -1914,7 +1964,7 @@ class _ScrapeSourceRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SizedBox(
-          height: 28,
+          height: compact ? 24 : 28,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -1941,10 +1991,10 @@ class _ScrapeSourceRow extends StatelessWidget {
                         style: theme.textTheme.bodyMedium,
                       ),
                       if (showProgressIndicator) ...[
-                        const SizedBox(width: 8),
+                        SizedBox(width: compact ? 6 : 8),
                         SizedBox(
-                          width: 20,
-                          height: 20,
+                          width: compact ? 18 : 20,
+                          height: compact ? 18 : 20,
                           child: hasProgressIndicator
                               ? CircularProgressIndicator(
                                   key: progressIndicatorKey,
@@ -1955,10 +2005,10 @@ class _ScrapeSourceRow extends StatelessWidget {
                         ),
                       ],
                       if (showCountSlot) ...[
-                        const SizedBox(width: 8),
+                        SizedBox(width: compact ? 6 : 8),
                         SizedBox(
-                          width: 72,
-                          height: 24,
+                          width: compact ? 64 : 72,
+                          height: compact ? 22 : 24,
                           child: count == null
                               ? const SizedBox.shrink()
                               : Align(
@@ -1983,7 +2033,22 @@ class _ScrapeSourceRow extends StatelessWidget {
             ],
           ),
         ),
-        if (detail != null && detail!.trim().isNotEmpty) ...[
+        if (reserveDetailSlot)
+          SizedBox(
+            height: compact ? 22 : 24,
+            child: detail != null && detail!.trim().isNotEmpty
+                ? Text(
+                    detail!,
+                    key: detailKey,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  )
+                : const SizedBox.shrink(),
+          )
+        else if (detail != null && detail!.trim().isNotEmpty) ...[
           const SizedBox(height: 4),
           Text(
             detail!,
@@ -2003,12 +2068,14 @@ class _ScrapeSummary extends StatelessWidget {
     required this.saved,
     required this.excluded,
     required this.failed,
+    this.compact = false,
     super.key,
   });
 
   final int saved;
   final int excluded;
   final int failed;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -2018,7 +2085,7 @@ class _ScrapeSummary extends StatelessWidget {
         '${l10n.scrapeExcludedCount} $excluded '
         '${l10n.scrapeFailedCount} $failed';
     return SizedBox(
-      height: 28,
+      height: compact ? 24 : 28,
       child: FittedBox(
         alignment: Alignment.centerLeft,
         fit: BoxFit.scaleDown,
@@ -2102,6 +2169,12 @@ double _scrapeDialogPadding(BuildContext context) {
   return tokens.isCompact ? 20 : 24;
 }
 
+double _scrapeProgressDialogPadding(BuildContext context) {
+  final width = MediaQuery.sizeOf(context).width;
+  final tokens = AppLayoutPolicy.resolve(BoxConstraints.tightFor(width: width));
+  return tokens.isCompact ? 16 : 20;
+}
+
 int _scrapeSafeProgressCurrent(int current, int total) {
   final nonNegative = current < 0 ? 0 : current;
   if (total <= 0) {
@@ -2149,6 +2222,10 @@ ScrapeSourceId? _resultDetailsSource(WorksScrapeResult result) {
   if (result.sourceResults.containsKey(ScrapeSourceId.minnanoAv) &&
       !result.worksSources.contains(ScrapeSourceId.minnanoAv)) {
     return ScrapeSourceId.minnanoAv;
+  }
+  if (result.sourceResults.containsKey(ScrapeSourceId.avbase) &&
+      !result.worksSources.contains(ScrapeSourceId.avbase)) {
+    return ScrapeSourceId.avbase;
   }
   return null;
 }
@@ -2246,6 +2323,7 @@ String _scrapeSourceLabel(AppLocalizations l10n, ScrapeSourceId source) {
   return switch (source) {
     ScrapeSourceId.javbus => l10n.scrapeSourceJavBus,
     ScrapeSourceId.minnanoAv => l10n.scrapeSourceMinnanoAv,
+    ScrapeSourceId.avbase => l10n.scrapeSourceAvBase,
   };
 }
 

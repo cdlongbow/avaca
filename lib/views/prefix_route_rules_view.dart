@@ -16,11 +16,13 @@ class PrefixRouteRulesBody extends StatefulWidget {
     required this.database,
     this.repository,
     this.filePicker,
+    this.shrinkWrap = false,
   });
 
   final AppDatabase database;
   final PrefixRouteRepository? repository;
   final PrefixRouteFilePicker? filePicker;
+  final bool shrinkWrap;
 
   @override
   State<PrefixRouteRulesBody> createState() => _PrefixRouteRulesBodyState();
@@ -99,7 +101,10 @@ class _PrefixRouteRulesBodyState extends State<PrefixRouteRulesBody> {
 
     final filteredRules = _filteredRules;
     return ListView(
+      key: const PageStorageKey('prefix-route-settings-scroll'),
       padding: EdgeInsets.zero,
+      shrinkWrap: widget.shrinkWrap,
+      physics: widget.shrinkWrap ? const NeverScrollableScrollPhysics() : null,
       children: [
         _summaryCard(context),
         const SizedBox(height: 12),

@@ -1422,6 +1422,62 @@ void main() {
     },
   );
 
+  testWidgets('scrape progress dialog sizes to content on phone viewport', (
+    tester,
+  ) async {
+    final result = Completer<WorksScrapeResult>();
+    await _pumpWorks(
+      tester,
+      size: const Size(390, 844),
+      scrapeExecutor: (options, token, onProgress) async {
+        onProgress(
+          const WorksScrapeProgress(
+            phase: WorksScrapePhase.fetchingDetails,
+            current: 0,
+            total: 1,
+            saved: 0,
+            excluded: 0,
+            failed: 0,
+            totalKnown: true,
+            source: ScrapeSourceId.javbus,
+            worksSources: [ScrapeSourceId.javbus],
+            sourceProgress: {
+              ScrapeSourceId.javbus: WorksScrapeSourceProgress(
+                phase: WorksScrapePhase.fetchingDetails,
+                current: 0,
+                total: 1,
+                totalKnown: true,
+              ),
+            },
+          ),
+        );
+        return result.future;
+      },
+    );
+
+    await _openWorksScrapeSettings(tester);
+    await tester.tap(find.text('開始刮削'));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump();
+
+    final progressViewport = tester.getRect(
+      find.byType(SingleChildScrollView).last,
+    );
+    expect(progressViewport.height, lessThan(400));
+
+    result.complete(
+      const WorksScrapeResult(
+        saved: 0,
+        excluded: 0,
+        failed: 0,
+        cancelled: true,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('scrape-result-done')));
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('scrape result lists unique failed works and image issues', (
     tester,
   ) async {

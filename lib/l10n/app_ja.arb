@@ -249,6 +249,7 @@
   "scrapeSourceWorksTitle": "作品の取得元",
   "scrapeSourceMinnanoAv": "みんなのAV",
   "scrapeSourceJavBus": "JavBus",
+   "scrapeSourceAvBase": "AvBase",
   "scrapeSourceAll": "すべての取得元（品番で統合・重複排除）",
   "scrapeSourceSaveFailed": "取得元の設定を保存できませんでした。",
   "scrapeSourceConnectionTitle": "取得元の接続状態",

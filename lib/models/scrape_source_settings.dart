@@ -4,7 +4,8 @@ const String scrapeSourceSettingsKey = 'scrape_source_settings';
 
 enum ScrapeSourceId {
   javbus('javbus'),
-  minnanoAv('minnanoAv');
+  minnanoAv('minnanoAv'),
+  avbase('avbase');
 
   const ScrapeSourceId(this.storageValue);
 
@@ -23,6 +24,8 @@ enum ScrapeSourceId {
 enum WorksSourceSelection {
   all('all'),
   javbus('javbus'),
+  avbase('avbase'),
+  // Kept for decoding existing settings. Minnano AV is actress-detail only.
   minnanoAv('minnanoAv');
 
   const WorksSourceSelection(this.storageValue);
