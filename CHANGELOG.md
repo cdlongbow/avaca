@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.1 - 2026-08-20
+
+- Added learned Prefix-based work-image routing with automatic probing,
+  per-Prefix persistence, manual family overrides, and safe import/export
+  management from Settings.
+- Hardened image probing and failure classification across supported DMM and
+  MGStage families, including bounded concurrent downloads and validation that
+  prevents invalid or placeholder images from being learned.
+- Refined scrape progress, responsive dialogs, and localized scraping status
+  text, with expanded coverage for routing, scraping, Settings, and Works UI.
+
 ## 0.9.0 - 2026-08-16
 
 - Added related-performer metadata for works, including source links and

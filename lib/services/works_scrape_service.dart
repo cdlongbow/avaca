@@ -14,9 +14,9 @@ import 'javbus/javbus_client.dart';
 import 'javbus/javbus_scrape_source.dart';
 import 'javbus/prefix_exclusion.dart';
 import 'javbus/javbus_verification.dart';
+import 'javbus/prefix_route_repository.dart';
 import 'javbus/work_image_downloader.dart';
 import 'javbus/work_image_policy.dart';
-import 'javbus/work_image_route_resolver.dart';
 import 'safe_image.dart';
 import 'scrape/scrape_image_downloader.dart';
 import 'scrape/scrape_models.dart';
@@ -136,13 +136,17 @@ final class WorksScrapeSourceProgress {
     required this.phase,
     required this.current,
     required this.total,
+    this.totalKnown = false,
     this.workCode,
   });
 
   final WorksScrapePhase phase;
   final int current;
   final int total;
+  final bool totalKnown;
   final String? workCode;
+
+  bool get hasKnownTotal => totalKnown;
 }
 
 class WorksScrapeProgress {
@@ -152,6 +156,7 @@ class WorksScrapeProgress {
     required this.saved,
     required this.excluded,
     required this.failed,
+    this.totalKnown = false,
     this.phase = WorksScrapePhase.savingWorks,
     this.source,
     this.workCode,
@@ -166,9 +171,12 @@ class WorksScrapeProgress {
   final int saved;
   final int excluded;
   final int failed;
+  final bool totalKnown;
   final ScrapeSourceId? source;
   final String? workCode;
   final Map<ScrapeSourceId, WorksScrapeSourceProgress> sourceProgress;
+
+  bool get hasKnownTotal => totalKnown;
 
   /// The source currently responsible for actress profile synchronization.
   ///
@@ -237,7 +245,11 @@ class WorksScrapeService {
     this.imageDownloadConcurrency = 2,
   }) : client = client,
        sources = sources ?? _legacySources(client),
-       workImageDownloader = workImageDownloader ?? WorkImageDownloader(),
+       workImageDownloader =
+           workImageDownloader ??
+           WorkImageDownloader(
+             routeRepository: PrefixRouteRepository.forDatabase(db),
+           ),
        actressImageDownloader =
            actressImageDownloader ?? HttpActressImageDownloader(),
        imageDirectory = imageDirectory ?? path.join(db.imgDir, 'scraped'),
@@ -556,22 +568,23 @@ class WorksScrapeService {
       preExcluded,
       0,
       phase: WorksScrapePhase.resolvingWorks,
+      totalKnown: true,
     );
-    var resolveCurrent = 0;
     for (final group in resolvedGroups) {
       if (_isCancelled(cancellationToken)) {
         break;
       }
-      resolveCurrent++;
       _notify(
         onProgress,
-        resolveCurrent,
+        0,
         resolvedGroups.length,
         0,
         preExcluded,
         0,
         phase: WorksScrapePhase.resolvingWorks,
         source: group.sourceId,
+        totalKnown: true,
+        updateSourceProgress: false,
       );
     }
     final outcomes = <String, _CanonicalWorkOutcome>{};
@@ -623,12 +636,32 @@ class WorksScrapeService {
       excludedCount(),
       failedCount(),
       phase: WorksScrapePhase.savingWorks,
+      totalKnown: true,
     );
+    final sourceTotals = <ScrapeSourceId, int>{};
+    for (final resolved in resolvedGroups) {
+      sourceTotals.update(
+        resolved.sourceId,
+        (total) => total + 1,
+        ifAbsent: () => 1,
+      );
+    }
+    int sourceTotalFor(ScrapeSourceId sourceId) {
+      final existing = _sourceProgress[sourceId];
+      if (existing != null && existing.hasKnownTotal) {
+        return existing.total;
+      }
+      return sourceTotals[sourceId] ?? 0;
+    }
+
+    final sourceCurrents = <ScrapeSourceId, int>{};
     var savingCurrent = 0;
     for (final resolved in resolvedGroups) {
       if (_isCancelled(cancellationToken)) {
         break;
       }
+      final currentForSource = sourceCurrents[resolved.sourceId] ?? 0;
+      final totalForSource = sourceTotalFor(resolved.sourceId);
       _notify(
         onProgress,
         savingCurrent,
@@ -638,6 +671,10 @@ class WorksScrapeService {
         failedCount(),
         phase: WorksScrapePhase.savingWorks,
         source: resolved.sourceId,
+        totalKnown: true,
+        sourceCurrent: currentForSource,
+        sourceTotal: totalForSource,
+        sourceTotalKnown: true,
       );
       final code = preferredScrapeWorkCode([resolved.code]);
       if (code == null) {
@@ -716,6 +753,8 @@ class WorksScrapeService {
                   phase: WorksScrapePhase.downloadingImages,
                   source: resolved.sourceId,
                   workCode: imageCode,
+                  totalKnown: true,
+                  updateSourceProgress: false,
                 );
               },
             );
@@ -742,6 +781,8 @@ class WorksScrapeService {
           }
         }
       }
+      final nextSourceCurrent = currentForSource + 1;
+      sourceCurrents[resolved.sourceId] = nextSourceCurrent;
       savingCurrent++;
       _notify(
         onProgress,
@@ -752,6 +793,10 @@ class WorksScrapeService {
         failedCount(),
         phase: WorksScrapePhase.savingWorks,
         source: resolved.sourceId,
+        totalKnown: true,
+        sourceCurrent: nextSourceCurrent,
+        sourceTotal: totalForSource,
+        sourceTotalKnown: true,
       );
     }
 
@@ -792,6 +837,7 @@ class WorksScrapeService {
         excluded,
         failed,
         phase: WorksScrapePhase.completed,
+        totalKnown: true,
       );
     }
     return WorksScrapeResult(
@@ -1008,7 +1054,6 @@ class WorksScrapeService {
     }
 
     final selection = _selectWorkCandidates(collected, exclusions);
-    var detailCurrent = 0;
     _notify(
       onProgress,
       0,
@@ -1018,18 +1063,24 @@ class WorksScrapeService {
       0,
       phase: WorksScrapePhase.fetchingDetails,
       source: sourceId,
+      totalKnown: false,
+      sourceCurrent: 0,
+      sourceTotal: selection.candidates.length,
+      sourceTotalKnown: true,
     );
 
     void notifyDetailProgress() {
       _notify(
         onProgress,
-        detailCurrent,
+        0,
         selection.candidates.length,
         0,
         selection.preExcluded,
         0,
         phase: WorksScrapePhase.fetchingDetails,
         source: sourceId,
+        totalKnown: false,
+        updateSourceProgress: false,
       );
     }
 
@@ -1038,7 +1089,10 @@ class WorksScrapeService {
     var streamingExcluded = 0;
     var streamingFailed = 0;
 
-    void notifyStreamingProgress({String? workCode}) {
+    void notifyStreamingProgress({
+      String? workCode,
+      bool updateSourceProgress = true,
+    }) {
       _notify(
         onProgress,
         streamingCurrent,
@@ -1049,6 +1103,11 @@ class WorksScrapeService {
         phase: WorksScrapePhase.downloadingImages,
         source: sourceId,
         workCode: workCode,
+        totalKnown: true,
+        updateSourceProgress: updateSourceProgress,
+        sourceCurrent: streamingCurrent,
+        sourceTotal: selection.candidates.length,
+        sourceTotalKnown: true,
       );
     }
 
@@ -1087,7 +1146,10 @@ class WorksScrapeService {
             exclusions: exclusions,
             cancellationToken: cancellationToken,
             imageQueue: imageQueue,
-            onImageDownload: (code) => notifyStreamingProgress(workCode: code),
+            onImageDownload: (code) => notifyStreamingProgress(
+              workCode: code,
+              updateSourceProgress: false,
+            ),
           ),
         ),
       );
@@ -1098,10 +1160,7 @@ class WorksScrapeService {
       candidates: selection.candidates,
       cancellationToken: cancellationToken,
       onAttemptStart: (_) => notifyDetailProgress(),
-      onAttemptComplete: (_) {
-        detailCurrent++;
-        notifyDetailProgress();
-      },
+      onAttemptComplete: (_) => notifyDetailProgress(),
       onDetailsFetched: enqueueImageSave,
     );
     final sourceResolution = _resolveSourceDetails(detailResult);
@@ -1321,6 +1380,7 @@ class WorksScrapeService {
       excluded,
       failedOutcomes.length,
       phase: WorksScrapePhase.completed,
+      totalKnown: true,
     );
     return WorksScrapeResult(
       saved: saved,
@@ -1780,10 +1840,6 @@ class WorksScrapeService {
     if (_isCancelled(cancellationToken)) {
       throw const _ScrapeCancelled();
     }
-    final route = const WorkImageRouteResolver().resolve(
-      studio: prepared.details.studio,
-      publisher: prepared.details.publisher,
-    );
     final imageResults = await Future.wait<_WorkImageResult>([
       _downloadWorkImage(
         details: prepared.details,
@@ -1798,7 +1854,6 @@ class WorksScrapeService {
         ),
         currentPath: prepared.currentCard,
         missingOnly: missingOnly,
-        route: route,
         onImageDownload: onImageDownload,
       ),
       _downloadWorkImage(
@@ -1814,7 +1869,6 @@ class WorksScrapeService {
         ),
         currentPath: prepared.currentDetail,
         missingOnly: missingOnly,
-        route: route,
         onImageDownload: onImageDownload,
       ),
     ]);
@@ -1850,7 +1904,6 @@ class WorksScrapeService {
     required String targetPath,
     required String currentPath,
     required bool missingOnly,
-    required WorkImageRouteResolution route,
     void Function(String code, WorkImageVariant variant)? onImageDownload,
   }) async {
     if (missingOnly &&
@@ -1868,7 +1921,6 @@ class WorksScrapeService {
         code: details.code,
         studio: details.studio,
         publisher: details.publisher,
-        route: route,
         variant: variant,
         targetPath: targetPath,
       );
@@ -2006,12 +2058,25 @@ class WorksScrapeService {
     WorksScrapePhase phase = WorksScrapePhase.savingWorks,
     ScrapeSourceId? source,
     String? workCode,
+    bool totalKnown = false,
+    bool updateSourceProgress = true,
+    int? sourceCurrent,
+    int? sourceTotal,
+    bool? sourceTotalKnown,
   }) {
     if (source != null) {
+      final previous = _sourceProgress[source];
+      final effectiveSourceTotal = sourceTotal ?? previous?.total ?? total;
+      final effectiveSourceTotalKnown =
+          sourceTotalKnown ?? previous?.totalKnown ?? totalKnown;
+      final effectiveSourceCurrent = updateSourceProgress
+          ? sourceCurrent ?? current
+          : previous?.current ?? sourceCurrent ?? current;
       _sourceProgress[source] = WorksScrapeSourceProgress(
         phase: phase,
-        current: current,
-        total: total,
+        current: effectiveSourceCurrent,
+        total: effectiveSourceTotal,
+        totalKnown: effectiveSourceTotalKnown,
         workCode: workCode,
       );
     }
@@ -2023,6 +2088,7 @@ class WorksScrapeService {
         saved: saved,
         excluded: excluded,
         failed: failed,
+        totalKnown: totalKnown,
         source: source,
         workCode: workCode,
         sourceProgress: Map.unmodifiable(_sourceProgress),

@@ -448,19 +448,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get scrapePhaseCompleted => 'Scrape complete';
 
   @override
-  String get scrapeSyncingTitle => 'Syncing';
+  String get scrapeSyncingTitle => 'Scraping';
 
   @override
-  String get scrapeSyncCompleted => 'Sync complete';
+  String get scrapeSyncCompleted => 'Scrape complete';
 
   @override
-  String get scrapeSyncPartial => 'Sync complete with some failures';
+  String get scrapeSyncPartial => 'Scrape complete with some failures';
 
   @override
-  String get scrapeSyncFailed => 'Sync failed';
+  String get scrapeSyncFailed => 'Scrape failed';
 
   @override
-  String get scrapeSyncStopped => 'Sync stopped';
+  String get scrapeSyncStopped => 'Scrape stopped';
 
   @override
   String get scrapeDetailsSection => 'Details';
@@ -492,7 +492,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get scrapeStatusWaiting => 'Waiting';
 
   @override
-  String get scrapeStatusSyncing => 'In progress';
+  String get scrapeStatusSyncing => 'Scraping';
 
   @override
   String get scrapeStatusCompleted => 'Complete';
@@ -810,4 +810,185 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get updateDataPreserved => 'Your data and settings will be preserved.';
+
+  @override
+  String get prefixRouteRulesTitle => 'Prefix route rules';
+
+  @override
+  String get prefixRouteRulesSubtitle =>
+      'View and manage image families learned from validated downloads.';
+
+  @override
+  String prefixRouteRuleCount(int count) {
+    return '$count learned Prefix rules';
+  }
+
+  @override
+  String get prefixRouteSearchHint => 'Search Prefix';
+
+  @override
+  String get prefixRouteNoRules =>
+      'No Prefix route rules have been learned yet.';
+
+  @override
+  String get prefixRouteNoSearchResults => 'No Prefix rules match this search.';
+
+  @override
+  String get prefixRouteBestFamily => 'Priority family';
+
+  @override
+  String get prefixRouteNotAvailable => 'Not available';
+
+  @override
+  String get prefixRouteCandidates => 'Known candidates';
+
+  @override
+  String prefixRouteSuccessCount(int count) {
+    return 'Successes: $count';
+  }
+
+  @override
+  String prefixRouteFailureCount(int count) {
+    return 'Failures: $count';
+  }
+
+  @override
+  String prefixRouteLastSuccess(String time) {
+    return 'Last success: $time';
+  }
+
+  @override
+  String prefixRouteLastFailure(String time) {
+    return 'Last failure: $time';
+  }
+
+  @override
+  String get prefixRouteStatusVerified => 'Verified';
+
+  @override
+  String get prefixRouteStatusExceptions => 'Has exceptions';
+
+  @override
+  String get prefixRouteStatusPending => 'Pending validation';
+
+  @override
+  String get prefixRouteStatusProbeFailed => 'Probe failed';
+
+  @override
+  String get prefixRouteManualOverride => 'Manual override';
+
+  @override
+  String get prefixRouteAutomatic => 'Automatic';
+
+  @override
+  String get prefixRouteAutomaticDescription =>
+      'Use learned candidates first, then probe the supported families when needed.';
+
+  @override
+  String get prefixRouteManualDescription =>
+      'This family is tried first. Learned statistics remain available.';
+
+  @override
+  String get prefixRouteFamilyDmmStandard => 'DMM standard';
+
+  @override
+  String get prefixRouteFamilyDmmLeadingOne => 'DMM leading one';
+
+  @override
+  String get prefixRouteFamilyDmmH1711 => 'DMM H1711';
+
+  @override
+  String get prefixRouteFamilyDmmRebeccaH346 => 'DMM Rebecca H346';
+
+  @override
+  String get prefixRouteFamilyMgstagePrestige => 'MGStage Prestige';
+
+  @override
+  String get prefixRouteFamilyMgstageSeikyouiku => 'MGStage Seikyouiku';
+
+  @override
+  String get prefixRouteExport => 'Export rules';
+
+  @override
+  String get prefixRouteImport => 'Import rules';
+
+  @override
+  String get prefixRouteExportDialogTitle => 'Export Prefix rules';
+
+  @override
+  String get prefixRouteExportRulesOnly => 'Rules only';
+
+  @override
+  String get prefixRouteExportRulesOnlyDescription =>
+      'Export families without validation statistics.';
+
+  @override
+  String get prefixRouteExportWithStatistics => 'Rules and statistics';
+
+  @override
+  String get prefixRouteExportWithStatisticsDescription =>
+      'Include success, failure, and timestamp data.';
+
+  @override
+  String get prefixRouteExportSuccess => 'Prefix rules exported.';
+
+  @override
+  String get prefixRouteImportDialogTitle => 'Import Prefix rules';
+
+  @override
+  String prefixRouteImportPreview(int rules, int conflicts) {
+    return 'Found $rules rules. Manual override conflicts: $conflicts.';
+  }
+
+  @override
+  String get prefixRouteImportMerge => 'Merge';
+
+  @override
+  String get prefixRouteImportReplace => 'Replace';
+
+  @override
+  String prefixRouteImportSuccess(int count) {
+    return 'Imported $count Prefix rules.';
+  }
+
+  @override
+  String get prefixRouteOperationFailed =>
+      'The Prefix route operation failed. Existing rules were not changed.';
+
+  @override
+  String get prefixRouteLoadFailed => 'Prefix route rules could not be loaded.';
+
+  @override
+  String get prefixRouteClearAutomatic => 'Clear automatic learning';
+
+  @override
+  String get prefixRouteClearAutomaticTitle => 'Clear automatic learning?';
+
+  @override
+  String get prefixRouteClearAutomaticMessage =>
+      'Learned candidates and statistics will be cleared. Manual overrides and downloaded images will be kept.';
+
+  @override
+  String get prefixRouteClearAutomaticSuccess =>
+      'Automatic Prefix learning was cleared.';
+
+  @override
+  String get prefixRouteReset => 'Reset learning';
+
+  @override
+  String get prefixRouteResetTitle => 'Reset this Prefix learning?';
+
+  @override
+  String get prefixRouteResetMessage =>
+      'Learned candidates and statistics will be cleared. A manual override, if present, will be kept.';
+
+  @override
+  String get prefixRouteForget => 'Remove this Prefix rule';
+
+  @override
+  String get prefixRouteForgetTitle => 'Remove this Prefix rule?';
+
+  @override
+  String get prefixRouteForgetMessage =>
+      'The learned data and manual override for this Prefix will be removed. Downloaded images and work data will not be changed.';
 }

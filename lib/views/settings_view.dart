@@ -10,6 +10,7 @@ import '../components/aligned_app_bar_back_button.dart';
 import '../components/adaptive_page_layout.dart';
 import '../components/javbus_verification_dialog.dart';
 import '../controllers/data_transfer_controller.dart';
+import '../controllers/prefix_route_file_transfer.dart';
 import '../controllers/settings_controller.dart';
 import '../controllers/software_update_controller.dart';
 import '../core/database.dart';
@@ -19,10 +20,12 @@ import '../models/scrape_source_settings.dart';
 import '../services/data_transfer_service.dart';
 import '../services/javbus/javbus_client.dart';
 import '../services/javbus/javbus_verification.dart';
+import '../services/javbus/prefix_route_repository.dart';
 import '../services/minnano/minnano_client.dart';
 import '../services/minnano/minnano_transport.dart';
 import '../services/scrape/scrape_source_registry.dart';
 import 'software_update_view.dart';
+import 'prefix_route_rules_view.dart';
 
 typedef ExternalUrlLauncher = Future<bool> Function(Uri uri);
 typedef ScrapeSourceConnectionTester =
@@ -188,6 +191,7 @@ class SettingsView extends StatefulWidget {
     required this.onLocaleChanged,
     this.transferController,
     this.softwareUpdateController,
+    this.prefixRouteFilePicker,
     this.externalUrlLauncher = _launchExternalUrl,
     this.scrapeSourceConnectionTester,
   });
@@ -202,6 +206,7 @@ class SettingsView extends StatefulWidget {
   final void Function(Locale? locale) onLocaleChanged;
   final DataTransferController? transferController;
   final SoftwareUpdateController? softwareUpdateController;
+  final PrefixRouteFilePicker? prefixRouteFilePicker;
   final ExternalUrlLauncher externalUrlLauncher;
   final ScrapeSourceConnectionTester? scrapeSourceConnectionTester;
 
@@ -514,6 +519,20 @@ class _SettingsViewState extends State<SettingsView> {
         const SizedBox(height: 8),
         _settingsActionCard(
           context: context,
+          feedbackId: 'other-prefix-route-rules',
+          icon: Icons.route_outlined,
+          title: localizations.prefixRouteRulesTitle,
+          subtitle: localizations.prefixRouteRulesSubtitle,
+          enabled: true,
+          onTap: () => _openCategory(
+            titleBuilder: (context) =>
+                AppLocalizations.of(context).prefixRouteRulesTitle,
+            bodyBuilder: _buildPrefixRouteRulesSettings,
+          ),
+        ),
+        const SizedBox(height: 8),
+        _settingsActionCard(
+          context: context,
           feedbackId: 'other-about',
           icon: Icons.info_outline,
           title: localizations.about,
@@ -533,6 +552,14 @@ class _SettingsViewState extends State<SettingsView> {
       database: widget.db,
       connectionTester:
           widget.scrapeSourceConnectionTester ?? _checkScrapeSourceConnection,
+    );
+  }
+
+  Widget _buildPrefixRouteRulesSettings(BuildContext context) {
+    return PrefixRouteRulesBody(
+      database: widget.db,
+      repository: PrefixRouteRepository.forDatabase(widget.db),
+      filePicker: widget.prefixRouteFilePicker,
     );
   }
 

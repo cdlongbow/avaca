@@ -348,6 +348,16 @@ void main() {
               .where((item) => item.phase == WorksScrapePhase.downloadingImages)
               .last;
           expect(imageProgress.workCode, 'SSIS-875');
+          expect(imageProgress.current, 0);
+          expect(imageProgress.totalKnown, isTrue);
+          expect(
+            imageProgress.sourceProgress[ScrapeSourceId.minnanoAv]?.current,
+            0,
+          );
+          expect(
+            imageProgress.sourceProgress[ScrapeSourceId.minnanoAv]?.total,
+            1,
+          );
 
           imageDownloader.releaseFirstImage();
           final result = await scrape;

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:avaca/services/javbus/work_image_downloader.dart';
 import 'package:avaca/services/javbus/work_image_policy.dart';
+import 'package:avaca/services/javbus/prefix_route_repository.dart';
 import 'package:avaca/services/javbus/work_image_route_resolver.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as image;
@@ -165,6 +166,52 @@ void main() {
         'rebd00975pl.jpg',
       );
     });
+
+    test('formats every supported family without metadata', () {
+      final standard = policy.urlsForFamily(
+        code: 'SONE-833',
+        family: WorkImageNormalizationFamily.dmmStandard,
+      );
+      expect(standard.card.pathSegments, contains('sone00833'));
+
+      final leading = policy.urlsForFamily(
+        code: 'START00023',
+        family: WorkImageNormalizationFamily.dmmLeadingOne,
+      );
+      expect(leading.card.pathSegments, contains('1start00023'));
+
+      final h1711 = policy.urlsForFamily(
+        code: 'DEVR-039',
+        family: WorkImageNormalizationFamily.dmmH1711,
+      );
+      expect(h1711.card.pathSegments, contains('h_1711devr00039'));
+
+      final rebecca = policy.urlsForFamily(
+        code: 'REBD-975',
+        family: WorkImageNormalizationFamily.dmmRebeccaH346,
+      );
+      expect(rebecca.detail.pathSegments, contains('h_346rebd00975'));
+
+      final prestige = policy.urlsForFamily(
+        code: 'ABF-183',
+        family: WorkImageNormalizationFamily.mgstagePrestige,
+      );
+      expect(
+        prestige.card.toString(),
+        'https://image.mgstage.com/images/prestige/abf/183/'
+        'pf_e_abf-183.jpg',
+      );
+
+      final seikyouiku = policy.urlsForFamily(
+        code: 'SEI-007',
+        family: WorkImageNormalizationFamily.mgstageSeikyouiku,
+      );
+      expect(
+        seikyouiku.detail.toString(),
+        'https://image.mgstage.com/images/seikyouiku/502sei/007/'
+        'pb_e_502sei-007.jpg',
+      );
+    });
   });
 
   test(
@@ -177,7 +224,7 @@ void main() {
 
       final result = await WorkImageDownloader(
         transport: transport,
-      ).fetch(code: 'SSIS-875', studio: 'S1', variant: WorkImageVariant.detail);
+      ).fetch(code: 'SSIS-875', variant: WorkImageVariant.detail);
 
       expect(result.bytes, valid);
       expect(transport.requested, hasLength(1));
@@ -199,7 +246,10 @@ void main() {
       await expectLater(
         WorkImageDownloader(transport: transport).fetch(
           code: 'REBD-975',
-          studio: 'Rebecca',
+          route: const WorkImageRouteResolution.resolved(
+            platform: WorkImagePlatform.dmm,
+            family: WorkImageNormalizationFamily.dmmRebeccaH346,
+          ),
           variant: WorkImageVariant.card,
         ),
         throwsA(isA<WorkImageDownloadException>()),
@@ -209,10 +259,11 @@ void main() {
     },
   );
 
-  test('rejects placeholder dimensions without fallback', () async {
+  test('rejects placeholder dimensions instead of learning a route', () async {
     final placeholder = image.encodePng(image.Image(width: 90, height: 122));
     final transport = _FakeBinaryTransport([
-      BinaryResponse(statusCode: 200, bodyBytes: placeholder),
+      for (var index = 0; index < 6; index++)
+        BinaryResponse(statusCode: 200, bodyBytes: placeholder),
     ]);
 
     await expectLater(
@@ -223,8 +274,8 @@ void main() {
       ),
       throwsA(isA<WorkImageDownloadException>()),
     );
-    expect(transport.requested, hasLength(1));
-    expect(transport.requested.single.toString(), contains('1start00196'));
+    expect(transport.requested, hasLength(5));
+    expect(transport.requested.first.toString(), contains('start00196'));
   });
 
   group('verified 0.8.7 DMM-standard metadata routes', () {
@@ -441,6 +492,73 @@ void main() {
     );
 
     expect(await File(target).readAsBytes(), bytes);
+  });
+
+  test('automatically learns the Rebecca H346 family', () async {
+    final valid = image.encodePng(image.Image(width: 300, height: 450));
+    final transport = _FakeBinaryTransport([
+      const BinaryResponse(statusCode: 404, bodyBytes: []),
+      const BinaryResponse(statusCode: 404, bodyBytes: []),
+      const BinaryResponse(statusCode: 404, bodyBytes: []),
+      BinaryResponse(statusCode: 200, bodyBytes: valid),
+    ]);
+    final repository = PrefixRouteRepository.inMemory();
+
+    await WorkImageDownloader(
+      transport: transport,
+      routeRepository: repository,
+    ).fetch(code: 'REBD-975', variant: WorkImageVariant.detail);
+
+    expect(transport.requested, hasLength(4));
+    expect(transport.requested.last.path, contains('h_346rebd00975'));
+    expect(
+      repository.ruleFor('rebd')?.preferredFamily,
+      WorkImageNormalizationFamily.dmmRebeccaH346,
+    );
+  });
+
+  test('automatically learns MGStage Prestige and Seikyouiku forms', () async {
+    final valid = image.encodePng(image.Image(width: 300, height: 450));
+
+    final prestigeTransport = _FakeBinaryTransport([
+      const BinaryResponse(statusCode: 404, bodyBytes: []),
+      const BinaryResponse(statusCode: 404, bodyBytes: []),
+      const BinaryResponse(statusCode: 404, bodyBytes: []),
+      BinaryResponse(statusCode: 200, bodyBytes: valid),
+    ]);
+    final prestigeRepository = PrefixRouteRepository.inMemory();
+    await WorkImageDownloader(
+      transport: prestigeTransport,
+      routeRepository: prestigeRepository,
+    ).fetch(code: 'ABF-183', variant: WorkImageVariant.card);
+    expect(prestigeTransport.requested.last.host, 'image.mgstage.com');
+    expect(prestigeTransport.requested.last.path, contains('pf_e_abf-183.jpg'));
+    expect(
+      prestigeRepository.ruleFor('abf')?.preferredFamily,
+      WorkImageNormalizationFamily.mgstagePrestige,
+    );
+
+    final seikyouikuTransport = _FakeBinaryTransport([
+      const BinaryResponse(statusCode: 404, bodyBytes: []),
+      const BinaryResponse(statusCode: 404, bodyBytes: []),
+      const BinaryResponse(statusCode: 404, bodyBytes: []),
+      const BinaryResponse(statusCode: 404, bodyBytes: []),
+      BinaryResponse(statusCode: 200, bodyBytes: valid),
+    ]);
+    final seikyouikuRepository = PrefixRouteRepository.inMemory();
+    await WorkImageDownloader(
+      transport: seikyouikuTransport,
+      routeRepository: seikyouikuRepository,
+    ).fetch(code: 'SEI-007', variant: WorkImageVariant.detail);
+    expect(seikyouikuTransport.requested.last.host, 'image.mgstage.com');
+    expect(
+      seikyouikuTransport.requested.last.path,
+      contains('pb_e_502sei-007.jpg'),
+    );
+    expect(
+      seikyouikuRepository.ruleFor('sei')?.preferredFamily,
+      WorkImageNormalizationFamily.mgstageSeikyouiku,
+    );
   });
 }
 

@@ -1371,8 +1371,23 @@ class _ScrapeProgressDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final padding = _scrapeDialogPadding(context);
+    final viewportSize = MediaQuery.sizeOf(context);
+    final dialogWidth = (viewportSize.width - padding * 2)
+        .clamp(240.0, 640.0)
+        .toDouble();
+    final dialogMaxHeight = (viewportSize.height - 48)
+        .clamp(180.0, viewportSize.height)
+        .toDouble();
+    final contentHeight = (viewportSize.height - 220)
+        .clamp(180.0, 520.0)
+        .toDouble();
     return AlertDialog(
       key: const Key('scrape-progress-dialog'),
+      constraints: BoxConstraints(
+        minWidth: dialogWidth,
+        maxWidth: dialogWidth,
+        maxHeight: dialogMaxHeight,
+      ),
       insetPadding: EdgeInsets.symmetric(horizontal: padding, vertical: 24),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(_scrapeDialogRadius),
@@ -1384,6 +1399,7 @@ class _ScrapeProgressDialog extends StatelessWidget {
       ),
       contentPadding: EdgeInsets.fromLTRB(padding, 16, padding, 0),
       content: _ScrapeDialogViewport(
+        height: contentHeight,
         child: ValueListenableBuilder<WorksScrapeProgress?>(
           valueListenable: progress,
           builder: (context, value, child) {
@@ -1421,10 +1437,6 @@ class _ScrapeProgressContent extends StatelessWidget {
         ? [value!.source!]
         : const <ScrapeSourceId>[];
     final workCode = value?.workCode?.trim();
-    final operation = [
-      _scrapePhaseLabel(l10n, phase),
-      if (value?.source != null) _scrapeSourceLabel(l10n, value!.source!),
-    ].join(' · ');
 
     final detailsBody = detailsSource == null
         ? _ScrapeEmptyState(text: l10n.scrapeStatusWaiting)
@@ -1481,32 +1493,16 @@ class _ScrapeProgressContent extends StatelessWidget {
           ? const Key('scrape-progress-current-work')
           : null,
       indeterminateProgress: downloadActive,
-    );
-    final hasDeterminateProgress = sourceProgress.values.any(
-      (item) => item.total > 0,
+      progressIndicatorKey: downloadActive
+          ? const Key('scrape-progress-download-circular')
+          : null,
+      reserveProgressIndicator: true,
     );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          operation,
-          key: const Key('scrape-progress-operation'),
-          style: Theme.of(context).textTheme.bodyMedium,
-        ),
-        if (workCode != null && workCode.isNotEmpty && !downloadActive) ...[
-          const SizedBox(height: 4),
-          Text(
-            l10n.scrapeCurrentWork(workCode),
-            key: const Key('scrape-progress-current-work'),
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
-        if (!hasDeterminateProgress && phase != WorksScrapePhase.completed) ...[
-          const SizedBox(height: 12),
-          const LinearProgressIndicator(minHeight: 4),
-        ],
         _ScrapeSection(title: l10n.scrapeDetailsSection, child: detailsBody),
         _ScrapeSection(title: l10n.scrapeWorksSection, child: worksBody),
         _ScrapeSection(title: l10n.scrapeDownloadSection, child: downloadBody),
@@ -1775,18 +1771,24 @@ class _ScrapeDialogHeading extends StatelessWidget {
 }
 
 class _ScrapeDialogViewport extends StatelessWidget {
-  const _ScrapeDialogViewport({required this.child, super.key});
+  const _ScrapeDialogViewport({required this.child, this.height, super.key});
 
   final Widget child;
+  final double? height;
 
   @override
   Widget build(BuildContext context) {
+    final scrollable = SingleChildScrollView(child: child);
+    final fixedHeight = height;
+    if (fixedHeight != null) {
+      return SizedBox(height: fixedHeight, child: scrollable);
+    }
     return ConstrainedBox(
       constraints: BoxConstraints(
         maxWidth: 640,
         maxHeight: MediaQuery.sizeOf(context).height * 0.68,
       ),
-      child: SingleChildScrollView(child: child),
+      child: scrollable,
     );
   }
 }
@@ -1851,7 +1853,9 @@ class _ScrapeSourceProgressRow extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final total = progress?.total ?? 0;
     final current = _scrapeSafeProgressCurrent(progress?.current ?? 0, total);
-    final hasCount = total > 0;
+    final hasKnownTotal = progress?.hasKnownTotal ?? false;
+    final hasCount = hasKnownTotal && total > 0;
+    final indeterminate = isActive && !hasKnownTotal;
     return _ScrapeSourceRow(
       label: _scrapeSourceLabel(l10n, source),
       status: _scrapeWorkProgressStatus(l10n, value, progress, isActive),
@@ -1862,6 +1866,12 @@ class _ScrapeSourceProgressRow extends StatelessWidget {
       progressValue: hasCount
           ? _scrapeProgressValue(progress?.current ?? 0, total)
           : null,
+      indeterminateProgress: indeterminate,
+      progressIndicatorKey: isActive
+          ? const Key('scrape-progress-circular')
+          : null,
+      reserveProgressIndicator: true,
+      reserveCountSlot: true,
     );
   }
 }
@@ -1876,6 +1886,9 @@ class _ScrapeSourceRow extends StatelessWidget {
     this.detailKey,
     this.progressValue,
     this.indeterminateProgress = false,
+    this.progressIndicatorKey,
+    this.reserveProgressIndicator = false,
+    this.reserveCountSlot = false,
   });
 
   final String label;
@@ -1886,45 +1899,90 @@ class _ScrapeSourceRow extends StatelessWidget {
   final Key? detailKey;
   final double? progressValue;
   final bool indeterminateProgress;
+  final Key? progressIndicatorKey;
+  final bool reserveProgressIndicator;
+  final bool reserveCountSlot;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final hasProgressIndicator = progressValue != null || indeterminateProgress;
+    final showProgressIndicator =
+        hasProgressIndicator || reserveProgressIndicator;
+    final showCountSlot = count != null || reserveCountSlot;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: Text(label, style: theme.textTheme.bodyMedium)),
-            const SizedBox(width: 12),
-            Flexible(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    status,
-                    textAlign: TextAlign.end,
-                    style: theme.textTheme.bodyMedium,
-                  ),
-                  if (count != null) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      count!,
-                      key: countKey,
-                      textAlign: TextAlign.end,
-                      style: theme.textTheme.bodySmall,
-                    ),
-                  ],
-                ],
+        SizedBox(
+          height: 28,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium,
+                ),
               ),
-            ),
-          ],
+              const SizedBox(width: 8),
+              Flexible(
+                child: FittedBox(
+                  alignment: Alignment.centerRight,
+                  fit: BoxFit.scaleDown,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        status,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                      if (showProgressIndicator) ...[
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: hasProgressIndicator
+                              ? CircularProgressIndicator(
+                                  key: progressIndicatorKey,
+                                  value: progressValue,
+                                  strokeWidth: 2.5,
+                                )
+                              : const SizedBox.shrink(),
+                        ),
+                      ],
+                      if (showCountSlot) ...[
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          width: 72,
+                          height: 24,
+                          child: count == null
+                              ? const SizedBox.shrink()
+                              : Align(
+                                  alignment: Alignment.centerRight,
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerRight,
+                                    child: Text(
+                                      count!,
+                                      key: countKey,
+                                      maxLines: 1,
+                                      style: theme.textTheme.bodySmall,
+                                    ),
+                                  ),
+                                ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
-        if (progressValue != null || indeterminateProgress) ...[
-          const SizedBox(height: 8),
-          LinearProgressIndicator(value: progressValue, minHeight: 4),
-        ],
         if (detail != null && detail!.trim().isNotEmpty) ...[
           const SizedBox(height: 4),
           Text(
@@ -1955,44 +2013,17 @@ class _ScrapeSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Wrap(
-      spacing: 18,
-      runSpacing: 8,
-      children: [
-        _ScrapeMetric(label: l10n.scrapeSavedCount, value: saved),
-        _ScrapeMetric(label: l10n.scrapeExcludedCount, value: excluded),
-        _ScrapeMetric(label: l10n.scrapeFailedCount, value: failed),
-      ],
-    );
-  }
-}
-
-class _ScrapeMetric extends StatelessWidget {
-  const _ScrapeMetric({required this.label, required this.value});
-
-  final String label;
-  final int value;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          value.toString(),
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        Text(
-          label,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-      ],
+    final summary =
+        '${l10n.scrapeSavedCount} $saved '
+        '${l10n.scrapeExcludedCount} $excluded '
+        '${l10n.scrapeFailedCount} $failed';
+    return SizedBox(
+      height: 28,
+      child: FittedBox(
+        alignment: Alignment.centerLeft,
+        fit: BoxFit.scaleDown,
+        child: Text(summary, maxLines: 1),
+      ),
     );
   }
 }

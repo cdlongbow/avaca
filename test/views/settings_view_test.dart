@@ -2,7 +2,9 @@ import 'package:avaca/core/config.dart';
 import 'package:avaca/core/database.dart';
 import 'package:avaca/l10n/app_localizations.dart';
 import 'package:avaca/models/scrape_source_settings.dart';
+import 'package:avaca/services/javbus/prefix_route_repository.dart';
 import 'package:avaca/services/javbus/javbus_verification.dart';
+import 'package:avaca/services/javbus/work_image_route_resolver.dart';
 import 'package:avaca/views/settings_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
@@ -73,7 +75,74 @@ void main() {
     ]);
   });
 
-  testWidgets('scrape sources persist independent detail and work selections', (
+  testWidgets('other exposes Prefix route rules and opens its formal page', (
+    tester,
+  ) async {
+    await _pumpSettings(tester);
+
+    await tester.tap(find.text('Other'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Prefix route rules'), findsOneWidget);
+    await tester.tap(find.text('Prefix route rules'));
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(AppBar, 'Prefix route rules'), findsOneWidget);
+    expect(find.text('0 learned Prefix rules'), findsOneWidget);
+    expect(find.byKey(const ValueKey('prefix-route-import')), findsOneWidget);
+    expect(find.byKey(const ValueKey('prefix-route-export')), findsOneWidget);
+    expect(
+      find.text('No Prefix route rules have been learned yet.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('Prefix route detail supports a manual override', (tester) async {
+    await _pumpSettings(tester);
+    final database = tester
+        .state<_SettingsHarnessState>(find.byType(_SettingsHarness))
+        .database;
+    final repository = PrefixRouteRepository.forDatabase(database);
+    await repository.recordSuccess(
+      prefix: 'SONE',
+      family: WorkImageNormalizationFamily.dmmStandard,
+    );
+
+    await tester.tap(find.text('Other'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Prefix route rules'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('SONE'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Known candidates'), findsOneWidget);
+    expect(find.text('Manual override'), findsOneWidget);
+
+    await tester.tap(
+      find.byType(DropdownButtonFormField<WorkImageNormalizationFamily?>),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('MGStage Prestige').last);
+    await tester.pumpAndSettle();
+
+    expect(
+      repository.ruleFor('sone')?.manualOverride,
+      WorkImageNormalizationFamily.mgstagePrestige,
+    );
+    expect(
+      repository
+          .ruleFor('sone')
+          ?.candidates
+          .firstWhere(
+            (candidate) =>
+                candidate.family == WorkImageNormalizationFamily.dmmStandard,
+          )
+          .successCount,
+      1,
+    );
+  });
+
+  testWidgets('scrape sources persist detail and supported work selections', (
     tester,
   ) async {
     await _pumpSettings(tester);
@@ -108,7 +177,7 @@ void main() {
     await tester.tap(find.byKey(const PageStorageKey('scrape-works-source')));
     await tester.pumpAndSettle();
     await tester.tap(
-      find.widgetWithText(RadioListTile<WorksSourceSelection>, 'Minnano AV'),
+      find.widgetWithText(RadioListTile<WorksSourceSelection>, 'JavBus'),
     );
     await tester.pumpAndSettle();
 
@@ -119,29 +188,23 @@ void main() {
       await database.getSetting(scrapeSourceSettingsKey),
     );
     expect(settings.actressDetailsSource, ScrapeSourceId.javbus);
-    expect(settings.worksSource, WorksSourceSelection.minnanoAv);
+    expect(settings.worksSource, WorksSourceSelection.javbus);
 
-    // Reopening the category must read the latest persisted pair. Selecting
-    // only the works source must not restore the old default actress source.
+    // Reopening the category must read the latest persisted pair rather than
+    // restoring either source's default.
     await tester.pageBack();
     await tester.pumpAndSettle();
     await tester.tap(find.text('Scrape sources'));
     await tester.pumpAndSettle();
     if (find
-        .widgetWithText(
-          RadioListTile<WorksSourceSelection>,
-          'All sources (merge and deduplicate by code)',
-        )
+        .widgetWithText(RadioListTile<WorksSourceSelection>, 'JavBus')
         .evaluate()
         .isEmpty) {
       await tester.tap(find.byKey(const PageStorageKey('scrape-works-source')));
       await tester.pumpAndSettle();
     }
     await tester.tap(
-      find.widgetWithText(
-        RadioListTile<WorksSourceSelection>,
-        'All sources (merge and deduplicate by code)',
-      ),
+      find.widgetWithText(RadioListTile<WorksSourceSelection>, 'JavBus'),
     );
     await tester.pumpAndSettle();
 
@@ -149,7 +212,7 @@ void main() {
       await database.getSetting(scrapeSourceSettingsKey),
     );
     expect(reopenedSettings.actressDetailsSource, ScrapeSourceId.javbus);
-    expect(reopenedSettings.worksSource, WorksSourceSelection.all);
+    expect(reopenedSettings.worksSource, WorksSourceSelection.javbus);
   });
 
   testWidgets('scrape source connections can be retested and verified', (

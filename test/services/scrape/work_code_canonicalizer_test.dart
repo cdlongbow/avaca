@@ -85,4 +85,16 @@ void main() {
     expect(canonicalizeWorkCode('1AB12'), isNot('AB-012'));
     expect(canonicalizeWorkCode('1ABC123'), 'ABC-123');
   });
+
+  test(
+    'extracts one normalized Prefix from the existing work-code identity',
+    () {
+      expect(canonicalWorkCodePrefix('sone-833'), 'SONE');
+      expect(canonicalWorkCodePrefix('START00023'), 'START');
+      expect(canonicalWorkCodePrefix('ABF-183'), 'ABF');
+      expect(canonicalWorkCodePrefix('SEI-007'), 'SEI');
+      expect(canonicalWorkCodePrefix('FC2'), isNull);
+      expect(normalizeWorkImagePrefix(' ｓＯｎｅ '), 'SONE');
+    },
+  );
 }

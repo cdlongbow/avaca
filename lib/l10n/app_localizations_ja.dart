@@ -443,19 +443,19 @@ class AppLocalizationsJa extends AppLocalizations {
   String get scrapePhaseCompleted => '取得完了';
 
   @override
-  String get scrapeSyncingTitle => '同期中';
+  String get scrapeSyncingTitle => 'スクレイピング中';
 
   @override
-  String get scrapeSyncCompleted => '同期が完了しました';
+  String get scrapeSyncCompleted => 'スクレイピング完了';
 
   @override
-  String get scrapeSyncPartial => '同期完了（一部失敗）';
+  String get scrapeSyncPartial => 'スクレイピング完了（一部失敗）';
 
   @override
-  String get scrapeSyncFailed => '同期に失敗しました';
+  String get scrapeSyncFailed => 'スクレイピングに失敗しました';
 
   @override
-  String get scrapeSyncStopped => '同期を停止しました';
+  String get scrapeSyncStopped => 'スクレイピングを停止しました';
 
   @override
   String get scrapeDetailsSection => '詳細情報';
@@ -487,7 +487,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get scrapeStatusWaiting => '待機中';
 
   @override
-  String get scrapeStatusSyncing => '処理中';
+  String get scrapeStatusSyncing => 'スクレイピング中';
 
   @override
   String get scrapeStatusCompleted => '完了';
@@ -782,6 +782,181 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get updateDataPreserved => 'データと設定は保持されます。';
+
+  @override
+  String get prefixRouteRulesTitle => '作品画像 Prefix ルート規則';
+
+  @override
+  String get prefixRouteRulesSubtitle => '検証済みダウンロードから学習した画像 family を管理します。';
+
+  @override
+  String prefixRouteRuleCount(int count) {
+    return '学習済み Prefix 規則 $count 件';
+  }
+
+  @override
+  String get prefixRouteSearchHint => 'Prefix を検索';
+
+  @override
+  String get prefixRouteNoRules => '学習済みの Prefix ルート規則はありません。';
+
+  @override
+  String get prefixRouteNoSearchResults => '一致する Prefix 規則はありません。';
+
+  @override
+  String get prefixRouteBestFamily => '優先 family';
+
+  @override
+  String get prefixRouteNotAvailable => 'なし';
+
+  @override
+  String get prefixRouteCandidates => '既知の候補ルート';
+
+  @override
+  String prefixRouteSuccessCount(int count) {
+    return '成功: $count 回';
+  }
+
+  @override
+  String prefixRouteFailureCount(int count) {
+    return '失敗: $count 回';
+  }
+
+  @override
+  String prefixRouteLastSuccess(String time) {
+    return '最終成功: $time';
+  }
+
+  @override
+  String prefixRouteLastFailure(String time) {
+    return '最終失敗: $time';
+  }
+
+  @override
+  String get prefixRouteStatusVerified => '検証済み';
+
+  @override
+  String get prefixRouteStatusExceptions => '例外あり';
+
+  @override
+  String get prefixRouteStatusPending => '再検証待ち';
+
+  @override
+  String get prefixRouteStatusProbeFailed => '探測失敗';
+
+  @override
+  String get prefixRouteManualOverride => '手動指定 route';
+
+  @override
+  String get prefixRouteAutomatic => '自動';
+
+  @override
+  String get prefixRouteAutomaticDescription =>
+      '学習済み候補を優先し、必要な場合だけ対応 family を探測します。';
+
+  @override
+  String get prefixRouteManualDescription => 'この family を最初に試します。学習統計は保持されます。';
+
+  @override
+  String get prefixRouteFamilyDmmStandard => 'DMM Standard';
+
+  @override
+  String get prefixRouteFamilyDmmLeadingOne => 'DMM Leading One';
+
+  @override
+  String get prefixRouteFamilyDmmH1711 => 'DMM H1711';
+
+  @override
+  String get prefixRouteFamilyDmmRebeccaH346 => 'DMM Rebecca H346';
+
+  @override
+  String get prefixRouteFamilyMgstagePrestige => 'MGStage Prestige';
+
+  @override
+  String get prefixRouteFamilyMgstageSeikyouiku => 'MGStage Seikyouiku';
+
+  @override
+  String get prefixRouteExport => '規則をエクスポート';
+
+  @override
+  String get prefixRouteImport => '規則をインポート';
+
+  @override
+  String get prefixRouteExportDialogTitle => 'Prefix 規則をエクスポート';
+
+  @override
+  String get prefixRouteExportRulesOnly => '規則のみ';
+
+  @override
+  String get prefixRouteExportRulesOnlyDescription =>
+      '検証統計を含めず family だけを出力します。';
+
+  @override
+  String get prefixRouteExportWithStatistics => '規則と統計';
+
+  @override
+  String get prefixRouteExportWithStatisticsDescription => '成功、失敗、時刻を含めます。';
+
+  @override
+  String get prefixRouteExportSuccess => 'Prefix 規則をエクスポートしました。';
+
+  @override
+  String get prefixRouteImportDialogTitle => 'Prefix 規則をインポート';
+
+  @override
+  String prefixRouteImportPreview(int rules, int conflicts) {
+    return '$rules 件の規則が見つかりました。手動指定の競合: $conflicts 件。';
+  }
+
+  @override
+  String get prefixRouteImportMerge => '統合';
+
+  @override
+  String get prefixRouteImportReplace => '置換';
+
+  @override
+  String prefixRouteImportSuccess(int count) {
+    return 'Prefix 規則を $count 件インポートしました。';
+  }
+
+  @override
+  String get prefixRouteOperationFailed =>
+      'Prefix ルート操作に失敗しました。既存の規則は変更されていません。';
+
+  @override
+  String get prefixRouteLoadFailed => 'Prefix ルート規則を読み込めませんでした。';
+
+  @override
+  String get prefixRouteClearAutomatic => '自動学習をクリア';
+
+  @override
+  String get prefixRouteClearAutomaticTitle => '自動学習をクリアしますか？';
+
+  @override
+  String get prefixRouteClearAutomaticMessage =>
+      '学習候補と統計をクリアします。手動指定とダウンロード済み画像は保持されます。';
+
+  @override
+  String get prefixRouteClearAutomaticSuccess => 'Prefix の自動学習をクリアしました。';
+
+  @override
+  String get prefixRouteReset => 'この Prefix の学習をリセット';
+
+  @override
+  String get prefixRouteResetTitle => 'この Prefix の学習をリセットしますか？';
+
+  @override
+  String get prefixRouteResetMessage => '候補と統計をクリアします。手動指定がある場合は保持されます。';
+
+  @override
+  String get prefixRouteForget => 'この Prefix 規則を削除';
+
+  @override
+  String get prefixRouteForgetTitle => 'この Prefix 規則を削除しますか？';
+
+  @override
+  String get prefixRouteForgetMessage =>
+      'この Prefix の学習データと手動指定を削除します。ダウンロード済み画像と作品データは変更されません。';
 }
 
 /// The translations for Japanese, as used in Japan (`ja_JP`).
@@ -1223,19 +1398,19 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
   String get scrapePhaseCompleted => '取得完了';
 
   @override
-  String get scrapeSyncingTitle => '同期中';
+  String get scrapeSyncingTitle => 'スクレイピング中';
 
   @override
-  String get scrapeSyncCompleted => '同期が完了しました';
+  String get scrapeSyncCompleted => 'スクレイピング完了';
 
   @override
-  String get scrapeSyncPartial => '同期完了（一部失敗）';
+  String get scrapeSyncPartial => 'スクレイピング完了（一部失敗）';
 
   @override
-  String get scrapeSyncFailed => '同期に失敗しました';
+  String get scrapeSyncFailed => 'スクレイピングに失敗しました';
 
   @override
-  String get scrapeSyncStopped => '同期を停止しました';
+  String get scrapeSyncStopped => 'スクレイピングを停止しました';
 
   @override
   String get scrapeDetailsSection => '詳細情報';
@@ -1267,7 +1442,7 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
   String get scrapeStatusWaiting => '待機中';
 
   @override
-  String get scrapeStatusSyncing => '処理中';
+  String get scrapeStatusSyncing => 'スクレイピング中';
 
   @override
   String get scrapeStatusCompleted => '完了';
@@ -1562,4 +1737,179 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
 
   @override
   String get updateDataPreserved => 'データと設定は保持されます。';
+
+  @override
+  String get prefixRouteRulesTitle => '作品画像 Prefix ルート規則';
+
+  @override
+  String get prefixRouteRulesSubtitle => '検証済みダウンロードから学習した画像 family を管理します。';
+
+  @override
+  String prefixRouteRuleCount(int count) {
+    return '学習済み Prefix 規則 $count 件';
+  }
+
+  @override
+  String get prefixRouteSearchHint => 'Prefix を検索';
+
+  @override
+  String get prefixRouteNoRules => '学習済みの Prefix ルート規則はありません。';
+
+  @override
+  String get prefixRouteNoSearchResults => '一致する Prefix 規則はありません。';
+
+  @override
+  String get prefixRouteBestFamily => '優先 family';
+
+  @override
+  String get prefixRouteNotAvailable => 'なし';
+
+  @override
+  String get prefixRouteCandidates => '既知の候補ルート';
+
+  @override
+  String prefixRouteSuccessCount(int count) {
+    return '成功: $count 回';
+  }
+
+  @override
+  String prefixRouteFailureCount(int count) {
+    return '失敗: $count 回';
+  }
+
+  @override
+  String prefixRouteLastSuccess(String time) {
+    return '最終成功: $time';
+  }
+
+  @override
+  String prefixRouteLastFailure(String time) {
+    return '最終失敗: $time';
+  }
+
+  @override
+  String get prefixRouteStatusVerified => '検証済み';
+
+  @override
+  String get prefixRouteStatusExceptions => '例外あり';
+
+  @override
+  String get prefixRouteStatusPending => '再検証待ち';
+
+  @override
+  String get prefixRouteStatusProbeFailed => '探測失敗';
+
+  @override
+  String get prefixRouteManualOverride => '手動指定 route';
+
+  @override
+  String get prefixRouteAutomatic => '自動';
+
+  @override
+  String get prefixRouteAutomaticDescription =>
+      '学習済み候補を優先し、必要な場合だけ対応 family を探測します。';
+
+  @override
+  String get prefixRouteManualDescription => 'この family を最初に試します。学習統計は保持されます。';
+
+  @override
+  String get prefixRouteFamilyDmmStandard => 'DMM Standard';
+
+  @override
+  String get prefixRouteFamilyDmmLeadingOne => 'DMM Leading One';
+
+  @override
+  String get prefixRouteFamilyDmmH1711 => 'DMM H1711';
+
+  @override
+  String get prefixRouteFamilyDmmRebeccaH346 => 'DMM Rebecca H346';
+
+  @override
+  String get prefixRouteFamilyMgstagePrestige => 'MGStage Prestige';
+
+  @override
+  String get prefixRouteFamilyMgstageSeikyouiku => 'MGStage Seikyouiku';
+
+  @override
+  String get prefixRouteExport => '規則をエクスポート';
+
+  @override
+  String get prefixRouteImport => '規則をインポート';
+
+  @override
+  String get prefixRouteExportDialogTitle => 'Prefix 規則をエクスポート';
+
+  @override
+  String get prefixRouteExportRulesOnly => '規則のみ';
+
+  @override
+  String get prefixRouteExportRulesOnlyDescription =>
+      '検証統計を含めず family だけを出力します。';
+
+  @override
+  String get prefixRouteExportWithStatistics => '規則と統計';
+
+  @override
+  String get prefixRouteExportWithStatisticsDescription => '成功、失敗、時刻を含めます。';
+
+  @override
+  String get prefixRouteExportSuccess => 'Prefix 規則をエクスポートしました。';
+
+  @override
+  String get prefixRouteImportDialogTitle => 'Prefix 規則をインポート';
+
+  @override
+  String prefixRouteImportPreview(int rules, int conflicts) {
+    return '$rules 件の規則が見つかりました。手動指定の競合: $conflicts 件。';
+  }
+
+  @override
+  String get prefixRouteImportMerge => '統合';
+
+  @override
+  String get prefixRouteImportReplace => '置換';
+
+  @override
+  String prefixRouteImportSuccess(int count) {
+    return 'Prefix 規則を $count 件インポートしました。';
+  }
+
+  @override
+  String get prefixRouteOperationFailed =>
+      'Prefix ルート操作に失敗しました。既存の規則は変更されていません。';
+
+  @override
+  String get prefixRouteLoadFailed => 'Prefix ルート規則を読み込めませんでした。';
+
+  @override
+  String get prefixRouteClearAutomatic => '自動学習をクリア';
+
+  @override
+  String get prefixRouteClearAutomaticTitle => '自動学習をクリアしますか？';
+
+  @override
+  String get prefixRouteClearAutomaticMessage =>
+      '学習候補と統計をクリアします。手動指定とダウンロード済み画像は保持されます。';
+
+  @override
+  String get prefixRouteClearAutomaticSuccess => 'Prefix の自動学習をクリアしました。';
+
+  @override
+  String get prefixRouteReset => 'この Prefix の学習をリセット';
+
+  @override
+  String get prefixRouteResetTitle => 'この Prefix の学習をリセットしますか？';
+
+  @override
+  String get prefixRouteResetMessage => '候補と統計をクリアします。手動指定がある場合は保持されます。';
+
+  @override
+  String get prefixRouteForget => 'この Prefix 規則を削除';
+
+  @override
+  String get prefixRouteForgetTitle => 'この Prefix 規則を削除しますか？';
+
+  @override
+  String get prefixRouteForgetMessage =>
+      'この Prefix の学習データと手動指定を削除します。ダウンロード済み画像と作品データは変更されません。';
 }

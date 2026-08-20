@@ -940,31 +940,31 @@ abstract class AppLocalizations {
   /// No description provided for @scrapeSyncingTitle.
   ///
   /// In zh_TW, this message translates to:
-  /// **'正在同步'**
+  /// **'刮削中'**
   String get scrapeSyncingTitle;
 
   /// No description provided for @scrapeSyncCompleted.
   ///
   /// In zh_TW, this message translates to:
-  /// **'同步完成'**
+  /// **'刮削完成'**
   String get scrapeSyncCompleted;
 
   /// No description provided for @scrapeSyncPartial.
   ///
   /// In zh_TW, this message translates to:
-  /// **'同步完成，但有部分項目失敗'**
+  /// **'刮削完成，但有部分項目失敗'**
   String get scrapeSyncPartial;
 
   /// No description provided for @scrapeSyncFailed.
   ///
   /// In zh_TW, this message translates to:
-  /// **'同步失敗'**
+  /// **'刮削失敗'**
   String get scrapeSyncFailed;
 
   /// No description provided for @scrapeSyncStopped.
   ///
   /// In zh_TW, this message translates to:
-  /// **'已停止同步'**
+  /// **'已停止刮削'**
   String get scrapeSyncStopped;
 
   /// No description provided for @scrapeDetailsSection.
@@ -1024,7 +1024,7 @@ abstract class AppLocalizations {
   /// No description provided for @scrapeStatusSyncing.
   ///
   /// In zh_TW, this message translates to:
-  /// **'同步中'**
+  /// **'刮削中'**
   String get scrapeStatusSyncing;
 
   /// No description provided for @scrapeStatusCompleted.
@@ -1584,6 +1584,318 @@ abstract class AppLocalizations {
   /// In zh_TW, this message translates to:
   /// **'使用者資料與設定會保留。'**
   String get updateDataPreserved;
+
+  /// No description provided for @prefixRouteRulesTitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'作品圖片 Prefix 路由規則'**
+  String get prefixRouteRulesTitle;
+
+  /// No description provided for @prefixRouteRulesSubtitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'查看並管理由實際驗證下載結果學習的圖片 family。'**
+  String get prefixRouteRulesSubtitle;
+
+  /// No description provided for @prefixRouteRuleCount.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'已學習 {count} 條 Prefix 規則'**
+  String prefixRouteRuleCount(int count);
+
+  /// No description provided for @prefixRouteSearchHint.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'搜尋 Prefix'**
+  String get prefixRouteSearchHint;
+
+  /// No description provided for @prefixRouteNoRules.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'尚未學習任何 Prefix 路由規則。'**
+  String get prefixRouteNoRules;
+
+  /// No description provided for @prefixRouteNoSearchResults.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'沒有符合搜尋條件的 Prefix 規則。'**
+  String get prefixRouteNoSearchResults;
+
+  /// No description provided for @prefixRouteBestFamily.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'目前優先 family'**
+  String get prefixRouteBestFamily;
+
+  /// No description provided for @prefixRouteNotAvailable.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'無'**
+  String get prefixRouteNotAvailable;
+
+  /// No description provided for @prefixRouteCandidates.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'已知候選路由'**
+  String get prefixRouteCandidates;
+
+  /// No description provided for @prefixRouteSuccessCount.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'成功：{count} 次'**
+  String prefixRouteSuccessCount(int count);
+
+  /// No description provided for @prefixRouteFailureCount.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'失敗：{count} 次'**
+  String prefixRouteFailureCount(int count);
+
+  /// No description provided for @prefixRouteLastSuccess.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'最後成功：{time}'**
+  String prefixRouteLastSuccess(String time);
+
+  /// No description provided for @prefixRouteLastFailure.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'最後失敗：{time}'**
+  String prefixRouteLastFailure(String time);
+
+  /// No description provided for @prefixRouteStatusVerified.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'已驗證'**
+  String get prefixRouteStatusVerified;
+
+  /// No description provided for @prefixRouteStatusExceptions.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'有例外'**
+  String get prefixRouteStatusExceptions;
+
+  /// No description provided for @prefixRouteStatusPending.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'待重新驗證'**
+  String get prefixRouteStatusPending;
+
+  /// No description provided for @prefixRouteStatusProbeFailed.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'探測失敗'**
+  String get prefixRouteStatusProbeFailed;
+
+  /// No description provided for @prefixRouteManualOverride.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'手動指定 route'**
+  String get prefixRouteManualOverride;
+
+  /// No description provided for @prefixRouteAutomatic.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'自動'**
+  String get prefixRouteAutomatic;
+
+  /// No description provided for @prefixRouteAutomaticDescription.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'優先使用已學習候選，必要時再探測目前支援的 family。'**
+  String get prefixRouteAutomaticDescription;
+
+  /// No description provided for @prefixRouteManualDescription.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'會優先嘗試此 family；原有學習統計仍會保留。'**
+  String get prefixRouteManualDescription;
+
+  /// No description provided for @prefixRouteFamilyDmmStandard.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'DMM Standard'**
+  String get prefixRouteFamilyDmmStandard;
+
+  /// No description provided for @prefixRouteFamilyDmmLeadingOne.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'DMM Leading One'**
+  String get prefixRouteFamilyDmmLeadingOne;
+
+  /// No description provided for @prefixRouteFamilyDmmH1711.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'DMM H1711'**
+  String get prefixRouteFamilyDmmH1711;
+
+  /// No description provided for @prefixRouteFamilyDmmRebeccaH346.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'DMM Rebecca H346'**
+  String get prefixRouteFamilyDmmRebeccaH346;
+
+  /// No description provided for @prefixRouteFamilyMgstagePrestige.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'MGStage Prestige'**
+  String get prefixRouteFamilyMgstagePrestige;
+
+  /// No description provided for @prefixRouteFamilyMgstageSeikyouiku.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'MGStage Seikyouiku'**
+  String get prefixRouteFamilyMgstageSeikyouiku;
+
+  /// No description provided for @prefixRouteExport.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'匯出規則'**
+  String get prefixRouteExport;
+
+  /// No description provided for @prefixRouteImport.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'匯入規則'**
+  String get prefixRouteImport;
+
+  /// No description provided for @prefixRouteExportDialogTitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'匯出 Prefix 規則'**
+  String get prefixRouteExportDialogTitle;
+
+  /// No description provided for @prefixRouteExportRulesOnly.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'僅規則'**
+  String get prefixRouteExportRulesOnly;
+
+  /// No description provided for @prefixRouteExportRulesOnlyDescription.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'匯出 family，不包含驗證統計。'**
+  String get prefixRouteExportRulesOnlyDescription;
+
+  /// No description provided for @prefixRouteExportWithStatistics.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'規則與統計'**
+  String get prefixRouteExportWithStatistics;
+
+  /// No description provided for @prefixRouteExportWithStatisticsDescription.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'包含成功、失敗與時間資料。'**
+  String get prefixRouteExportWithStatisticsDescription;
+
+  /// No description provided for @prefixRouteExportSuccess.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'Prefix 規則已匯出。'**
+  String get prefixRouteExportSuccess;
+
+  /// No description provided for @prefixRouteImportDialogTitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'匯入 Prefix 規則'**
+  String get prefixRouteImportDialogTitle;
+
+  /// No description provided for @prefixRouteImportPreview.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'找到 {rules} 條規則。手動指定衝突：{conflicts}。'**
+  String prefixRouteImportPreview(int rules, int conflicts);
+
+  /// No description provided for @prefixRouteImportMerge.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'合併'**
+  String get prefixRouteImportMerge;
+
+  /// No description provided for @prefixRouteImportReplace.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'取代'**
+  String get prefixRouteImportReplace;
+
+  /// No description provided for @prefixRouteImportSuccess.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'已匯入 {count} 條 Prefix 規則。'**
+  String prefixRouteImportSuccess(int count);
+
+  /// No description provided for @prefixRouteOperationFailed.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'Prefix 路由操作失敗，既有規則未變更。'**
+  String get prefixRouteOperationFailed;
+
+  /// No description provided for @prefixRouteLoadFailed.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'無法載入 Prefix 路由規則。'**
+  String get prefixRouteLoadFailed;
+
+  /// No description provided for @prefixRouteClearAutomatic.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'清除自動學習'**
+  String get prefixRouteClearAutomatic;
+
+  /// No description provided for @prefixRouteClearAutomaticTitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'清除自動學習？'**
+  String get prefixRouteClearAutomaticTitle;
+
+  /// No description provided for @prefixRouteClearAutomaticMessage.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'將清除已學習候選與統計；手動指定與已下載圖片會保留。'**
+  String get prefixRouteClearAutomaticMessage;
+
+  /// No description provided for @prefixRouteClearAutomaticSuccess.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'已清除 Prefix 自動學習資料。'**
+  String get prefixRouteClearAutomaticSuccess;
+
+  /// No description provided for @prefixRouteReset.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'重設此 Prefix 學習'**
+  String get prefixRouteReset;
+
+  /// No description provided for @prefixRouteResetTitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'重設此 Prefix 的學習資料？'**
+  String get prefixRouteResetTitle;
+
+  /// No description provided for @prefixRouteResetMessage.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'將清除候選與統計；如果有手動指定 route，會保留。'**
+  String get prefixRouteResetMessage;
+
+  /// No description provided for @prefixRouteForget.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'移除此 Prefix 規則'**
+  String get prefixRouteForget;
+
+  /// No description provided for @prefixRouteForgetTitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'移除此 Prefix 規則？'**
+  String get prefixRouteForgetTitle;
+
+  /// No description provided for @prefixRouteForgetMessage.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'將移除此 Prefix 的學習資料與手動指定；不會變更已下載圖片或作品資料。'**
+  String get prefixRouteForgetMessage;
 }
 
 class _AppLocalizationsDelegate

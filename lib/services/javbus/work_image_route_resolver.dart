@@ -9,6 +9,32 @@ enum WorkImageNormalizationFamily {
   mgstageSeikyouiku,
 }
 
+/// Stable, metadata-independent order used for the first probe of an unknown
+/// Prefix.  Keep this list centralized so downloader, import/export, and
+/// Settings do not accidentally develop different family orders.
+const workImageDefaultProbeOrder = <WorkImageNormalizationFamily>[
+  WorkImageNormalizationFamily.dmmStandard,
+  WorkImageNormalizationFamily.dmmLeadingOne,
+  WorkImageNormalizationFamily.dmmH1711,
+  WorkImageNormalizationFamily.dmmRebeccaH346,
+  WorkImageNormalizationFamily.mgstagePrestige,
+  WorkImageNormalizationFamily.mgstageSeikyouiku,
+];
+
+String workImageNormalizationFamilyName(WorkImageNormalizationFamily family) =>
+    family.name;
+
+WorkImageNormalizationFamily? workImageNormalizationFamilyFromName(
+  String? value,
+) {
+  for (final family in WorkImageNormalizationFamily.values) {
+    if (family.name == value) {
+      return family;
+    }
+  }
+  return null;
+}
+
 enum WorkImageRouteFailureReason {
   metadataMissing,
   metadataUnmapped,

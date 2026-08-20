@@ -98,7 +98,6 @@ class WorkImagePolicy {
     List<Uri> evidenceUris = const [],
     WorkImageRouteResolution? route,
   }) {
-    final parts = _parseCode(code);
     final resolved =
         route ??
         const WorkImageRouteResolver().resolve(
@@ -108,7 +107,20 @@ class WorkImagePolicy {
     if (!resolved.isResolved) {
       throw WorkImageRouteException(code, resolved.failureReason!);
     }
-    if (resolved.family == WorkImageNormalizationFamily.mgstagePrestige) {
+    return urlsForFamily(code: code, family: resolved.family!);
+  }
+
+  /// Builds URLs for one of the explicitly supported image families.
+  ///
+  /// Route selection belongs to PrefixRouteRepository/WorkImageDownloader;
+  /// this method is intentionally only a formatter plus the existing host
+  /// and path safety assertion.
+  WorkImageUrls urlsForFamily({
+    required String code,
+    required WorkImageNormalizationFamily family,
+  }) {
+    final parts = _parseCode(code);
+    if (family == WorkImageNormalizationFamily.mgstagePrestige) {
       final normalizedCode = parts.prefix + '-' + parts.number;
       final base =
           'https://image.mgstage.com/images/prestige/' +
@@ -123,7 +135,7 @@ class WorkImagePolicy {
       _assertApproved(urls);
       return urls;
     }
-    if (resolved.family == WorkImageNormalizationFamily.mgstageSeikyouiku) {
+    if (family == WorkImageNormalizationFamily.mgstageSeikyouiku) {
       final tokenPrefix = '502' + parts.prefix;
       final token = tokenPrefix + '-' + parts.number;
       final base =
@@ -140,7 +152,7 @@ class WorkImagePolicy {
       return urls;
     }
 
-    final imageCode = _dmmImageCode(parts, resolved.family!);
+    final imageCode = _dmmImageCode(parts, family);
     final base =
         'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/' +
         imageCode +
@@ -167,7 +179,11 @@ class WorkImagePolicy {
       WorkImageNormalizationFamily.dmmH1711 =>
         'h_1711' + parts.prefix + paddedNumber,
       WorkImageNormalizationFamily.dmmRebeccaH346 =>
-        'h_346' + parts.prefix + paddedNumber,
+        parts.prefix == 'rebd'
+            ? 'h_346' + parts.prefix + paddedNumber
+            : throw FormatException(
+                'Rebecca H346 is not applicable to ${parts.prefix}.',
+              ),
       WorkImageNormalizationFamily.mgstagePrestige ||
       WorkImageNormalizationFamily.mgstageSeikyouiku => throw StateError(
         'MGStage route must not format a DMM URL.',

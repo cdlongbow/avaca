@@ -180,15 +180,17 @@ void main() {
 
     await images.firstDownloadStarted.future;
     expect(client.detailRequests, ['OVR-001', 'OVR-002']);
-    expect(
-      progress.any(
-        (item) =>
-            item.phase == WorksScrapePhase.downloadingImages &&
-            item.current == 0 &&
-            item.total == 2,
-      ),
-      isTrue,
+    final firstImageProgress = progress.firstWhere(
+      (item) => item.phase == WorksScrapePhase.downloadingImages,
     );
+    expect(firstImageProgress.current, 0);
+    expect(firstImageProgress.total, 2);
+    expect(firstImageProgress.totalKnown, isTrue);
+    expect(
+      firstImageProgress.sourceProgress[ScrapeSourceId.javbus]?.current,
+      0,
+    );
+    expect(firstImageProgress.sourceProgress[ScrapeSourceId.javbus]?.total, 2);
 
     images.releaseFirstDownload();
     final result = await scrape;
@@ -199,7 +201,7 @@ void main() {
         .where((item) => item.phase == WorksScrapePhase.downloadingImages)
         .map((item) => item.current)
         .toList();
-    expect(imageProgress, containsAll(<int>[1, 2]));
+    expect(imageProgress, containsAll(<int>[0, 1, 2]));
   });
 
   test('missing-only mode keeps existing downloaded image files', () async {

@@ -442,19 +442,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String get scrapePhaseCompleted => '刮削完成';
 
   @override
-  String get scrapeSyncingTitle => '正在同步';
+  String get scrapeSyncingTitle => '刮削中';
 
   @override
-  String get scrapeSyncCompleted => '同步完成';
+  String get scrapeSyncCompleted => '刮削完成';
 
   @override
-  String get scrapeSyncPartial => '同步完成，但有部分項目失敗';
+  String get scrapeSyncPartial => '刮削完成，但有部分項目失敗';
 
   @override
-  String get scrapeSyncFailed => '同步失敗';
+  String get scrapeSyncFailed => '刮削失敗';
 
   @override
-  String get scrapeSyncStopped => '已停止同步';
+  String get scrapeSyncStopped => '已停止刮削';
 
   @override
   String get scrapeDetailsSection => '詳細資料';
@@ -486,7 +486,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get scrapeStatusWaiting => '等待中';
 
   @override
-  String get scrapeStatusSyncing => '同步中';
+  String get scrapeStatusSyncing => '刮削中';
 
   @override
   String get scrapeStatusCompleted => '完成';
@@ -778,6 +778,177 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get updateDataPreserved => '使用者資料與設定會保留。';
+
+  @override
+  String get prefixRouteRulesTitle => '作品圖片 Prefix 路由規則';
+
+  @override
+  String get prefixRouteRulesSubtitle => '查看並管理由實際驗證下載結果學習的圖片 family。';
+
+  @override
+  String prefixRouteRuleCount(int count) {
+    return '已學習 $count 條 Prefix 規則';
+  }
+
+  @override
+  String get prefixRouteSearchHint => '搜尋 Prefix';
+
+  @override
+  String get prefixRouteNoRules => '尚未學習任何 Prefix 路由規則。';
+
+  @override
+  String get prefixRouteNoSearchResults => '沒有符合搜尋條件的 Prefix 規則。';
+
+  @override
+  String get prefixRouteBestFamily => '目前優先 family';
+
+  @override
+  String get prefixRouteNotAvailable => '無';
+
+  @override
+  String get prefixRouteCandidates => '已知候選路由';
+
+  @override
+  String prefixRouteSuccessCount(int count) {
+    return '成功：$count 次';
+  }
+
+  @override
+  String prefixRouteFailureCount(int count) {
+    return '失敗：$count 次';
+  }
+
+  @override
+  String prefixRouteLastSuccess(String time) {
+    return '最後成功：$time';
+  }
+
+  @override
+  String prefixRouteLastFailure(String time) {
+    return '最後失敗：$time';
+  }
+
+  @override
+  String get prefixRouteStatusVerified => '已驗證';
+
+  @override
+  String get prefixRouteStatusExceptions => '有例外';
+
+  @override
+  String get prefixRouteStatusPending => '待重新驗證';
+
+  @override
+  String get prefixRouteStatusProbeFailed => '探測失敗';
+
+  @override
+  String get prefixRouteManualOverride => '手動指定 route';
+
+  @override
+  String get prefixRouteAutomatic => '自動';
+
+  @override
+  String get prefixRouteAutomaticDescription => '優先使用已學習候選，必要時再探測目前支援的 family。';
+
+  @override
+  String get prefixRouteManualDescription => '會優先嘗試此 family；原有學習統計仍會保留。';
+
+  @override
+  String get prefixRouteFamilyDmmStandard => 'DMM Standard';
+
+  @override
+  String get prefixRouteFamilyDmmLeadingOne => 'DMM Leading One';
+
+  @override
+  String get prefixRouteFamilyDmmH1711 => 'DMM H1711';
+
+  @override
+  String get prefixRouteFamilyDmmRebeccaH346 => 'DMM Rebecca H346';
+
+  @override
+  String get prefixRouteFamilyMgstagePrestige => 'MGStage Prestige';
+
+  @override
+  String get prefixRouteFamilyMgstageSeikyouiku => 'MGStage Seikyouiku';
+
+  @override
+  String get prefixRouteExport => '匯出規則';
+
+  @override
+  String get prefixRouteImport => '匯入規則';
+
+  @override
+  String get prefixRouteExportDialogTitle => '匯出 Prefix 規則';
+
+  @override
+  String get prefixRouteExportRulesOnly => '僅規則';
+
+  @override
+  String get prefixRouteExportRulesOnlyDescription => '匯出 family，不包含驗證統計。';
+
+  @override
+  String get prefixRouteExportWithStatistics => '規則與統計';
+
+  @override
+  String get prefixRouteExportWithStatisticsDescription => '包含成功、失敗與時間資料。';
+
+  @override
+  String get prefixRouteExportSuccess => 'Prefix 規則已匯出。';
+
+  @override
+  String get prefixRouteImportDialogTitle => '匯入 Prefix 規則';
+
+  @override
+  String prefixRouteImportPreview(int rules, int conflicts) {
+    return '找到 $rules 條規則。手動指定衝突：$conflicts。';
+  }
+
+  @override
+  String get prefixRouteImportMerge => '合併';
+
+  @override
+  String get prefixRouteImportReplace => '取代';
+
+  @override
+  String prefixRouteImportSuccess(int count) {
+    return '已匯入 $count 條 Prefix 規則。';
+  }
+
+  @override
+  String get prefixRouteOperationFailed => 'Prefix 路由操作失敗，既有規則未變更。';
+
+  @override
+  String get prefixRouteLoadFailed => '無法載入 Prefix 路由規則。';
+
+  @override
+  String get prefixRouteClearAutomatic => '清除自動學習';
+
+  @override
+  String get prefixRouteClearAutomaticTitle => '清除自動學習？';
+
+  @override
+  String get prefixRouteClearAutomaticMessage => '將清除已學習候選與統計；手動指定與已下載圖片會保留。';
+
+  @override
+  String get prefixRouteClearAutomaticSuccess => '已清除 Prefix 自動學習資料。';
+
+  @override
+  String get prefixRouteReset => '重設此 Prefix 學習';
+
+  @override
+  String get prefixRouteResetTitle => '重設此 Prefix 的學習資料？';
+
+  @override
+  String get prefixRouteResetMessage => '將清除候選與統計；如果有手動指定 route，會保留。';
+
+  @override
+  String get prefixRouteForget => '移除此 Prefix 規則';
+
+  @override
+  String get prefixRouteForgetTitle => '移除此 Prefix 規則？';
+
+  @override
+  String get prefixRouteForgetMessage =>
+      '將移除此 Prefix 的學習資料與手動指定；不會變更已下載圖片或作品資料。';
 }
 
 /// The translations for Chinese, as used in China (`zh_CN`).
@@ -1218,19 +1389,19 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get scrapePhaseCompleted => '刮削完成';
 
   @override
-  String get scrapeSyncingTitle => '正在同步';
+  String get scrapeSyncingTitle => '刮削中';
 
   @override
-  String get scrapeSyncCompleted => '同步完成';
+  String get scrapeSyncCompleted => '刮削完成';
 
   @override
-  String get scrapeSyncPartial => '同步完成，但有部分项目失败';
+  String get scrapeSyncPartial => '刮削完成，但有部分项目失败';
 
   @override
-  String get scrapeSyncFailed => '同步失败';
+  String get scrapeSyncFailed => '刮削失败';
 
   @override
-  String get scrapeSyncStopped => '已停止同步';
+  String get scrapeSyncStopped => '已停止刮削';
 
   @override
   String get scrapeDetailsSection => '详细资料';
@@ -1262,7 +1433,7 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get scrapeStatusWaiting => '等待中';
 
   @override
-  String get scrapeStatusSyncing => '同步中';
+  String get scrapeStatusSyncing => '刮削中';
 
   @override
   String get scrapeStatusCompleted => '完成';
@@ -1554,6 +1725,177 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get updateDataPreserved => '用户资料与设置会保留。';
+
+  @override
+  String get prefixRouteRulesTitle => '作品图片 Prefix 路由规则';
+
+  @override
+  String get prefixRouteRulesSubtitle => '查看并管理由实际验证下载结果学习的图片 family。';
+
+  @override
+  String prefixRouteRuleCount(int count) {
+    return '已学习 $count 条 Prefix 规则';
+  }
+
+  @override
+  String get prefixRouteSearchHint => '搜索 Prefix';
+
+  @override
+  String get prefixRouteNoRules => '尚未学习任何 Prefix 路由规则。';
+
+  @override
+  String get prefixRouteNoSearchResults => '没有符合搜索条件的 Prefix 规则。';
+
+  @override
+  String get prefixRouteBestFamily => '当前优先 family';
+
+  @override
+  String get prefixRouteNotAvailable => '无';
+
+  @override
+  String get prefixRouteCandidates => '已知候选路由';
+
+  @override
+  String prefixRouteSuccessCount(int count) {
+    return '成功：$count 次';
+  }
+
+  @override
+  String prefixRouteFailureCount(int count) {
+    return '失败：$count 次';
+  }
+
+  @override
+  String prefixRouteLastSuccess(String time) {
+    return '最后成功：$time';
+  }
+
+  @override
+  String prefixRouteLastFailure(String time) {
+    return '最后失败：$time';
+  }
+
+  @override
+  String get prefixRouteStatusVerified => '已验证';
+
+  @override
+  String get prefixRouteStatusExceptions => '有例外';
+
+  @override
+  String get prefixRouteStatusPending => '待重新验证';
+
+  @override
+  String get prefixRouteStatusProbeFailed => '探测失败';
+
+  @override
+  String get prefixRouteManualOverride => '手动指定 route';
+
+  @override
+  String get prefixRouteAutomatic => '自动';
+
+  @override
+  String get prefixRouteAutomaticDescription => '优先使用已学习候选，必要时再探测当前支持的 family。';
+
+  @override
+  String get prefixRouteManualDescription => '会优先尝试此 family；原有学习统计仍会保留。';
+
+  @override
+  String get prefixRouteFamilyDmmStandard => 'DMM Standard';
+
+  @override
+  String get prefixRouteFamilyDmmLeadingOne => 'DMM Leading One';
+
+  @override
+  String get prefixRouteFamilyDmmH1711 => 'DMM H1711';
+
+  @override
+  String get prefixRouteFamilyDmmRebeccaH346 => 'DMM Rebecca H346';
+
+  @override
+  String get prefixRouteFamilyMgstagePrestige => 'MGStage Prestige';
+
+  @override
+  String get prefixRouteFamilyMgstageSeikyouiku => 'MGStage Seikyouiku';
+
+  @override
+  String get prefixRouteExport => '导出规则';
+
+  @override
+  String get prefixRouteImport => '导入规则';
+
+  @override
+  String get prefixRouteExportDialogTitle => '导出 Prefix 规则';
+
+  @override
+  String get prefixRouteExportRulesOnly => '仅规则';
+
+  @override
+  String get prefixRouteExportRulesOnlyDescription => '导出 family，不包含验证统计。';
+
+  @override
+  String get prefixRouteExportWithStatistics => '规则与统计';
+
+  @override
+  String get prefixRouteExportWithStatisticsDescription => '包含成功、失败与时间资料。';
+
+  @override
+  String get prefixRouteExportSuccess => 'Prefix 规则已导出。';
+
+  @override
+  String get prefixRouteImportDialogTitle => '导入 Prefix 规则';
+
+  @override
+  String prefixRouteImportPreview(int rules, int conflicts) {
+    return '找到 $rules 条规则。手动指定冲突：$conflicts。';
+  }
+
+  @override
+  String get prefixRouteImportMerge => '合并';
+
+  @override
+  String get prefixRouteImportReplace => '替换';
+
+  @override
+  String prefixRouteImportSuccess(int count) {
+    return '已导入 $count 条 Prefix 规则。';
+  }
+
+  @override
+  String get prefixRouteOperationFailed => 'Prefix 路由操作失败，现有规则未变更。';
+
+  @override
+  String get prefixRouteLoadFailed => '无法加载 Prefix 路由规则。';
+
+  @override
+  String get prefixRouteClearAutomatic => '清除自动学习';
+
+  @override
+  String get prefixRouteClearAutomaticTitle => '清除自动学习？';
+
+  @override
+  String get prefixRouteClearAutomaticMessage => '将清除已学习候选与统计；手动指定与已下载图片会保留。';
+
+  @override
+  String get prefixRouteClearAutomaticSuccess => '已清除 Prefix 自动学习资料。';
+
+  @override
+  String get prefixRouteReset => '重设此 Prefix 学习';
+
+  @override
+  String get prefixRouteResetTitle => '重设此 Prefix 的学习资料？';
+
+  @override
+  String get prefixRouteResetMessage => '将清除候选与统计；如果有手动指定 route，会保留。';
+
+  @override
+  String get prefixRouteForget => '移除此 Prefix 规则';
+
+  @override
+  String get prefixRouteForgetTitle => '移除此 Prefix 规则？';
+
+  @override
+  String get prefixRouteForgetMessage =>
+      '将移除此 Prefix 的学习资料与手动指定；不会变更已下载图片或作品资料。';
 }
 
 /// The translations for Chinese, as used in Taiwan (`zh_TW`).
@@ -1994,19 +2336,19 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get scrapePhaseCompleted => '刮削完成';
 
   @override
-  String get scrapeSyncingTitle => '正在同步';
+  String get scrapeSyncingTitle => '刮削中';
 
   @override
-  String get scrapeSyncCompleted => '同步完成';
+  String get scrapeSyncCompleted => '刮削完成';
 
   @override
-  String get scrapeSyncPartial => '同步完成，但有部分項目失敗';
+  String get scrapeSyncPartial => '刮削完成，但有部分項目失敗';
 
   @override
-  String get scrapeSyncFailed => '同步失敗';
+  String get scrapeSyncFailed => '刮削失敗';
 
   @override
-  String get scrapeSyncStopped => '已停止同步';
+  String get scrapeSyncStopped => '已停止刮削';
 
   @override
   String get scrapeDetailsSection => '詳細資料';
@@ -2038,7 +2380,7 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get scrapeStatusWaiting => '等待中';
 
   @override
-  String get scrapeStatusSyncing => '同步中';
+  String get scrapeStatusSyncing => '刮削中';
 
   @override
   String get scrapeStatusCompleted => '完成';
@@ -2330,4 +2672,175 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get updateDataPreserved => '使用者資料與設定會保留。';
+
+  @override
+  String get prefixRouteRulesTitle => '作品圖片 Prefix 路由規則';
+
+  @override
+  String get prefixRouteRulesSubtitle => '查看並管理由實際驗證下載結果學習的圖片 family。';
+
+  @override
+  String prefixRouteRuleCount(int count) {
+    return '已學習 $count 條 Prefix 規則';
+  }
+
+  @override
+  String get prefixRouteSearchHint => '搜尋 Prefix';
+
+  @override
+  String get prefixRouteNoRules => '尚未學習任何 Prefix 路由規則。';
+
+  @override
+  String get prefixRouteNoSearchResults => '沒有符合搜尋條件的 Prefix 規則。';
+
+  @override
+  String get prefixRouteBestFamily => '目前優先 family';
+
+  @override
+  String get prefixRouteNotAvailable => '無';
+
+  @override
+  String get prefixRouteCandidates => '已知候選路由';
+
+  @override
+  String prefixRouteSuccessCount(int count) {
+    return '成功：$count 次';
+  }
+
+  @override
+  String prefixRouteFailureCount(int count) {
+    return '失敗：$count 次';
+  }
+
+  @override
+  String prefixRouteLastSuccess(String time) {
+    return '最後成功：$time';
+  }
+
+  @override
+  String prefixRouteLastFailure(String time) {
+    return '最後失敗：$time';
+  }
+
+  @override
+  String get prefixRouteStatusVerified => '已驗證';
+
+  @override
+  String get prefixRouteStatusExceptions => '有例外';
+
+  @override
+  String get prefixRouteStatusPending => '待重新驗證';
+
+  @override
+  String get prefixRouteStatusProbeFailed => '探測失敗';
+
+  @override
+  String get prefixRouteManualOverride => '手動指定 route';
+
+  @override
+  String get prefixRouteAutomatic => '自動';
+
+  @override
+  String get prefixRouteAutomaticDescription => '優先使用已學習候選，必要時再探測目前支援的 family。';
+
+  @override
+  String get prefixRouteManualDescription => '會優先嘗試此 family；原有學習統計仍會保留。';
+
+  @override
+  String get prefixRouteFamilyDmmStandard => 'DMM Standard';
+
+  @override
+  String get prefixRouteFamilyDmmLeadingOne => 'DMM Leading One';
+
+  @override
+  String get prefixRouteFamilyDmmH1711 => 'DMM H1711';
+
+  @override
+  String get prefixRouteFamilyDmmRebeccaH346 => 'DMM Rebecca H346';
+
+  @override
+  String get prefixRouteFamilyMgstagePrestige => 'MGStage Prestige';
+
+  @override
+  String get prefixRouteFamilyMgstageSeikyouiku => 'MGStage Seikyouiku';
+
+  @override
+  String get prefixRouteExport => '匯出規則';
+
+  @override
+  String get prefixRouteImport => '匯入規則';
+
+  @override
+  String get prefixRouteExportDialogTitle => '匯出 Prefix 規則';
+
+  @override
+  String get prefixRouteExportRulesOnly => '僅規則';
+
+  @override
+  String get prefixRouteExportRulesOnlyDescription => '匯出 family，不包含驗證統計。';
+
+  @override
+  String get prefixRouteExportWithStatistics => '規則與統計';
+
+  @override
+  String get prefixRouteExportWithStatisticsDescription => '包含成功、失敗與時間資料。';
+
+  @override
+  String get prefixRouteExportSuccess => 'Prefix 規則已匯出。';
+
+  @override
+  String get prefixRouteImportDialogTitle => '匯入 Prefix 規則';
+
+  @override
+  String prefixRouteImportPreview(int rules, int conflicts) {
+    return '找到 $rules 條規則。手動指定衝突：$conflicts。';
+  }
+
+  @override
+  String get prefixRouteImportMerge => '合併';
+
+  @override
+  String get prefixRouteImportReplace => '取代';
+
+  @override
+  String prefixRouteImportSuccess(int count) {
+    return '已匯入 $count 條 Prefix 規則。';
+  }
+
+  @override
+  String get prefixRouteOperationFailed => 'Prefix 路由操作失敗，既有規則未變更。';
+
+  @override
+  String get prefixRouteLoadFailed => '無法載入 Prefix 路由規則。';
+
+  @override
+  String get prefixRouteClearAutomatic => '清除自動學習';
+
+  @override
+  String get prefixRouteClearAutomaticTitle => '清除自動學習？';
+
+  @override
+  String get prefixRouteClearAutomaticMessage => '將清除已學習候選與統計；手動指定與已下載圖片會保留。';
+
+  @override
+  String get prefixRouteClearAutomaticSuccess => '已清除 Prefix 自動學習資料。';
+
+  @override
+  String get prefixRouteReset => '重設此 Prefix 學習';
+
+  @override
+  String get prefixRouteResetTitle => '重設此 Prefix 的學習資料？';
+
+  @override
+  String get prefixRouteResetMessage => '將清除候選與統計；如果有手動指定 route，會保留。';
+
+  @override
+  String get prefixRouteForget => '移除此 Prefix 規則';
+
+  @override
+  String get prefixRouteForgetTitle => '移除此 Prefix 規則？';
+
+  @override
+  String get prefixRouteForgetMessage =>
+      '將移除此 Prefix 的學習資料與手動指定；不會變更已下載圖片或作品資料。';
 }

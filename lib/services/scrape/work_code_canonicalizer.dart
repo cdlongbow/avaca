@@ -75,6 +75,46 @@ WorkCodeIdentity? parseWorkCodeIdentity(String? raw) {
 /// Compatibility wrapper used by existing callers.
 String? canonicalizeWorkCode(String? raw) => parseWorkCodeIdentity(raw)?.value;
 
+/// Returns the canonical Prefix used by image-route learning.
+///
+/// Prefix learning must share the same work-code identity rules as the rest
+/// of the app.  In particular, numeric-leading aliases such as
+/// `1start00408` are normalized before the Prefix is extracted, while opaque
+/// values such as `FC2` remain ineligible for route learning.
+String? canonicalWorkCodePrefix(String? raw) {
+  final canonical = canonicalizeWorkCode(raw);
+  if (canonical == null) {
+    return null;
+  }
+  final match = RegExp(r'^([A-Z]+[A-Z0-9]*)-\d+$').firstMatch(canonical);
+  return match?.group(1);
+}
+
+/// Normalizes a Prefix supplied by a route-rule import or Settings UI.
+///
+/// This intentionally accepts only the Prefix portion, not a complete work
+/// code.  It keeps `sone`, `Sone`, and `SONE` on one persisted rule while
+/// rejecting URL/path-like values.
+String? normalizeWorkImagePrefix(String? raw) {
+  final trimmed = raw?.trim();
+  if (trimmed == null || trimmed.isEmpty) {
+    return null;
+  }
+  final ascii = StringBuffer();
+  for (final rune in trimmed.runes) {
+    if (rune >= 0xFF01 && rune <= 0xFF5E) {
+      ascii.writeCharCode(rune - 0xFEE0);
+    } else {
+      ascii.writeCharCode(rune);
+    }
+  }
+  final prefix = ascii.toString().toUpperCase();
+  if (!RegExp(r'^[A-Z]+[A-Z0-9]*$').hasMatch(prefix)) {
+    return null;
+  }
+  return prefix;
+}
+
 WorkCodeIdentity _simpleIdentity(String prefix, String digits) {
   final significantDigits = digits.replaceFirst(RegExp(r'^0+(?=\d)'), '');
   final number = significantDigits.padLeft(3, '0');
