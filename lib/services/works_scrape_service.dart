@@ -1082,7 +1082,14 @@ class WorksScrapeService {
       sourceTotalKnown: true,
     );
 
-    void notifyDetailProgress() {
+    var detailCurrent = 0;
+    void notifyDetailProgress({
+      _WorkCandidate? candidate,
+      bool completed = false,
+    }) {
+      if (completed && detailCurrent < selection.candidates.length) {
+        detailCurrent++;
+      }
       _notify(
         onProgress,
         0,
@@ -1092,8 +1099,12 @@ class WorksScrapeService {
         0,
         phase: WorksScrapePhase.fetchingDetails,
         source: sourceId,
+        workCode: candidate?.summary.code,
         totalKnown: false,
-        updateSourceProgress: false,
+        updateSourceProgress: completed,
+        sourceCurrent: detailCurrent,
+        sourceTotal: selection.candidates.length,
+        sourceTotalKnown: true,
       );
     }
 
@@ -1161,7 +1172,7 @@ class WorksScrapeService {
             imageQueue: imageQueue,
             onImageDownload: (code) => notifyStreamingProgress(
               workCode: code,
-              updateSourceProgress: false,
+              updateSourceProgress: true,
             ),
           ),
         ),
@@ -1172,8 +1183,9 @@ class WorksScrapeService {
       source: source,
       candidates: selection.candidates,
       cancellationToken: cancellationToken,
-      onAttemptStart: (_) => notifyDetailProgress(),
-      onAttemptComplete: (_) => notifyDetailProgress(),
+      onAttemptStart: (candidate) => notifyDetailProgress(candidate: candidate),
+      onAttemptComplete: (candidate) =>
+          notifyDetailProgress(candidate: candidate, completed: true),
       onDetailsFetched: enqueueImageSave,
     );
     final sourceResolution = _resolveSourceDetails(detailResult);

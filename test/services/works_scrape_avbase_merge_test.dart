@@ -60,6 +60,7 @@ void main() {
         imageDirectory: directory.path,
         javBusDetailDelay: Duration.zero,
       );
+      final progress = <WorksScrapeProgress>[];
 
       final result = await service.scrape(
         actressId: actressId,
@@ -69,9 +70,30 @@ void main() {
           actressDetailsSource: ScrapeSourceId.javbus,
           worksSource: WorksSourceSelection.all,
         ),
+        onProgress: progress.add,
       );
       expect(result.saved, 1);
       expect(result.failed, 0);
+      expect(
+        progress.any(
+          (item) =>
+              item.phase == WorksScrapePhase.fetchingDetails &&
+              item.source == ScrapeSourceId.javbus &&
+              item.sourceProgress[ScrapeSourceId.javbus]?.current == 1,
+        ),
+        isTrue,
+        reason: 'JavBus detail progress must leave 0 after its request ends.',
+      );
+      expect(
+        progress.any(
+          (item) =>
+              item.phase == WorksScrapePhase.fetchingDetails &&
+              item.source == ScrapeSourceId.avbase &&
+              item.sourceProgress[ScrapeSourceId.avbase]?.current == 1,
+        ),
+        isTrue,
+        reason: 'AvBase detail progress must leave 0 after its request ends.',
+      );
       expect(result.worksSources, [
         ScrapeSourceId.javbus,
         ScrapeSourceId.avbase,

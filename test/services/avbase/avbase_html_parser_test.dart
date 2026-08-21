@@ -21,6 +21,9 @@ void main() {
           <a href="/works/date/2026-08-20">2026/08/20</a>
         </div>
         <nav>
+          <a data-slot="button" href="/works/date">本日発売</a>
+        </nav>
+        <nav>
           <a href="?q=&amp;page=0">0</a>
           <a href="?q=&amp;page=1">1</a>
           <a href="?q=&amp;page=6">6</a>

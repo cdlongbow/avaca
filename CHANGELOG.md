@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.3 - 2026-08-21
+
+- Fixed AvBase and combined JavBus/AvBase scrape progress so each source
+  advances its detail counter instead of remaining at zero.
+- Filtered AvBase navigation links from talent-page work collection so only
+  actual work cards enter the scrape pipeline.
+- Added regression coverage for source-local progress and AvBase work-link
+  parsing.
+
 ## 0.9.2 - 2026-08-21
 
 - Added AvBase as a guarded actress-details and works source, including

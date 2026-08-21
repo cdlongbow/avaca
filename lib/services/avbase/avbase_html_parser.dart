@@ -147,9 +147,12 @@ final class AvBaseHtmlParser {
       return null;
     }
     final card = _workCard(anchor);
-    final releaseDate = card == null
-        ? null
-        : _clean(card.querySelector('a[href*="/works/date/"]')?.text);
+    if (card == null) {
+      return null;
+    }
+    final releaseDate = _clean(
+      card.querySelector('a[href*="/works/date/"]')?.text,
+    );
     return AvBaseWorkSummary(
       code: code,
       title: _clean(anchor.text) ?? '',
