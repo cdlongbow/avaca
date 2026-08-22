@@ -5,6 +5,7 @@ import 'package:avaca/controllers/detail_controller.dart';
 import 'package:avaca/core/database.dart';
 import 'package:avaca/models/scraped_actress_details.dart';
 import 'package:avaca/models/work.dart';
+import 'package:avaca/models/work_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as path;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -64,6 +65,9 @@ void main() {
           'series': '系列',
           'card_image_path': 'images/abf-183-card.jpg',
           'detail_image_path': 'images/abf-183-detail.jpg',
+          'is_stored': 0,
+          'storage_quality': null,
+          'storage_frame_rate': null,
         },
       ]);
       expect(
@@ -71,6 +75,30 @@ void main() {
         containsPair('code', 'ABF-183'),
       );
     });
+
+    test(
+      'persists the work storage record with quality and frame rate',
+      () async {
+        final workId = await database.upsertActressWork(
+          actressId: actressId,
+          work: const Work(code: 'STORE-001', title: '儲存測試作品'),
+        );
+
+        await database.updateWorkStorage(
+          workId: workId,
+          record: const WorkStorageRecord(
+            isStored: true,
+            quality: '2K',
+            frameRate: 30,
+          ),
+        );
+
+        final row = await database.getWorkById(workId);
+        expect(row?['is_stored'], 1);
+        expect(row?['storage_quality'], '2K');
+        expect(row?['storage_frame_rate'], 30);
+      },
+    );
 
     test(
       'stores source-scoped performers and resolves canonical names and aliases',

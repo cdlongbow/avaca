@@ -222,6 +222,12 @@ void main() {
         final chips = tester.widgetList<FilterChip>(find.byType(FilterChip));
         final selectedChip = chips.firstWhere((item) => item.selected);
         final unselectedChip = chips.firstWhere((item) => !item.selected);
+        for (var index = 1; index < chips.length; index++) {
+          expect(
+            tester.getRect(find.byType(FilterChip).at(index)).top,
+            closeTo(firstChipRect.top, 0.01),
+          );
+        }
         expect(selectedChip.showCheckmark, isFalse);
         expect(
           selectedChip.selectedColor,
@@ -267,7 +273,7 @@ void main() {
     });
 
     testWidgets(
-      'edit profile uses symmetric inset and compact right-column photo actions',
+      'edit profile has no outer frame and compact right-column photo actions',
       (tester) async {
         await _pumpDetail(tester, size: const Size(390, 844));
         await _enterDetailEditMode(tester);
@@ -292,18 +298,18 @@ void main() {
         final changeRect = tester.getRect(changePhoto);
         final deleteRect = tester.getRect(deletePhoto);
 
-        expect(imageRect.left - panelRect.left, closeTo(12, 0.01));
-        expect(imageRect.top - panelRect.top, closeTo(12, 0.01));
-        expect(worksRect.top - panelRect.top, closeTo(12, 0.01));
+        expect(imageRect.left - panelRect.left, closeTo(0, 0.01));
+        expect(imageRect.top - panelRect.top, closeTo(0, 0.01));
+        expect(worksRect.top - panelRect.top, closeTo(0, 0.01));
         expect(countRect.left, greaterThan(worksRect.left));
         expect(countRect.right, lessThanOrEqualTo(worksRect.right));
         expect(imageRect.top, closeTo(worksRect.top, 0.01));
         expect(actionsRect.top, greaterThan(worksRect.bottom));
         expect(actionsRect.left, greaterThanOrEqualTo(worksRect.left));
-        expect(actionsRect.right, lessThanOrEqualTo(panelRect.right - 12));
+        expect(actionsRect.right, lessThanOrEqualTo(panelRect.right));
         expect(changeRect.top, closeTo(deleteRect.top, 0.01));
         expect(changeRect.height, closeTo(deleteRect.height, 0.01));
-        expect(changeRect.height, lessThanOrEqualTo(40));
+        expect(changeRect.height, lessThanOrEqualTo(32));
         expect(changeRect.right, lessThanOrEqualTo(deleteRect.left));
         expect(
           _outlinedButtonRadius(tester, changePhoto),
@@ -333,6 +339,69 @@ void main() {
         expect(deleteTextStyle?.fontFamily, labelStyle?.fontFamily);
         expect(find.text('更換照片'), findsOneWidget);
         expect(find.text('刪除照片'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'keeps edit body rows compact with labels left and controls right',
+      (tester) async {
+        await _pumpDetail(tester, size: const Size(390, 844));
+        await _enterDetailEditMode(tester);
+
+        final birthDate = find.byKey(const Key('detail-birth-date-button'));
+        final height = find.byKey(const Key('detail-height-field'));
+        final cup = find.byKey(const Key('detail-cup-field'));
+        final measurements = find.byKey(const Key('detail-measurements-field'));
+        final birthRect = tester.getRect(birthDate);
+        final heightRect = tester.getRect(height);
+        final cupRect = tester.getRect(cup);
+        final measurementsRect = tester.getRect(measurements);
+
+        for (final rect in [birthRect, heightRect, cupRect, measurementsRect]) {
+          expect(rect.height, closeTo(40, 0.01));
+        }
+        expect(heightRect.top, greaterThan(birthRect.bottom));
+        expect(cupRect.top, greaterThan(heightRect.bottom));
+        expect(measurementsRect.top, greaterThan(cupRect.bottom));
+        expect(heightRect.top - birthRect.bottom, closeTo(8, 0.01));
+        expect(cupRect.top - heightRect.bottom, closeTo(8, 0.01));
+        expect(measurementsRect.top - cupRect.bottom, closeTo(8, 0.01));
+        expect(heightRect.left, closeTo(birthRect.left, 0.01));
+        expect(cupRect.left, closeTo(birthRect.left, 0.01));
+        expect(measurementsRect.left, closeTo(birthRect.left, 0.01));
+        expect(heightRect.right, closeTo(birthRect.right, 0.01));
+        expect(cupRect.right, closeTo(birthRect.right, 0.01));
+        expect(measurementsRect.right, closeTo(birthRect.right, 0.01));
+
+        final colorScheme = Theme.of(tester.element(height)).colorScheme;
+        final l10n = AppLocalizations.of(tester.element(height));
+        for (final entry in {
+          l10n.birthDate: birthRect,
+          l10n.heightCm: heightRect,
+          l10n.cup: cupRect,
+          l10n.measurements: measurementsRect,
+        }.entries) {
+          final labelRect = tester.getRect(find.text(entry.key));
+          expect(labelRect.center.dy, closeTo(entry.value.center.dy, 0.01));
+        }
+
+        final birthButton = tester.widget<OutlinedButton>(birthDate);
+        final birthText = (birthButton.child! as Align).child! as Text;
+        expect(birthText.style?.fontSize, 14);
+        expect(birthText.style?.color, colorScheme.onSurfaceVariant);
+
+        final heightField = tester.widget<TextField>(height);
+        expect(heightField.decoration?.labelText, isNull);
+        expect(heightField.decoration?.isDense, isFalse);
+        expect(heightField.style?.fontSize, 14);
+        expect(heightField.style?.color, colorScheme.onSurfaceVariant);
+        expect(heightField.textAlign, TextAlign.left);
+        expect(heightField.textAlignVertical, TextAlignVertical.center);
+        expect(
+          heightField.decoration?.constraints,
+          BoxConstraints.tightFor(height: 40),
+        );
         expect(tester.takeException(), isNull);
       },
     );

@@ -85,6 +85,9 @@ class DataTransferService {
         'series',
         'card_image_path',
         'detail_image_path',
+        'is_stored',
+        'storage_quality',
+        'storage_frame_rate',
         'created_at',
         'modified_at',
       ],
@@ -196,6 +199,9 @@ class DataTransferService {
               variant: WorkImageVariant.detail,
             ),
           ),
+          isStored: row['is_stored'] is num && row['is_stored'] != 0,
+          storageQuality: _asNullableString(row['storage_quality']),
+          storageFrameRate: _asInt(row['storage_frame_rate']),
           createdAt: _asNullableString(row['created_at']),
           modifiedAt: _asNullableString(row['modified_at']),
         ),
@@ -258,6 +264,9 @@ class DataTransferService {
           detailImageAssetId: draft.detailSourceKey,
           createdAt: draft.createdAt,
           modifiedAt: draft.modifiedAt,
+          isStored: draft.isStored,
+          storageQuality: draft.storageQuality,
+          storageFrameRate: draft.storageFrameRate,
         ),
       );
     }
@@ -333,6 +342,9 @@ class DataTransferService {
                   : assetIds[item.detailImageAssetId!],
               createdAt: item.createdAt,
               modifiedAt: item.modifiedAt,
+              isStored: item.isStored,
+              storageQuality: item.storageQuality,
+              storageFrameRate: item.storageFrameRate,
             ),
           )
           .toList(growable: false),
@@ -903,6 +915,9 @@ class DataTransferService {
           'series': work.series,
           'card_image_path': cardImage,
           'detail_image_path': detailImage,
+          'is_stored': work.isStored ? 1 : 0,
+          'storage_quality': work.storageQuality,
+          'storage_frame_rate': work.storageFrameRate,
           if (work.createdAt != null) 'created_at': work.createdAt,
           if (work.modifiedAt != null) 'modified_at': work.modifiedAt,
         });
@@ -932,6 +947,15 @@ class DataTransferService {
             series = COALESCE(?, series),
             card_image_path = COALESCE(?, card_image_path),
             detail_image_path = COALESCE(?, detail_image_path),
+            is_stored = CASE WHEN is_stored = 1 OR ? = 1 THEN 1 ELSE 0 END,
+            storage_quality = CASE
+              WHEN is_stored = 0 AND ? = 1 THEN COALESCE(?, storage_quality)
+              ELSE storage_quality
+            END,
+            storage_frame_rate = CASE
+              WHEN is_stored = 0 AND ? = 1 THEN COALESCE(?, storage_frame_rate)
+              ELSE storage_frame_rate
+            END,
             modified_at = CURRENT_TIMESTAMP
         WHERE id = ?
         ''',
@@ -944,6 +968,11 @@ class DataTransferService {
           work.series,
           cardImage,
           detailImage,
+          work.isStored ? 1 : 0,
+          work.isStored ? 1 : 0,
+          work.storageQuality,
+          work.isStored ? 1 : 0,
+          work.storageFrameRate,
           id,
         ],
       );
@@ -1125,6 +1154,9 @@ class _ExportWorkDraft {
     required this.series,
     required this.cardSourceKey,
     required this.detailSourceKey,
+    required this.isStored,
+    required this.storageQuality,
+    required this.storageFrameRate,
     required this.createdAt,
     required this.modifiedAt,
   });
@@ -1139,6 +1171,9 @@ class _ExportWorkDraft {
   final String? series;
   final String? cardSourceKey;
   final String? detailSourceKey;
+  final bool isStored;
+  final String? storageQuality;
+  final int? storageFrameRate;
   final String? createdAt;
   final String? modifiedAt;
 }

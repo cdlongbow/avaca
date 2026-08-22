@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../core/database.dart';
+import '../models/work_storage.dart';
 
 enum WorksLoadStatus { loading, loaded, notFound, error }
 
@@ -16,14 +17,28 @@ class WorksController extends ChangeNotifier {
   WorksLoadStatus status = WorksLoadStatus.loading;
   Object? loadError;
   String _searchQuery = '';
+  WorkStorageFilter _storageFilter = WorkStorageFilter.all;
 
   String get searchQuery => _searchQuery;
+  WorkStorageFilter get storageFilter => _storageFilter;
 
   List<Map<String, Object?>> get visibleWorks {
     final rawQuery = _searchQuery.trim();
 
+    final filteredWorks = switch (_storageFilter) {
+      WorkStorageFilter.all => works,
+      WorkStorageFilter.stored =>
+        works
+            .where((work) => WorkStorageRecord.fromDatabase(work).isStored)
+            .toList(growable: false),
+      WorkStorageFilter.notStored =>
+        works
+            .where((work) => !WorkStorageRecord.fromDatabase(work).isStored)
+            .toList(growable: false),
+    };
+
     if (rawQuery.isEmpty) {
-      return works;
+      return filteredWorks;
     }
 
     final query = _canonicalizeWorkCode(rawQuery);
@@ -32,12 +47,21 @@ class WorksController extends ChangeNotifier {
       return const [];
     }
 
-    return works
+    return filteredWorks
         .where((work) {
           final code = work['code']?.toString() ?? '';
           return _canonicalizeWorkCode(code).contains(query);
         })
         .toList(growable: false);
+  }
+
+  void changeStorageFilter(WorkStorageFilter value) {
+    if (_storageFilter == value) {
+      return;
+    }
+
+    _storageFilter = value;
+    notifyListeners();
   }
 
   void changeSearch(String value) {

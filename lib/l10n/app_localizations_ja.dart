@@ -304,6 +304,39 @@ class AppLocalizationsJa extends AppLocalizations {
   String get relatedActresses => '関連出演者';
 
   @override
+  String get workStorageTitle => '作品保存記録';
+
+  @override
+  String get workStorageSaved => '保存済み';
+
+  @override
+  String get workStorageNotSaved => '未保存';
+
+  @override
+  String get workStorageQuality => '画質';
+
+  @override
+  String get workStorageFrameRate => 'フレームレート';
+
+  @override
+  String get workStorageSave => '保存';
+
+  @override
+  String get workStorageUpdated => '作品保存記録を更新しました';
+
+  @override
+  String get workStorageUpdateFailed => '作品保存記録の更新に失敗しました';
+
+  @override
+  String get workStorageFilterStored => '保存済み';
+
+  @override
+  String get workStorageFilterNotStored => '未保存';
+
+  @override
+  String get workStorageFilterAll => 'すべて';
+
+  @override
   String get aliases => '別名';
 
   @override
@@ -1260,6 +1293,39 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
 
   @override
   String get relatedActresses => '関連出演者';
+
+  @override
+  String get workStorageTitle => '作品保存記録';
+
+  @override
+  String get workStorageSaved => '保存済み';
+
+  @override
+  String get workStorageNotSaved => '未保存';
+
+  @override
+  String get workStorageQuality => '画質';
+
+  @override
+  String get workStorageFrameRate => 'フレームレート';
+
+  @override
+  String get workStorageSave => '保存';
+
+  @override
+  String get workStorageUpdated => '作品保存記録を更新しました';
+
+  @override
+  String get workStorageUpdateFailed => '作品保存記録の更新に失敗しました';
+
+  @override
+  String get workStorageFilterStored => '保存済み';
+
+  @override
+  String get workStorageFilterNotStored => '未保存';
+
+  @override
+  String get workStorageFilterAll => 'すべて';
 
   @override
   String get aliases => '別名';

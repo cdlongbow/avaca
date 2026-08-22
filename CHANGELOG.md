@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.5 - 2026-08-23
+
+- Added per-work storage records for saved status, video quality, and frame
+  rate, including database migration and ZIP export/import persistence.
+- Added saved/not-saved work filters and a Work Detail editor for maintaining
+  storage records.
+- Refined Detail and Work Detail responsive editing layouts, related-actress
+  actions, localized labels, and navigation refresh behavior while preserving
+  unsaved edits.
+- Added regression coverage for storage persistence, transfer compatibility,
+  work filtering, responsive layouts, and the updated Detail/Works flows.
+
 ## 0.9.4 - 2026-08-21
 
 - Normalized V, T, and VT edition suffixes across JavBus and multi-source

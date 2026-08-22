@@ -1,5 +1,6 @@
 import 'package:avaca/core/database.dart';
 import 'package:avaca/l10n/app_localizations.dart';
+import 'package:avaca/models/work_storage.dart';
 import 'package:avaca/views/work_detail_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -42,10 +43,10 @@ void main() {
       expect(find.byKey(const ValueKey('related-actress-2')), findsOneWidget);
       expect(
         tester
-            .widget<ListTile>(
+            .widget<TextButton>(
               find.byKey(const ValueKey('related-actress-未建立頁面')),
             )
-            .onTap,
+            .onPressed,
         isNull,
       );
 
@@ -54,9 +55,48 @@ void main() {
       expect(requestedRoutes, ['/detail/2']);
     },
   );
+
+  testWidgets('edits and shows the work storage record', (tester) async {
+    final database = _WorkDetailDatabase();
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('zh', 'TW'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: WorkDetailView(db: database, workId: 7),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('work-storage-action')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('work-storage-dialog')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('work-storage-saved-switch')));
+    await tester.tap(find.byKey(const Key('work-storage-quality-2K')));
+    await tester.tap(find.byKey(const Key('work-storage-frame-rate-30')));
+    await tester.tap(find.byKey(const Key('work-storage-save')));
+    await tester.pumpAndSettle();
+
+    expect(
+      database.savedStorage,
+      const WorkStorageRecord(isStored: true, quality: '2K', frameRate: 30),
+    );
+    expect(find.text('2K/30'), findsOneWidget);
+  });
 }
 
 class _WorkDetailDatabase extends AppDatabase {
+  WorkStorageRecord? savedStorage;
+
+  @override
+  Future<void> updateWorkStorage({
+    required int workId,
+    required WorkStorageRecord record,
+  }) async {
+    savedStorage = record;
+  }
+
   @override
   Future<Map<String, Object?>?> getWorkById(
     int workId, {
@@ -72,6 +112,9 @@ class _WorkDetailDatabase extends AppDatabase {
       'publisher': '發行商',
       'series': '系列',
       'detail_image_path': '',
+      'is_stored': 0,
+      'storage_quality': null,
+      'storage_frame_rate': null,
       'related_performers': [
         {'name': '當前女優', 'actress_id': 1, 'source': 'javbus'},
         {'name': '本地女優', 'actress_id': 2, 'source': 'javbus'},

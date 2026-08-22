@@ -199,6 +199,9 @@ class DataTransferWork {
     required this.detailImageAssetId,
     required this.createdAt,
     required this.modifiedAt,
+    this.isStored = false,
+    this.storageQuality,
+    this.storageFrameRate,
   });
 
   final String id;
@@ -213,6 +216,9 @@ class DataTransferWork {
   final String? detailImageAssetId;
   final String? createdAt;
   final String? modifiedAt;
+  final bool isStored;
+  final String? storageQuality;
+  final int? storageFrameRate;
 
   Map<String, Object?> toJson() => {
     'id': id,
@@ -227,6 +233,9 @@ class DataTransferWork {
     'detailImageAssetId': detailImageAssetId,
     'createdAt': createdAt,
     'modifiedAt': modifiedAt,
+    'isStored': isStored,
+    'storageQuality': storageQuality,
+    'storageFrameRate': storageFrameRate,
   };
 
   factory DataTransferWork.fromJson(Object? source) {
@@ -244,6 +253,9 @@ class DataTransferWork {
       detailImageAssetId: _nullableString(map, 'detailImageAssetId'),
       createdAt: _nullableString(map, 'createdAt'),
       modifiedAt: _nullableString(map, 'modifiedAt'),
+      isStored: _optionalBool(map, 'isStored') ?? false,
+      storageQuality: _nullableString(map, 'storageQuality'),
+      storageFrameRate: _nullableInt(map, 'storageFrameRate'),
     );
   }
 }
@@ -347,6 +359,15 @@ int? _nullableInt(Map<String, Object?> map, String key) {
   if (value == null) return null;
   if (value is! int) {
     throw FormatException('$key must be an integer or null.');
+  }
+  return value;
+}
+
+bool? _optionalBool(Map<String, Object?> map, String key) {
+  final value = map[key];
+  if (value == null) return null;
+  if (value is! bool) {
+    throw FormatException('$key must be a boolean or null.');
   }
   return value;
 }

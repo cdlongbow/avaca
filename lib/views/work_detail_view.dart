@@ -3,10 +3,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../components/aligned_app_bar_back_button.dart';
+import '../components/app_snackbar.dart';
 import '../components/adaptive_page_layout.dart';
 import '../core/database.dart';
 import '../core/layout.dart';
 import '../l10n/app_localizations.dart';
+import '../models/work_storage.dart';
 
 class WorkDetailView extends StatefulWidget {
   const WorkDetailView({
@@ -26,6 +28,7 @@ class WorkDetailView extends StatefulWidget {
 
 class _WorkDetailViewState extends State<WorkDetailView> {
   late final Future<Map<String, Object?>?> workFuture;
+  WorkStorageRecord? _storageRecord;
 
   @override
   void initState() {
@@ -48,6 +51,7 @@ class _WorkDetailViewState extends State<WorkDetailView> {
                 ? const AlignedAppBarBackButton()
                 : null,
             title: Text(work?['code']?.toString() ?? ''),
+            actions: [if (work != null) _buildStorageAction(work)],
           ),
           body: switch (snapshot.connectionState) {
             ConnectionState.waiting => const Center(
@@ -64,6 +68,77 @@ class _WorkDetailViewState extends State<WorkDetailView> {
         );
       },
     );
+  }
+
+  Widget _buildStorageAction(Map<String, Object?> work) {
+    final l10n = AppLocalizations.of(context);
+    final record = _storageRecord ?? WorkStorageRecord.fromDatabase(work);
+    final statusLabel = record.isStored
+        ? record.compactLabel
+        : l10n.workStorageNotSaved;
+    return Padding(
+      padding: const EdgeInsets.only(right: 4),
+      child: Tooltip(
+        message: record.isStored
+            ? l10n.workStorageSaved
+            : l10n.workStorageNotSaved,
+        child: TextButton(
+          key: const Key('work-storage-action'),
+          onPressed: () => _editWorkStorage(record),
+          style: TextButton.styleFrom(
+            minimumSize: const Size(0, 40),
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                record.isStored ? Icons.bookmark : Icons.bookmark_border,
+                size: 18,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                statusLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _editWorkStorage(WorkStorageRecord initial) async {
+    final updated = await showDialog<WorkStorageRecord>(
+      context: context,
+      builder: (context) => _WorkStorageDialog(initial: initial),
+    );
+    if (updated == null || !mounted) {
+      return;
+    }
+
+    try {
+      await widget.db.updateWorkStorage(workId: widget.workId, record: updated);
+      if (!mounted) {
+        return;
+      }
+      setState(() => _storageRecord = updated);
+      AppSnackBar.showSuccess(
+        context,
+        AppLocalizations.of(context).workStorageUpdated,
+      );
+    } catch (_) {
+      if (mounted) {
+        AppSnackBar.showError(
+          context,
+          AppLocalizations.of(context).workStorageUpdateFailed,
+        );
+      }
+    }
   }
 
   Widget _buildContent(Map<String, Object?> work) {
@@ -197,34 +272,49 @@ class _WorkDetailViewState extends State<WorkDetailView> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(l10n.relatedActresses),
-          const SizedBox(height: 4),
-          for (final performer in performers) _relatedActressTile(performer),
+          const SizedBox(height: 2),
+          Wrap(
+            spacing: 2,
+            runSpacing: 0,
+            children: [
+              for (final performer in performers)
+                _relatedActressButton(performer),
+            ],
+          ),
         ],
       ),
     );
   }
 
-  Widget _relatedActressTile(Map<String, Object?> performer) {
+  Widget _relatedActressButton(Map<String, Object?> performer) {
     final name = performer['name']?.toString().trim() ?? '';
     final actressId = performer['actress_id'];
     if (name.isEmpty) {
       return const SizedBox.shrink();
     }
     if (actressId is int) {
-      return ListTile(
+      return TextButton(
         key: ValueKey('related-actress-$actressId'),
-        contentPadding: EdgeInsets.zero,
-        dense: true,
-        title: Text(name),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: () => Navigator.of(context).pushNamed('/detail/$actressId'),
+        style: TextButton.styleFrom(
+          minimumSize: const Size(0, 32),
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          visualDensity: const VisualDensity(horizontal: -2, vertical: -3),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        child: Text(name),
+        onPressed: () => Navigator.of(context).pushNamed('/detail/$actressId'),
       );
     }
-    return ListTile(
+    return TextButton(
       key: ValueKey('related-actress-$name'),
-      contentPadding: EdgeInsets.zero,
-      dense: true,
-      title: Text(name),
+      style: TextButton.styleFrom(
+        minimumSize: const Size(0, 32),
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        visualDensity: const VisualDensity(horizontal: -2, vertical: -3),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      onPressed: null,
+      child: Text(name),
     );
   }
 
@@ -270,6 +360,105 @@ class _WorkDetailViewState extends State<WorkDetailView> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Text('$label：$value'),
+    );
+  }
+}
+
+class _WorkStorageDialog extends StatefulWidget {
+  const _WorkStorageDialog({required this.initial});
+
+  final WorkStorageRecord initial;
+
+  @override
+  State<_WorkStorageDialog> createState() => _WorkStorageDialogState();
+}
+
+class _WorkStorageDialogState extends State<_WorkStorageDialog> {
+  late bool isStored;
+  late String quality;
+  late int frameRate;
+
+  @override
+  void initState() {
+    super.initState();
+    isStored = widget.initial.isStored;
+    quality = widget.initial.quality;
+    frameRate = widget.initial.frameRate;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return AlertDialog(
+      key: const Key('work-storage-dialog'),
+      title: Text(l10n.workStorageTitle),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SwitchListTile.adaptive(
+              key: const Key('work-storage-saved-switch'),
+              contentPadding: EdgeInsets.zero,
+              title: Text(l10n.workStorageSaved),
+              value: isStored,
+              onChanged: (value) => setState(() => isStored = value),
+            ),
+            const SizedBox(height: 8),
+            Text(l10n.workStorageQuality),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: [
+                for (final value in WorkStorageRecord.qualities)
+                  ChoiceChip(
+                    key: Key('work-storage-quality-$value'),
+                    label: Text(value),
+                    selected: quality == value,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity: const VisualDensity(vertical: -2),
+                    onSelected: (_) => setState(() => quality = value),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(l10n.workStorageFrameRate),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 6,
+              children: [
+                for (final value in WorkStorageRecord.frameRates)
+                  ChoiceChip(
+                    key: Key('work-storage-frame-rate-$value'),
+                    label: Text('$value'),
+                    selected: frameRate == value,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity: const VisualDensity(vertical: -2),
+                    onSelected: (_) => setState(() => frameRate = value),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(l10n.cancel),
+        ),
+        FilledButton(
+          key: const Key('work-storage-save'),
+          onPressed: () => Navigator.of(context).pop(
+            WorkStorageRecord(
+              isStored: isStored,
+              quality: quality,
+              frameRate: frameRate,
+            ),
+          ),
+          child: Text(l10n.workStorageSave),
+        ),
+      ],
     );
   }
 }

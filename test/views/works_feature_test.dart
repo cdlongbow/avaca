@@ -233,6 +233,15 @@ void main() {
 
     expect(find.byKey(const Key('works-search-menu-item')), findsOneWidget);
     expect(find.byKey(const Key('works-scrape-menu-item')), findsOneWidget);
+    expect(
+      find.byKey(const Key('works-filter-stored-menu-item')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('works-filter-not-stored-menu-item')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('works-filter-all-menu-item')), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('works-search-menu-item')));
     await tester.pumpAndSettle();
@@ -241,6 +250,24 @@ void main() {
     expect(find.byKey(const Key('works-search-close')), findsOneWidget);
     expect(find.byKey(const Key('works-search-clear')), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('works overflow menu filters saved and unsaved works', (
+    tester,
+  ) async {
+    await _pumpWorks(tester);
+
+    await tester.tap(find.byKey(const Key('works-overflow-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('works-filter-stored-menu-item')));
+    await tester.pumpAndSettle();
+    expect(find.text('找不到符合的作品'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('works-overflow-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('works-filter-all-menu-item')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('work-card-1')), findsOneWidget);
   });
 
   testWidgets('work code search ignores case and separators', (tester) async {

@@ -83,7 +83,7 @@ void main() {
     final label = align.child! as Text;
     final colorScheme = Theme.of(tester.element(birthDateButton)).colorScheme;
     expect(align.alignment, Alignment.centerLeft);
-    expect(label.style?.fontSize, 16);
+    expect(label.style?.fontSize, 14);
     expect(label.style?.color, colorScheme.onSurfaceVariant);
     await tester.tap(birthDateButton);
     await tester.pumpAndSettle();

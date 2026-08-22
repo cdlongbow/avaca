@@ -13,6 +13,7 @@ import '../core/layout.dart';
 import '../l10n/app_localizations.dart';
 import '../models/scrape_source_settings.dart';
 import '../models/work_scrape_options.dart';
+import '../models/work_storage.dart';
 import '../services/avbase/avbase_client.dart';
 import '../services/avbase/avbase_scrape_source.dart';
 import '../services/avbase/avbase_transport.dart';
@@ -39,7 +40,13 @@ typedef WorksScrapeExecutor =
       void Function(WorksScrapeProgress progress) onProgress,
     );
 
-enum _WorksMenuAction { search, scrape }
+enum _WorksMenuAction {
+  search,
+  scrape,
+  filterStored,
+  filterNotStored,
+  filterAll,
+}
 
 const _scrapeSettingsDialogRadius = 28.0;
 
@@ -352,6 +359,12 @@ class _WorksViewState extends State<WorksView> {
             _openSearch();
           case _WorksMenuAction.scrape:
             _openScrapeSettings();
+          case _WorksMenuAction.filterStored:
+            controller.changeStorageFilter(WorkStorageFilter.stored);
+          case _WorksMenuAction.filterNotStored:
+            controller.changeStorageFilter(WorkStorageFilter.notStored);
+          case _WorksMenuAction.filterAll:
+            controller.changeStorageFilter(WorkStorageFilter.all);
         }
       },
       itemBuilder: (context) => [
@@ -379,6 +392,53 @@ class _WorksViewState extends State<WorksView> {
             ],
           ),
         ),
+        const PopupMenuDivider(),
+        PopupMenuItem<_WorksMenuAction>(
+          key: const Key('works-filter-stored-menu-item'),
+          value: _WorksMenuAction.filterStored,
+          enabled: enabled,
+          child: _buildStorageFilterMenuRow(
+            l10n.workStorageFilterStored,
+            WorkStorageFilter.stored,
+            Icons.bookmark,
+          ),
+        ),
+        PopupMenuItem<_WorksMenuAction>(
+          key: const Key('works-filter-not-stored-menu-item'),
+          value: _WorksMenuAction.filterNotStored,
+          enabled: enabled,
+          child: _buildStorageFilterMenuRow(
+            l10n.workStorageFilterNotStored,
+            WorkStorageFilter.notStored,
+            Icons.bookmark_border,
+          ),
+        ),
+        PopupMenuItem<_WorksMenuAction>(
+          key: const Key('works-filter-all-menu-item'),
+          value: _WorksMenuAction.filterAll,
+          enabled: enabled,
+          child: _buildStorageFilterMenuRow(
+            l10n.workStorageFilterAll,
+            WorkStorageFilter.all,
+            Icons.video_library_outlined,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStorageFilterMenuRow(
+    String label,
+    WorkStorageFilter filter,
+    IconData icon,
+  ) {
+    final selected = controller.storageFilter == filter;
+    return Row(
+      children: [
+        Icon(icon),
+        const SizedBox(width: 12),
+        Expanded(child: Text(label)),
+        if (selected) const Icon(Icons.check, size: 18),
       ],
     );
   }
@@ -610,6 +670,10 @@ class _WorksViewState extends State<WorksView> {
         ),
       ),
     );
+
+    if (mounted) {
+      await controller.reloadWorks();
+    }
   }
 
   Future<void> _openScrapeSettings() async {
@@ -863,17 +927,18 @@ class _WorksViewState extends State<WorksView> {
       );
     }
 
-    final detailsImageDownloader = switch (sourceSettings.actressDetailsSource) {
-      ScrapeSourceId.minnanoAv => HttpActressImageDownloader(
-        transport: minnanoAvatarTransport,
-      ),
-      ScrapeSourceId.avbase => HttpActressImageDownloader(
-        transport: avbaseAvatarTransport,
-      ),
-      ScrapeSourceId.javbus => HttpActressImageDownloader(
-        authenticatedTransport: javBusTransport,
-      ),
-    };
+    final detailsImageDownloader =
+        switch (sourceSettings.actressDetailsSource) {
+          ScrapeSourceId.minnanoAv => HttpActressImageDownloader(
+            transport: minnanoAvatarTransport,
+          ),
+          ScrapeSourceId.avbase => HttpActressImageDownloader(
+            transport: avbaseAvatarTransport,
+          ),
+          ScrapeSourceId.javbus => HttpActressImageDownloader(
+            authenticatedTransport: javBusTransport,
+          ),
+        };
     final service = WorksScrapeService(
       db: widget.db,
       sources: configuredSources,

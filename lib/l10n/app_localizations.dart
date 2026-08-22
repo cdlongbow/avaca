@@ -679,6 +679,72 @@ abstract class AppLocalizations {
   /// **'關聯演員'**
   String get relatedActresses;
 
+  /// No description provided for @workStorageTitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'作品儲存記錄'**
+  String get workStorageTitle;
+
+  /// No description provided for @workStorageSaved.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'已儲存'**
+  String get workStorageSaved;
+
+  /// No description provided for @workStorageNotSaved.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'未儲存'**
+  String get workStorageNotSaved;
+
+  /// No description provided for @workStorageQuality.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'畫質'**
+  String get workStorageQuality;
+
+  /// No description provided for @workStorageFrameRate.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'幀率'**
+  String get workStorageFrameRate;
+
+  /// No description provided for @workStorageSave.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'儲存'**
+  String get workStorageSave;
+
+  /// No description provided for @workStorageUpdated.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'作品儲存記錄已更新'**
+  String get workStorageUpdated;
+
+  /// No description provided for @workStorageUpdateFailed.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'作品儲存記錄更新失敗'**
+  String get workStorageUpdateFailed;
+
+  /// No description provided for @workStorageFilterStored.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'已儲存'**
+  String get workStorageFilterStored;
+
+  /// No description provided for @workStorageFilterNotStored.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'未儲存'**
+  String get workStorageFilterNotStored;
+
+  /// No description provided for @workStorageFilterAll.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'全部'**
+  String get workStorageFilterAll;
+
   /// No description provided for @aliases.
   ///
   /// In zh_TW, this message translates to:

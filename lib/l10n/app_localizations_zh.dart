@@ -303,6 +303,39 @@ class AppLocalizationsZh extends AppLocalizations {
   String get relatedActresses => '關聯演員';
 
   @override
+  String get workStorageTitle => '作品儲存記錄';
+
+  @override
+  String get workStorageSaved => '已儲存';
+
+  @override
+  String get workStorageNotSaved => '未儲存';
+
+  @override
+  String get workStorageQuality => '畫質';
+
+  @override
+  String get workStorageFrameRate => '幀率';
+
+  @override
+  String get workStorageSave => '儲存';
+
+  @override
+  String get workStorageUpdated => '作品儲存記錄已更新';
+
+  @override
+  String get workStorageUpdateFailed => '作品儲存記錄更新失敗';
+
+  @override
+  String get workStorageFilterStored => '已儲存';
+
+  @override
+  String get workStorageFilterNotStored => '未儲存';
+
+  @override
+  String get workStorageFilterAll => '全部';
+
+  @override
   String get aliases => '別名';
 
   @override
@@ -1253,6 +1286,39 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get relatedActresses => '关联演员';
 
   @override
+  String get workStorageTitle => '作品存储记录';
+
+  @override
+  String get workStorageSaved => '已保存';
+
+  @override
+  String get workStorageNotSaved => '未保存';
+
+  @override
+  String get workStorageQuality => '画质';
+
+  @override
+  String get workStorageFrameRate => '帧率';
+
+  @override
+  String get workStorageSave => '保存';
+
+  @override
+  String get workStorageUpdated => '作品存储记录已更新';
+
+  @override
+  String get workStorageUpdateFailed => '作品存储记录更新失败';
+
+  @override
+  String get workStorageFilterStored => '已保存';
+
+  @override
+  String get workStorageFilterNotStored => '未保存';
+
+  @override
+  String get workStorageFilterAll => '全部';
+
+  @override
   String get aliases => '别名';
 
   @override
@@ -2201,6 +2267,39 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get relatedActresses => '關聯演員';
+
+  @override
+  String get workStorageTitle => '作品儲存記錄';
+
+  @override
+  String get workStorageSaved => '已儲存';
+
+  @override
+  String get workStorageNotSaved => '未儲存';
+
+  @override
+  String get workStorageQuality => '畫質';
+
+  @override
+  String get workStorageFrameRate => '幀率';
+
+  @override
+  String get workStorageSave => '儲存';
+
+  @override
+  String get workStorageUpdated => '作品儲存記錄已更新';
+
+  @override
+  String get workStorageUpdateFailed => '作品儲存記錄更新失敗';
+
+  @override
+  String get workStorageFilterStored => '已儲存';
+
+  @override
+  String get workStorageFilterNotStored => '未儲存';
+
+  @override
+  String get workStorageFilterAll => '全部';
 
   @override
   String get aliases => '別名';

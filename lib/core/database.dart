@@ -8,6 +8,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../models/scraped_actress_details.dart';
 import '../models/work.dart';
+import '../models/work_storage.dart';
 import 'platform_adapter.dart';
 
 typedef ManagedFileDelete = Future<void> Function(File file);
@@ -558,10 +559,27 @@ class AppDatabase {
         series TEXT,
         card_image_path TEXT,
         detail_image_path TEXT,
+        is_stored INTEGER NOT NULL DEFAULT 0,
+        storage_quality TEXT,
+        storage_frame_rate INTEGER,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         modified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     ''');
+    final columns = await _getTableColumns(db, 'works');
+    if (!columns.contains('is_stored')) {
+      await db.execute(
+        'ALTER TABLE works ADD COLUMN is_stored INTEGER NOT NULL DEFAULT 0',
+      );
+    }
+    if (!columns.contains('storage_quality')) {
+      await db.execute('ALTER TABLE works ADD COLUMN storage_quality TEXT');
+    }
+    if (!columns.contains('storage_frame_rate')) {
+      await db.execute(
+        'ALTER TABLE works ADD COLUMN storage_frame_rate INTEGER',
+      );
+    }
     await db.execute('''
       CREATE TABLE IF NOT EXISTS actress_works (
         actress_id INTEGER NOT NULL,
@@ -765,6 +783,9 @@ class AppDatabase {
     'series',
     'card_image_path',
     'detail_image_path',
+    'is_stored',
+    'storage_quality',
+    'storage_frame_rate',
   ];
 
   // 取得指定女優的本機作品，最新發行日期優先。
@@ -807,11 +828,34 @@ class AppDatabase {
     return work;
   }
 
+  Future<void> updateWorkStorage({
+    required int workId,
+    required WorkStorageRecord record,
+  }) async {
+    if (!WorkStorageRecord.qualities.contains(record.quality) ||
+        !WorkStorageRecord.frameRates.contains(record.frameRate)) {
+      throw ArgumentError('Unsupported work storage settings.');
+    }
+    final db = await database;
+    final updated = await db.update(
+      'works',
+      {
+        ...record.toDatabaseMap(),
+        'modified_at': DateTime.now().toUtc().toIso8601String(),
+      },
+      where: 'id = ?',
+      whereArgs: [workId],
+    );
+    if (updated == 0) {
+      throw StateError('Work $workId was not found.');
+    }
+  }
+
   Future<List<Map<String, Object?>>> _getRelatedPerformers(
     DatabaseExecutor executor,
-    int workId,
-    {int? currentActressId}
-  ) async {
+    int workId, {
+    int? currentActressId,
+  }) async {
     final rows = await executor.query(
       'work_performers',
       columns: ['name', 'source', 'source_uri'],

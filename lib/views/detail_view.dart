@@ -12,8 +12,9 @@ import '../core/layout.dart';
 
 const double _detailControlRadius = 6.0;
 const double _detailActionHeight = 52.0;
-const double _detailEditableRowHeight = 48.0;
+const double _detailEditableRowHeight = 40.0;
 const double _detailReadOnlyRowHeight = 28.0;
+const double _detailEditableFieldGap = 8.0;
 
 enum _DetailMenuAction { edit, delete }
 
@@ -485,18 +486,21 @@ class _DetailViewState extends State<DetailView> {
   Widget _buildWideProfileVisual(double imageSize) {
     final colorScheme = Theme.of(context).colorScheme;
     final name = controller.actressData['name']?.toString() ?? '';
+    final isEditing = controller.isEditing;
 
     return Container(
       key: const Key('detail-profile-panel'),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
-      ),
+      padding: EdgeInsets.all(isEditing ? 0 : 12),
+      decoration: isEditing
+          ? null
+          : BoxDecoration(
+              color: colorScheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(16),
+            ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildProfileImage(imageSize - 24),
+          _buildProfileImage(isEditing ? imageSize : imageSize - 24),
           if (name.isNotEmpty) ...[
             const SizedBox(height: 12),
             Text(
@@ -671,18 +675,10 @@ class _DetailViewState extends State<DetailView> {
 
   // 顯示個人照片、照片操作與屬性內容。
   Widget _buildProfilePanel(AppLayoutTokens tokens) {
-    final colorScheme = Theme.of(context).colorScheme;
     final isEditing = controller.isEditing;
 
     return Container(
       key: const Key('detail-profile-panel'),
-      padding: isEditing ? EdgeInsets.all(tokens.cardRadius) : EdgeInsets.zero,
-      decoration: isEditing
-          ? BoxDecoration(
-              color: colorScheme.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(tokens.cardRadius),
-            )
-          : null,
       child: LayoutBuilder(
         builder: (context, constraints) {
           final horizontalGap = isEditing && tokens.isCompact
@@ -774,7 +770,7 @@ class _DetailViewState extends State<DetailView> {
     ).textTheme.labelMedium!.copyWith(fontSize: 12);
     final changeStyle = OutlinedButton.styleFrom(
       foregroundColor: colorScheme.primary,
-      padding: const EdgeInsets.symmetric(horizontal: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 2),
       minimumSize: Size.zero,
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       textStyle: actionTextStyle,
@@ -785,7 +781,7 @@ class _DetailViewState extends State<DetailView> {
     final deleteStyle = OutlinedButton.styleFrom(
       foregroundColor: colorScheme.error,
       side: BorderSide(color: colorScheme.error),
-      padding: const EdgeInsets.symmetric(horizontal: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 2),
       minimumSize: Size.zero,
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       textStyle: actionTextStyle,
@@ -799,7 +795,7 @@ class _DetailViewState extends State<DetailView> {
       children: [
         Expanded(
           child: SizedBox(
-            height: 34,
+            height: 32,
             child: OutlinedButton(
               key: const Key('detail-change-photo-button'),
               onPressed: () {
@@ -814,7 +810,7 @@ class _DetailViewState extends State<DetailView> {
         const SizedBox(width: 6),
         Expanded(
           child: SizedBox(
-            height: 34,
+            height: 32,
             child: OutlinedButton(
               key: const Key('detail-delete-photo-button'),
               onPressed: controller.deletePhoto,
@@ -857,39 +853,44 @@ class _DetailViewState extends State<DetailView> {
   Widget _buildAttrEditRow() {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Wrap(
-      alignment: WrapAlignment.end,
-      spacing: 4,
-      runSpacing: 4,
-      children: controller.getAttrOptions(context).map((option) {
-        final selected = selectedAttrs.contains(option);
+    return FittedBox(
+      alignment: Alignment.topRight,
+      fit: BoxFit.scaleDown,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: controller.getAttrOptions(context).map((option) {
+          final selected = selectedAttrs.contains(option);
 
-        return FilterChip(
-          label: Text(
-            option,
-            style: TextStyle(
-              fontSize: 14,
-              color: selected
-                  ? colorScheme.onSurface
-                  : colorScheme.onSurfaceVariant,
+          return Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: FilterChip(
+              label: Text(
+                option,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: selected
+                      ? colorScheme.onSurface
+                      : colorScheme.onSurfaceVariant,
+                ),
+              ),
+              labelPadding: const EdgeInsets.symmetric(horizontal: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              visualDensity: const VisualDensity(horizontal: -2, vertical: -4),
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              selected: selected,
+              showCheckmark: false,
+              selectedColor: colorScheme.primary.withValues(alpha: 0.28),
+              onSelected: (selected) {
+                setState(() {
+                  selected
+                      ? selectedAttrs.add(option)
+                      : selectedAttrs.remove(option);
+                });
+              },
             ),
-          ),
-          labelPadding: const EdgeInsets.symmetric(horizontal: 2),
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          visualDensity: const VisualDensity(horizontal: -2, vertical: -4),
-          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          selected: selected,
-          showCheckmark: false,
-          selectedColor: colorScheme.primary.withValues(alpha: 0.28),
-          onSelected: (selected) {
-            setState(() {
-              selected
-                  ? selectedAttrs.add(option)
-                  : selectedAttrs.remove(option);
-            });
-          },
-        );
-      }).toList(),
+          );
+        }).toList(),
+      ),
     );
   }
 
@@ -897,7 +898,12 @@ class _DetailViewState extends State<DetailView> {
     _dismissKeyboard();
     await Navigator.of(context).pushNamed('/works/${widget.actressId}');
     if (mounted) {
-      await controller.refreshWorkCount();
+      if (controller.isEditing) {
+        await controller.refreshWorkCount();
+      } else {
+        await controller.refresh();
+        _syncFieldsFromController();
+      }
     }
   }
 
@@ -931,32 +937,108 @@ class _DetailViewState extends State<DetailView> {
     final isEditing = controller.isEditing;
     return _buildCard(
       title: AppLocalizations.of(context).bodyInfo,
-      titleTrailing: KeyedSubtree(
-        key: const Key('detail-attributes'),
-        child: isEditing ? _buildAttrEditRow() : _buildAttrViewRow(),
-      ),
+      titleTrailing: isEditing
+          ? null
+          : KeyedSubtree(
+              key: const Key('detail-attributes'),
+              child: _buildAttrViewRow(),
+            ),
       radius: tokens.cardRadius,
-      child: Column(
-        children: [
-          _buildBirthDateField(),
-          _buildStatField(
-            fieldKey: const Key('detail-height-field'),
-            label: AppLocalizations.of(context).heightCm,
-            controller: heightController,
-          ),
-          _buildStatField(
-            fieldKey: const Key('detail-cup-field'),
-            label: AppLocalizations.of(context).cup,
-            controller: cupController,
-          ),
-          _buildStatField(
-            fieldKey: const Key('detail-measurements-field'),
-            label: AppLocalizations.of(context).measurements,
-            controller: bwhController,
-          ),
-        ],
-      ),
+      child: isEditing
+          ? Column(
+              children: [
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: KeyedSubtree(
+                    key: const Key('detail-attributes'),
+                    child: _buildAttrEditRow(),
+                  ),
+                ),
+                const SizedBox(height: _detailEditableFieldGap),
+                _buildEditableBodyFields(),
+              ],
+            )
+          : _buildBodyViewFields(),
     );
+  }
+
+  Widget _buildBodyViewFields() {
+    return Column(
+      children: [
+        _buildBirthDateField(),
+        _buildStatField(
+          fieldKey: const Key('detail-height-field'),
+          label: AppLocalizations.of(context).heightCm,
+          controller: heightController,
+        ),
+        _buildStatField(
+          fieldKey: const Key('detail-cup-field'),
+          label: AppLocalizations.of(context).cup,
+          controller: cupController,
+        ),
+        _buildStatField(
+          fieldKey: const Key('detail-measurements-field'),
+          label: AppLocalizations.of(context).measurements,
+          controller: bwhController,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEditableBodyFields() {
+    final l10n = AppLocalizations.of(context);
+    final labelWidth = _editableLabelWidth([
+      l10n.birthDate,
+      l10n.heightCm,
+      l10n.cup,
+      l10n.measurements,
+    ]);
+
+    return Column(
+      children: [
+        _buildBirthDateField(labelWidth: labelWidth),
+        const SizedBox(height: _detailEditableFieldGap),
+        _buildStatField(
+          fieldKey: const Key('detail-height-field'),
+          label: l10n.heightCm,
+          controller: heightController,
+          labelWidth: labelWidth,
+        ),
+        const SizedBox(height: _detailEditableFieldGap),
+        _buildStatField(
+          fieldKey: const Key('detail-cup-field'),
+          label: l10n.cup,
+          controller: cupController,
+          labelWidth: labelWidth,
+        ),
+        const SizedBox(height: _detailEditableFieldGap),
+        _buildStatField(
+          fieldKey: const Key('detail-measurements-field'),
+          label: l10n.measurements,
+          controller: bwhController,
+          labelWidth: labelWidth,
+        ),
+      ],
+    );
+  }
+
+  double _editableLabelWidth(Iterable<String> labels) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final style = TextStyle(fontSize: 13, color: colorScheme.onSurface);
+    var maxWidth = 0.0;
+
+    for (final label in labels) {
+      final painter = TextPainter(
+        text: TextSpan(text: label, style: style),
+        textDirection: Directionality.of(context),
+        textScaler: MediaQuery.textScalerOf(context),
+        maxLines: 1,
+      )..layout();
+      maxWidth = math.max(maxWidth, painter.width);
+      painter.dispose();
+    }
+
+    return maxWidth.ceilToDouble();
   }
 
   Widget _buildNotesPanel(AppLayoutTokens tokens) {
@@ -1017,7 +1099,7 @@ class _DetailViewState extends State<DetailView> {
     });
   }
 
-  Widget _buildBirthDateField() {
+  Widget _buildBirthDateField({double? labelWidth}) {
     final selectedDate = birthDate;
     final label = AppLocalizations.of(context).birthDate;
     final colorScheme = Theme.of(context).colorScheme;
@@ -1058,17 +1140,27 @@ class _DetailViewState extends State<DetailView> {
       );
     }
 
-    return OutlinedButton(
-      key: const Key('detail-birth-date-button'),
-      onPressed: _openBirthDatePicker,
-      style: _detailOutlinedButtonStyle(),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Text(
-          selectedDate == null
-              ? AppLocalizations.of(context).setBirthDate
-              : _displayDate(selectedDate),
-          style: TextStyle(fontSize: 16, color: colorScheme.onSurfaceVariant),
+    return _buildEditableLabelField(
+      label: label,
+      labelWidth: labelWidth,
+      child: OutlinedButton(
+        key: const Key('detail-birth-date-button'),
+        onPressed: _openBirthDatePicker,
+        style: _detailOutlinedButtonStyle().copyWith(
+          padding: const WidgetStatePropertyAll(EdgeInsets.zero),
+          minimumSize: const WidgetStatePropertyAll(Size.zero),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            selectedDate == null
+                ? AppLocalizations.of(context).setBirthDate
+                : _displayDate(selectedDate),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 14, color: colorScheme.onSurfaceVariant),
+          ),
         ),
       ),
     );
@@ -1118,6 +1210,7 @@ class _DetailViewState extends State<DetailView> {
     required Key fieldKey,
     required String label,
     required TextEditingController controller,
+    double? labelWidth,
   }) {
     final isEditing = this.controller.isEditing;
     final colorScheme = Theme.of(context).colorScheme;
@@ -1146,13 +1239,22 @@ class _DetailViewState extends State<DetailView> {
       );
     }
 
-    return SizedBox(
-      height: _detailEditableRowHeight,
+    return _buildEditableLabelField(
+      label: label,
+      labelWidth: labelWidth,
       child: TextField(
         key: fieldKey,
         controller: controller,
+        maxLines: 1,
+        textAlign: TextAlign.left,
+        textAlignVertical: TextAlignVertical.center,
+        style: TextStyle(fontSize: 14, color: colorScheme.onSurfaceVariant),
         decoration: InputDecoration(
-          labelText: label,
+          isDense: false,
+          constraints: BoxConstraints.tightFor(
+            height: _detailEditableRowHeight,
+          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 8),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(_detailControlRadius),
           ),
@@ -1165,6 +1267,53 @@ class _DetailViewState extends State<DetailView> {
             borderSide: BorderSide(color: colorScheme.primary, width: 2),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildEditableLabelField({
+    required String label,
+    double? labelWidth,
+    required Widget child,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return SizedBox(
+      height: _detailEditableRowHeight,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (labelWidth == null)
+            Flexible(
+              fit: FlexFit.loose,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 13, color: colorScheme.onSurface),
+                ),
+              ),
+            )
+          else
+            SizedBox(
+              width: labelWidth,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 13, color: colorScheme.onSurface),
+                ),
+              ),
+            ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: SizedBox(height: _detailEditableRowHeight, child: child),
+          ),
+        ],
       ),
     );
   }

@@ -306,6 +306,39 @@ class AppLocalizationsEn extends AppLocalizations {
   String get relatedActresses => 'Related actresses';
 
   @override
+  String get workStorageTitle => 'Work storage record';
+
+  @override
+  String get workStorageSaved => 'Saved';
+
+  @override
+  String get workStorageNotSaved => 'Not saved';
+
+  @override
+  String get workStorageQuality => 'Quality';
+
+  @override
+  String get workStorageFrameRate => 'Frame rate';
+
+  @override
+  String get workStorageSave => 'Save';
+
+  @override
+  String get workStorageUpdated => 'Work storage record updated';
+
+  @override
+  String get workStorageUpdateFailed => 'Failed to update work storage record';
+
+  @override
+  String get workStorageFilterStored => 'Saved';
+
+  @override
+  String get workStorageFilterNotStored => 'Not saved';
+
+  @override
+  String get workStorageFilterAll => 'All';
+
+  @override
   String get aliases => 'Aliases';
 
   @override

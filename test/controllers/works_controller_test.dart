@@ -1,5 +1,6 @@
 import 'package:avaca/controllers/works_controller.dart';
 import 'package:avaca/core/database.dart';
+import 'package:avaca/models/work_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _WorksControllerDatabase extends AppDatabase {
@@ -52,4 +53,37 @@ void main() {
 
     controller.dispose();
   });
+
+  test('filters works by storage state before applying search', () async {
+    final controller = WorksController(
+      db: _StorageWorksControllerDatabase(),
+      actressId: 7,
+    );
+
+    await controller.init();
+
+    controller.changeStorageFilter(WorkStorageFilter.stored);
+    expect(controller.visibleWorks.map((work) => work['id']), [1]);
+
+    controller.changeStorageFilter(WorkStorageFilter.notStored);
+    expect(controller.visibleWorks.map((work) => work['id']), [2]);
+
+    controller.changeSearch('ABF-002');
+    expect(controller.visibleWorks.map((work) => work['id']), [2]);
+
+    controller.changeStorageFilter(WorkStorageFilter.all);
+    expect(controller.visibleWorks.map((work) => work['id']), [2]);
+
+    controller.dispose();
+  });
+}
+
+class _StorageWorksControllerDatabase extends _WorksControllerDatabase {
+  @override
+  Future<List<Map<String, Object?>>> getWorksForActress(int actressId) async {
+    return [
+      {'id': 1, 'code': 'SONE-001', 'title': '已儲存作品', 'is_stored': 1},
+      {'id': 2, 'code': 'ABF-002', 'title': '未儲存作品', 'is_stored': 0},
+    ];
+  }
 }

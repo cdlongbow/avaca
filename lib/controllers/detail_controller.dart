@@ -31,6 +31,17 @@ class DetailController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> refresh() async {
+    if (isEditing) {
+      return;
+    }
+    actressData = await _loadActressData();
+    currentAttrs = _parseAttrs(actressData['main_type']?.toString() ?? '');
+    actressAliases = _parseAliases(actressData['aliases']);
+    await refreshWorkCount(notify: false);
+    notifyListeners();
+  }
+
   List<String> getCurrentAliases() => List.unmodifiable(actressAliases);
 
   List<String> get aliases => getCurrentAliases();
