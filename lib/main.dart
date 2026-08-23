@@ -10,12 +10,16 @@ import 'core/keyboard_dismiss_navigator_observer.dart';
 import 'controllers/software_update_controller.dart';
 import 'services/update_cache_service.dart';
 import 'services/update_startup_marker.dart';
+import 'services/scrape_job_coordinator.dart';
 import 'views/add_view.dart';
+import 'views/data_health_view.dart';
 import 'views/detail_view.dart';
 import 'views/home_view.dart';
 import 'views/settings_view.dart';
 import 'views/software_update_view.dart';
 import 'views/works_view.dart';
+import 'views/scrape_job_detail_view.dart';
+import 'views/scrape_jobs_view.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -53,6 +57,7 @@ class _AvacaAppState extends State<AvacaApp> {
   bool _ready = false;
   late final SoftwareUpdateController _softwareUpdateController;
   late final bool _ownsSoftwareUpdateController;
+  late final ScrapeJobCoordinator _scrapeJobCoordinator;
   final UpdateCacheService _updateCacheService = UpdateCacheService();
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
   bool _automaticUpdateStarted = false;
@@ -64,12 +69,16 @@ class _AvacaAppState extends State<AvacaApp> {
     _softwareUpdateController =
         widget.softwareUpdateController ??
         SoftwareUpdateController.forApp(db: widget.db);
+    _scrapeJobCoordinator = ScrapeJobCoordinator(db: widget.db);
+    unawaited(_scrapeJobCoordinator.initialize());
     _restoreThemeState();
   }
 
   @override
   void dispose() {
     if (_ownsSoftwareUpdateController) _softwareUpdateController.dispose();
+    _scrapeJobCoordinator.rulesRepository.close();
+    _scrapeJobCoordinator.dispose();
     super.dispose();
   }
 
@@ -261,6 +270,7 @@ class _AvacaAppState extends State<AvacaApp> {
       return _page(
         SettingsView(
           db: widget.db,
+          scrapeJobCoordinator: _scrapeJobCoordinator,
           softwareUpdateController: _softwareUpdateController,
           onThemeChanged: (mode, pureBlack, custom) {
             setState(() {
@@ -290,8 +300,37 @@ class _AvacaAppState extends State<AvacaApp> {
       final id = int.tryParse(name.split('/').last);
 
       if (id != null) {
-        return _page(WorksView(db: widget.db, actressId: id));
+        return _page(
+          WorksView(
+            db: widget.db,
+            actressId: id,
+            scrapeJobCoordinator: _scrapeJobCoordinator,
+          ),
+        );
       }
+    }
+
+    if (name == '/scrape-jobs') {
+      return _page(
+        ScrapeJobsView(db: widget.db, coordinator: _scrapeJobCoordinator),
+      );
+    }
+
+    if (name.startsWith('/scrape-job/')) {
+      final id = name.substring('/scrape-job/'.length);
+      if (id.isNotEmpty) {
+        return _page(
+          ScrapeJobDetailView(
+            db: widget.db,
+            coordinator: _scrapeJobCoordinator,
+            jobId: id,
+          ),
+        );
+      }
+    }
+
+    if (name == '/data-health') {
+      return _page(DataHealthView(db: widget.db));
     }
 
     return _page(HomeView(db: widget.db));

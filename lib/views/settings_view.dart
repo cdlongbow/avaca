@@ -18,6 +18,7 @@ import '../core/layout.dart';
 import '../models/data_transfer_models.dart';
 import '../models/scrape_source_settings.dart';
 import '../services/data_transfer_service.dart';
+import '../services/scrape_job_coordinator.dart';
 import '../services/avbase/avbase_client.dart';
 import '../services/avbase/avbase_transport.dart';
 import '../services/javbus/javbus_client.dart';
@@ -28,6 +29,8 @@ import '../services/minnano/minnano_transport.dart';
 import '../services/scrape/scrape_source_registry.dart';
 import 'software_update_view.dart';
 import 'prefix_route_rules_view.dart';
+import 'data_health_view.dart';
+import 'scrape_jobs_view.dart';
 
 typedef ExternalUrlLauncher = Future<bool> Function(Uri uri);
 typedef ScrapeSourceConnectionTester =
@@ -196,6 +199,7 @@ class SettingsView extends StatefulWidget {
     this.prefixRouteFilePicker,
     this.externalUrlLauncher = _launchExternalUrl,
     this.scrapeSourceConnectionTester,
+    this.scrapeJobCoordinator,
   });
 
   final AppDatabase db;
@@ -211,6 +215,7 @@ class SettingsView extends StatefulWidget {
   final PrefixRouteFilePicker? prefixRouteFilePicker;
   final ExternalUrlLauncher externalUrlLauncher;
   final ScrapeSourceConnectionTester? scrapeSourceConnectionTester;
+  final ScrapeJobCoordinator? scrapeJobCoordinator;
 
   @override
   State<SettingsView> createState() => _SettingsViewState();
@@ -344,6 +349,18 @@ class _SettingsViewState extends State<SettingsView> {
                 titleBuilder: (context) =>
                     AppLocalizations.of(context).settingsDataTransferTitle,
                 bodyBuilder: _buildDataTransferSettings,
+              ),
+            ),
+            const SizedBox(height: 8),
+            _categoryCard(
+              tokens: tokens,
+              feedbackId: 'category-data-health',
+              icon: Icons.monitor_heart_outlined,
+              title: AppLocalizations.of(context).settingsDataHealthTitle,
+              onTap: () => Navigator.of(context).push<void>(
+                MaterialPageRoute(
+                  builder: (_) => DataHealthView(db: widget.db),
+                ),
               ),
             ),
             const SizedBox(height: 8),
@@ -511,6 +528,28 @@ class _SettingsViewState extends State<SettingsView> {
           title: localizations.scrapeSources,
           subtitle: null,
           child: _buildScrapeSourcesSettings(context, shrinkWrap: true),
+        ),
+        const SizedBox(height: 8),
+        _settingsExpansionCard(
+          context: context,
+          feedbackId: 'other-scrape-jobs',
+          icon: Icons.queue_play_next_outlined,
+          title: localizations.settingsScrapeJobsTitle,
+          subtitle: localizations.settingsScrapeJobsSubtitle,
+          child: widget.scrapeJobCoordinator == null
+              ? Text(localizations.scrapeJobsEmpty)
+              : ListTile(
+                  leading: const Icon(Icons.open_in_new),
+                  title: Text(localizations.scrapeJobsTitle),
+                  onTap: () => Navigator.of(context).push<void>(
+                    MaterialPageRoute(
+                      builder: (_) => ScrapeJobsView(
+                        db: widget.db,
+                        coordinator: widget.scrapeJobCoordinator!,
+                      ),
+                    ),
+                  ),
+                ),
         ),
         const SizedBox(height: 8),
         _settingsExpansionCard(
@@ -1379,14 +1418,14 @@ class _ScrapeSourcesSettingsBodyState
             _sourceSelector<WorksSourceSelection>(
               key: const PageStorageKey('scrape-works-source'),
               title: localizations.scrapeSourceWorksTitle,
-               value: settings.worksSource == WorksSourceSelection.minnanoAv
-                   ? WorksSourceSelection.javbus
-                   : settings.worksSource,
-               options: [
-                 (WorksSourceSelection.all, localizations.scrapeSourceAll),
-                 (WorksSourceSelection.javbus, localizations.scrapeSourceJavBus),
-                 (WorksSourceSelection.avbase, localizations.scrapeSourceAvBase),
-               ],
+              value: settings.worksSource == WorksSourceSelection.minnanoAv
+                  ? WorksSourceSelection.javbus
+                  : settings.worksSource,
+              options: [
+                (WorksSourceSelection.all, localizations.scrapeSourceAll),
+                (WorksSourceSelection.javbus, localizations.scrapeSourceJavBus),
+                (WorksSourceSelection.avbase, localizations.scrapeSourceAvBase),
+              ],
               onChanged: (value) => unawaited(_select(worksSource: value)),
             ),
           ],

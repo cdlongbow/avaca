@@ -4,7 +4,7 @@ import 'package:avaca/models/data_transfer_manifest.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('v1 manifest round-trips with archive-local identities', () {
+  test('v2 manifest round-trips with archive-local identities', () {
     const manifest = DataTransferManifest(
       exportedAt: '2026-08-10T00:00:00Z',
       actresses: [
@@ -63,7 +63,7 @@ void main() {
     expect(
       () => DataTransferManifest.fromJson({
         'format': DataTransferLimits.format,
-        'version': 2,
+        'version': DataTransferLimits.version + 1,
         'exportedAt': 'now',
         'actresses': [],
         'works': [],

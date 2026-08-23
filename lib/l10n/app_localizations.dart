@@ -1968,6 +1968,270 @@ abstract class AppLocalizations {
   /// In zh_TW, this message translates to:
   /// **'將移除此 Prefix 的學習資料與手動指定；不會變更已下載圖片或作品資料。'**
   String get prefixRouteForgetMessage;
+
+  /// No description provided for @workFieldProvenanceTitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'欄位來源'**
+  String get workFieldProvenanceTitle;
+
+  /// No description provided for @workFieldProvenanceSource.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'來源'**
+  String get workFieldProvenanceSource;
+
+  /// No description provided for @workFieldProvenanceObservedAt.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'觀測時間'**
+  String get workFieldProvenanceObservedAt;
+
+  /// No description provided for @workFieldProvenanceUnknown.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'未知來源'**
+  String get workFieldProvenanceUnknown;
+
+  /// No description provided for @dataHealthTitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'資料健康度'**
+  String get dataHealthTitle;
+
+  /// No description provided for @dataHealthSubtitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'查看作品資料、刮削工作與來源錯誤的可觀測性摘要。'**
+  String get dataHealthSubtitle;
+
+  /// No description provided for @dataHealthRefresh.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'重新整理'**
+  String get dataHealthRefresh;
+
+  /// No description provided for @dataHealthActresses.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'女優'**
+  String get dataHealthActresses;
+
+  /// No description provided for @dataHealthWorks.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'作品'**
+  String get dataHealthWorks;
+
+  /// No description provided for @dataHealthStored.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'已收藏影片'**
+  String get dataHealthStored;
+
+  /// No description provided for @dataHealthNotStored.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'未收藏影片'**
+  String get dataHealthNotStored;
+
+  /// No description provided for @dataHealthMetadataIssues.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'缺少作品欄位'**
+  String get dataHealthMetadataIssues;
+
+  /// No description provided for @dataHealthMissingImages.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'缺少圖片引用'**
+  String get dataHealthMissingImages;
+
+  /// No description provided for @dataHealthMissingProvenance.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'缺少欄位來源'**
+  String get dataHealthMissingProvenance;
+
+  /// No description provided for @dataHealthPendingDeletions.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'待清理檔案'**
+  String get dataHealthPendingDeletions;
+
+  /// No description provided for @dataHealthJobStates.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'刮削工作狀態'**
+  String get dataHealthJobStates;
+
+  /// No description provided for @dataHealthSourceErrors.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'近 7 日來源錯誤'**
+  String get dataHealthSourceErrors;
+
+  /// No description provided for @scrapeJobsTitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'刮削工作'**
+  String get scrapeJobsTitle;
+
+  /// No description provided for @scrapeJobsEmpty.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'目前沒有刮削工作。'**
+  String get scrapeJobsEmpty;
+
+  /// No description provided for @scrapeJobDetailTitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'刮削工作詳情'**
+  String get scrapeJobDetailTitle;
+
+  /// No description provided for @scrapeJobPause.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'暫停'**
+  String get scrapeJobPause;
+
+  /// No description provided for @scrapeJobResume.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'繼續'**
+  String get scrapeJobResume;
+
+  /// No description provided for @scrapeJobCancel.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'取消'**
+  String get scrapeJobCancel;
+
+  /// No description provided for @scrapeJobRetryFailed.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'只重試失敗作品'**
+  String get scrapeJobRetryFailed;
+
+  /// No description provided for @scrapeJobEvents.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'事件紀錄'**
+  String get scrapeJobEvents;
+
+  /// No description provided for @scrapeJobDiagnostics.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'刮削診斷'**
+  String get scrapeJobDiagnostics;
+
+  /// No description provided for @scrapeJobItems.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'作品檢查點'**
+  String get scrapeJobItems;
+
+  /// No description provided for @scrapeJobNoEvents.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'尚無事件紀錄。'**
+  String get scrapeJobNoEvents;
+
+  /// No description provided for @scrapeJobNoItems.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'尚無作品檢查點。'**
+  String get scrapeJobNoItems;
+
+  /// No description provided for @scrapeJobStateQueued.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'排隊中'**
+  String get scrapeJobStateQueued;
+
+  /// No description provided for @scrapeJobStateRunning.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'執行中'**
+  String get scrapeJobStateRunning;
+
+  /// No description provided for @scrapeJobStatePaused.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'已暫停'**
+  String get scrapeJobStatePaused;
+
+  /// No description provided for @scrapeJobStateWaiting.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'等待驗證'**
+  String get scrapeJobStateWaiting;
+
+  /// No description provided for @scrapeJobStateSucceeded.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'成功'**
+  String get scrapeJobStateSucceeded;
+
+  /// No description provided for @scrapeJobStatePartial.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'部分完成'**
+  String get scrapeJobStatePartial;
+
+  /// No description provided for @scrapeJobStateFailed.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'失敗'**
+  String get scrapeJobStateFailed;
+
+  /// No description provided for @scrapeJobStateCancelled.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'已取消'**
+  String get scrapeJobStateCancelled;
+
+  /// No description provided for @scrapeJobStateExcluded.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'已排除'**
+  String get scrapeJobStateExcluded;
+
+  /// No description provided for @scrapeJobProgress.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'已處理 {processed}，成功 {saved}，失敗 {failed}'**
+  String scrapeJobProgress(int processed, int saved, int failed);
+
+  /// No description provided for @scrapeJobRulesVersion.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'規則版本：{version}'**
+  String scrapeJobRulesVersion(String version);
+
+  /// No description provided for @settingsDataHealthTitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'資料健康度'**
+  String get settingsDataHealthTitle;
+
+  /// No description provided for @settingsDataHealthSubtitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'查看資料完整性與刮削可觀測性。'**
+  String get settingsDataHealthSubtitle;
+
+  /// No description provided for @settingsScrapeJobsTitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'刮削工作'**
+  String get settingsScrapeJobsTitle;
+
+  /// No description provided for @settingsScrapeJobsSubtitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'查看佇列、恢復、暫停與失敗重試。'**
+  String get settingsScrapeJobsSubtitle;
 }
 
 class _AppLocalizationsDelegate

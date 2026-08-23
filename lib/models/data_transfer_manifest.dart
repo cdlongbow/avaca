@@ -5,7 +5,8 @@ class DataTransferLimits {
   const DataTransferLimits._();
 
   static const format = 'avaca-data';
-  static const version = 1;
+  static const version = 2;
+  static const supportedVersions = {1, 2};
   static const maxArchiveBytes = 1 << 30;
   static const maxEntries = 10000;
   static const maxSingleEntryBytes = 128 << 20;
@@ -53,7 +54,7 @@ class DataTransferManifest {
     if (format != DataTransferLimits.format) {
       throw const FormatException('Unsupported data transfer format.');
     }
-    if (version != DataTransferLimits.version) {
+    if (!DataTransferLimits.supportedVersions.contains(version)) {
       throw FormatException('Unsupported data transfer version: $version.');
     }
 
@@ -202,6 +203,7 @@ class DataTransferWork {
     this.isStored = false,
     this.storageQuality,
     this.storageFrameRate,
+    this.provenance = const [],
   });
 
   final String id;
@@ -219,6 +221,7 @@ class DataTransferWork {
   final bool isStored;
   final String? storageQuality;
   final int? storageFrameRate;
+  final List<DataTransferProvenance> provenance;
 
   Map<String, Object?> toJson() => {
     'id': id,
@@ -236,6 +239,9 @@ class DataTransferWork {
     'isStored': isStored,
     'storageQuality': storageQuality,
     'storageFrameRate': storageFrameRate,
+    'provenance': provenance
+        .map((item) => item.toJson())
+        .toList(growable: false),
   };
 
   factory DataTransferWork.fromJson(Object? source) {
@@ -256,6 +262,54 @@ class DataTransferWork {
       isStored: _optionalBool(map, 'isStored') ?? false,
       storageQuality: _nullableString(map, 'storageQuality'),
       storageFrameRate: _nullableInt(map, 'storageFrameRate'),
+      provenance: _optionalList(
+        map,
+        'provenance',
+        DataTransferProvenance.fromJson,
+      ),
+    );
+  }
+}
+
+class DataTransferProvenance {
+  const DataTransferProvenance({
+    required this.field,
+    required this.source,
+    this.sourceUri,
+    this.observedAt,
+  });
+
+  final String field;
+  final String source;
+  final String? sourceUri;
+  final String? observedAt;
+
+  Map<String, Object?> toJson() => {
+    'field': field,
+    'source': source,
+    if (sourceUri != null) 'sourceUri': sourceUri,
+    if (observedAt != null) 'observedAt': observedAt,
+  };
+
+  factory DataTransferProvenance.fromJson(Object? source) {
+    final map = _asMap(source, 'provenance');
+    final field = _requiredString(map, 'field');
+    const allowed = {
+      'title',
+      'release_date',
+      'duration_minutes',
+      'studio',
+      'publisher',
+      'series',
+    };
+    if (!allowed.contains(field)) {
+      throw FormatException('Unsupported provenance field: $field.');
+    }
+    return DataTransferProvenance(
+      field: field,
+      source: _requiredString(map, 'source'),
+      sourceUri: _nullableString(map, 'sourceUri'),
+      observedAt: _nullableString(map, 'observedAt'),
     );
   }
 }
@@ -400,6 +454,15 @@ List<T> _list<T>(
     throw FormatException('$key must be an array.');
   }
   return value.map(parse).toList(growable: false);
+}
+
+List<T> _optionalList<T>(
+  Map<String, Object?> map,
+  String key,
+  T Function(Object?) parse,
+) {
+  if (!map.containsKey(key) || map[key] == null) return const [];
+  return _list(map, key, parse);
 }
 
 void _ensureUnique(Iterable<String> values, String label) {

@@ -239,8 +239,45 @@ class _WorkDetailViewState extends State<WorkDetailView> {
             _labeledValue(l10n.publisher, work['publisher']?.toString()),
             _labeledValue(l10n.series, work['series']?.toString()),
             _buildRelatedActresses(work),
+            _buildFieldProvenance(work, tokens),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildFieldProvenance(
+    Map<String, Object?> work,
+    AppLayoutTokens tokens,
+  ) {
+    final raw = work['field_provenance'];
+    if (raw is! List) return const SizedBox.shrink();
+    final rows = raw
+        .whereType<Map>()
+        .map((item) => Map<String, Object?>.from(item))
+        .where((item) => (item['source']?.toString().trim() ?? '').isNotEmpty)
+        .toList(growable: false);
+    if (rows.isEmpty) return const SizedBox.shrink();
+    final l10n = AppLocalizations.of(context);
+    return Padding(
+      key: const Key('work-field-provenance-section'),
+      padding: EdgeInsets.only(top: tokens.sectionGap / 2),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(l10n.workFieldProvenanceTitle),
+          const SizedBox(height: 4),
+          for (final row in rows)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                '${row['field']}: ${row['source'] ?? l10n.workFieldProvenanceUnknown}'
+                '${row['source_uri'] == null ? '' : ' · ${row['source_uri']}'}'
+                '${row['observed_at'] == null ? '' : ' · ${row['observed_at']}'}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+        ],
       ),
     );
   }

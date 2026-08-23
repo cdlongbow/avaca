@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.9.6 - 2026-08-23
+
+- Added persistent scrape jobs with resumable progress, cancellation, retry
+  targets, per-source tracking, event history, and snapshot-based execution
+  rules.
+- Added scrape-job history/detail screens, data-health diagnostics, and
+  localized settings/navigation for the new workflows.
+- Added database persistence and transfer coverage for scrape jobs, source
+  progress, field provenance, data-health checks, and versioned scrape rules.
+- Hardened scrape-session coordination, event sanitization, cancellation, and
+  progress aggregation with regression coverage for concurrent and partial
+  runs.
+
 ## 0.9.5 - 2026-08-23
 
 - Added per-work storage records for saved status, video quality, and frame

@@ -985,6 +985,142 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get prefixRouteForgetMessage =>
       '將移除此 Prefix 的學習資料與手動指定；不會變更已下載圖片或作品資料。';
+
+  @override
+  String get workFieldProvenanceTitle => '欄位來源';
+
+  @override
+  String get workFieldProvenanceSource => '來源';
+
+  @override
+  String get workFieldProvenanceObservedAt => '觀測時間';
+
+  @override
+  String get workFieldProvenanceUnknown => '未知來源';
+
+  @override
+  String get dataHealthTitle => '資料健康度';
+
+  @override
+  String get dataHealthSubtitle => '查看作品資料、刮削工作與來源錯誤的可觀測性摘要。';
+
+  @override
+  String get dataHealthRefresh => '重新整理';
+
+  @override
+  String get dataHealthActresses => '女優';
+
+  @override
+  String get dataHealthWorks => '作品';
+
+  @override
+  String get dataHealthStored => '已收藏影片';
+
+  @override
+  String get dataHealthNotStored => '未收藏影片';
+
+  @override
+  String get dataHealthMetadataIssues => '缺少作品欄位';
+
+  @override
+  String get dataHealthMissingImages => '缺少圖片引用';
+
+  @override
+  String get dataHealthMissingProvenance => '缺少欄位來源';
+
+  @override
+  String get dataHealthPendingDeletions => '待清理檔案';
+
+  @override
+  String get dataHealthJobStates => '刮削工作狀態';
+
+  @override
+  String get dataHealthSourceErrors => '近 7 日來源錯誤';
+
+  @override
+  String get scrapeJobsTitle => '刮削工作';
+
+  @override
+  String get scrapeJobsEmpty => '目前沒有刮削工作。';
+
+  @override
+  String get scrapeJobDetailTitle => '刮削工作詳情';
+
+  @override
+  String get scrapeJobPause => '暫停';
+
+  @override
+  String get scrapeJobResume => '繼續';
+
+  @override
+  String get scrapeJobCancel => '取消';
+
+  @override
+  String get scrapeJobRetryFailed => '只重試失敗作品';
+
+  @override
+  String get scrapeJobEvents => '事件紀錄';
+
+  @override
+  String get scrapeJobDiagnostics => '刮削診斷';
+
+  @override
+  String get scrapeJobItems => '作品檢查點';
+
+  @override
+  String get scrapeJobNoEvents => '尚無事件紀錄。';
+
+  @override
+  String get scrapeJobNoItems => '尚無作品檢查點。';
+
+  @override
+  String get scrapeJobStateQueued => '排隊中';
+
+  @override
+  String get scrapeJobStateRunning => '執行中';
+
+  @override
+  String get scrapeJobStatePaused => '已暫停';
+
+  @override
+  String get scrapeJobStateWaiting => '等待驗證';
+
+  @override
+  String get scrapeJobStateSucceeded => '成功';
+
+  @override
+  String get scrapeJobStatePartial => '部分完成';
+
+  @override
+  String get scrapeJobStateFailed => '失敗';
+
+  @override
+  String get scrapeJobStateCancelled => '已取消';
+
+  @override
+  String get scrapeJobStateExcluded => '已排除';
+
+  @override
+  String scrapeJobProgress(int processed, int saved, int failed) {
+    return '已處理 $processed，成功 $saved，失敗 $failed';
+  }
+
+  @override
+  String scrapeJobRulesVersion(String version) {
+    return '規則版本：$version';
+  }
+
+  @override
+  String get settingsDataHealthTitle => '資料健康度';
+
+  @override
+  String get settingsDataHealthSubtitle => '查看資料完整性與刮削可觀測性。';
+
+  @override
+  String get settingsScrapeJobsTitle => '刮削工作';
+
+  @override
+  String get settingsScrapeJobsSubtitle => '查看佇列、恢復、暫停與失敗重試。';
 }
 
 /// The translations for Chinese, as used in China (`zh_CN`).
@@ -1968,6 +2104,142 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   @override
   String get prefixRouteForgetMessage =>
       '将移除此 Prefix 的学习资料与手动指定；不会变更已下载图片或作品资料。';
+
+  @override
+  String get workFieldProvenanceTitle => '字段来源';
+
+  @override
+  String get workFieldProvenanceSource => '来源';
+
+  @override
+  String get workFieldProvenanceObservedAt => '观测时间';
+
+  @override
+  String get workFieldProvenanceUnknown => '未知来源';
+
+  @override
+  String get dataHealthTitle => '数据健康度';
+
+  @override
+  String get dataHealthSubtitle => '查看作品数据、刮削任务与来源错误的可观测性摘要。';
+
+  @override
+  String get dataHealthRefresh => '刷新';
+
+  @override
+  String get dataHealthActresses => '女优';
+
+  @override
+  String get dataHealthWorks => '作品';
+
+  @override
+  String get dataHealthStored => '已收藏影片';
+
+  @override
+  String get dataHealthNotStored => '未收藏影片';
+
+  @override
+  String get dataHealthMetadataIssues => '缺少作品字段';
+
+  @override
+  String get dataHealthMissingImages => '缺少图片引用';
+
+  @override
+  String get dataHealthMissingProvenance => '缺少字段来源';
+
+  @override
+  String get dataHealthPendingDeletions => '待清理文件';
+
+  @override
+  String get dataHealthJobStates => '刮削任务状态';
+
+  @override
+  String get dataHealthSourceErrors => '近 7 日来源错误';
+
+  @override
+  String get scrapeJobsTitle => '刮削任务';
+
+  @override
+  String get scrapeJobsEmpty => '目前没有刮削任务。';
+
+  @override
+  String get scrapeJobDetailTitle => '刮削任务详情';
+
+  @override
+  String get scrapeJobPause => '暂停';
+
+  @override
+  String get scrapeJobResume => '继续';
+
+  @override
+  String get scrapeJobCancel => '取消';
+
+  @override
+  String get scrapeJobRetryFailed => '只重试失败作品';
+
+  @override
+  String get scrapeJobEvents => '事件记录';
+
+  @override
+  String get scrapeJobDiagnostics => '刮削诊断';
+
+  @override
+  String get scrapeJobItems => '作品检查点';
+
+  @override
+  String get scrapeJobNoEvents => '尚无事件记录。';
+
+  @override
+  String get scrapeJobNoItems => '尚无作品检查点。';
+
+  @override
+  String get scrapeJobStateQueued => '排队中';
+
+  @override
+  String get scrapeJobStateRunning => '执行中';
+
+  @override
+  String get scrapeJobStatePaused => '已暂停';
+
+  @override
+  String get scrapeJobStateWaiting => '等待验证';
+
+  @override
+  String get scrapeJobStateSucceeded => '成功';
+
+  @override
+  String get scrapeJobStatePartial => '部分完成';
+
+  @override
+  String get scrapeJobStateFailed => '失败';
+
+  @override
+  String get scrapeJobStateCancelled => '已取消';
+
+  @override
+  String get scrapeJobStateExcluded => '已排除';
+
+  @override
+  String scrapeJobProgress(int processed, int saved, int failed) {
+    return '已处理 $processed，成功 $saved，失败 $failed';
+  }
+
+  @override
+  String scrapeJobRulesVersion(String version) {
+    return '规则版本：$version';
+  }
+
+  @override
+  String get settingsDataHealthTitle => '数据健康度';
+
+  @override
+  String get settingsDataHealthSubtitle => '查看数据完整性与刮削可观测性。';
+
+  @override
+  String get settingsScrapeJobsTitle => '刮削任务';
+
+  @override
+  String get settingsScrapeJobsSubtitle => '查看队列、恢复、暂停与失败重试。';
 }
 
 /// The translations for Chinese, as used in Taiwan (`zh_TW`).
@@ -2951,4 +3223,140 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   @override
   String get prefixRouteForgetMessage =>
       '將移除此 Prefix 的學習資料與手動指定；不會變更已下載圖片或作品資料。';
+
+  @override
+  String get workFieldProvenanceTitle => '欄位來源';
+
+  @override
+  String get workFieldProvenanceSource => '來源';
+
+  @override
+  String get workFieldProvenanceObservedAt => '觀測時間';
+
+  @override
+  String get workFieldProvenanceUnknown => '未知來源';
+
+  @override
+  String get dataHealthTitle => '資料健康度';
+
+  @override
+  String get dataHealthSubtitle => '查看作品資料、刮削工作與來源錯誤的可觀測性摘要。';
+
+  @override
+  String get dataHealthRefresh => '重新整理';
+
+  @override
+  String get dataHealthActresses => '女優';
+
+  @override
+  String get dataHealthWorks => '作品';
+
+  @override
+  String get dataHealthStored => '已收藏影片';
+
+  @override
+  String get dataHealthNotStored => '未收藏影片';
+
+  @override
+  String get dataHealthMetadataIssues => '缺少作品欄位';
+
+  @override
+  String get dataHealthMissingImages => '缺少圖片引用';
+
+  @override
+  String get dataHealthMissingProvenance => '缺少欄位來源';
+
+  @override
+  String get dataHealthPendingDeletions => '待清理檔案';
+
+  @override
+  String get dataHealthJobStates => '刮削工作狀態';
+
+  @override
+  String get dataHealthSourceErrors => '近 7 日來源錯誤';
+
+  @override
+  String get scrapeJobsTitle => '刮削工作';
+
+  @override
+  String get scrapeJobsEmpty => '目前沒有刮削工作。';
+
+  @override
+  String get scrapeJobDetailTitle => '刮削工作詳情';
+
+  @override
+  String get scrapeJobPause => '暫停';
+
+  @override
+  String get scrapeJobResume => '繼續';
+
+  @override
+  String get scrapeJobCancel => '取消';
+
+  @override
+  String get scrapeJobRetryFailed => '只重試失敗作品';
+
+  @override
+  String get scrapeJobEvents => '事件紀錄';
+
+  @override
+  String get scrapeJobDiagnostics => '刮削診斷';
+
+  @override
+  String get scrapeJobItems => '作品檢查點';
+
+  @override
+  String get scrapeJobNoEvents => '尚無事件紀錄。';
+
+  @override
+  String get scrapeJobNoItems => '尚無作品檢查點。';
+
+  @override
+  String get scrapeJobStateQueued => '排隊中';
+
+  @override
+  String get scrapeJobStateRunning => '執行中';
+
+  @override
+  String get scrapeJobStatePaused => '已暫停';
+
+  @override
+  String get scrapeJobStateWaiting => '等待驗證';
+
+  @override
+  String get scrapeJobStateSucceeded => '成功';
+
+  @override
+  String get scrapeJobStatePartial => '部分完成';
+
+  @override
+  String get scrapeJobStateFailed => '失敗';
+
+  @override
+  String get scrapeJobStateCancelled => '已取消';
+
+  @override
+  String get scrapeJobStateExcluded => '已排除';
+
+  @override
+  String scrapeJobProgress(int processed, int saved, int failed) {
+    return '已處理 $processed，成功 $saved，失敗 $failed';
+  }
+
+  @override
+  String scrapeJobRulesVersion(String version) {
+    return '規則版本：$version';
+  }
+
+  @override
+  String get settingsDataHealthTitle => '資料健康度';
+
+  @override
+  String get settingsDataHealthSubtitle => '查看資料完整性與刮削可觀測性。';
+
+  @override
+  String get settingsScrapeJobsTitle => '刮削工作';
+
+  @override
+  String get settingsScrapeJobsSubtitle => '查看佇列、恢復、暫停與失敗重試。';
 }

@@ -993,6 +993,142 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String get prefixRouteForgetMessage =>
       'この Prefix の学習データと手動指定を削除します。ダウンロード済み画像と作品データは変更されません。';
+
+  @override
+  String get workFieldProvenanceTitle => '項目ソース';
+
+  @override
+  String get workFieldProvenanceSource => 'ソース';
+
+  @override
+  String get workFieldProvenanceObservedAt => '観測時刻';
+
+  @override
+  String get workFieldProvenanceUnknown => '不明なソース';
+
+  @override
+  String get dataHealthTitle => 'データ健全性';
+
+  @override
+  String get dataHealthSubtitle => '作品データ、スクレイプジョブ、ソースエラーを確認します。';
+
+  @override
+  String get dataHealthRefresh => '更新';
+
+  @override
+  String get dataHealthActresses => '女優';
+
+  @override
+  String get dataHealthWorks => '作品';
+
+  @override
+  String get dataHealthStored => '保存済み動画';
+
+  @override
+  String get dataHealthNotStored => '未保存';
+
+  @override
+  String get dataHealthMetadataIssues => '不足している作品項目';
+
+  @override
+  String get dataHealthMissingImages => '不足している画像参照';
+
+  @override
+  String get dataHealthMissingProvenance => '不足している項目ソース';
+
+  @override
+  String get dataHealthPendingDeletions => '保留中のファイル削除';
+
+  @override
+  String get dataHealthJobStates => 'スクレイプジョブ状態';
+
+  @override
+  String get dataHealthSourceErrors => '過去 7 日間のソースエラー';
+
+  @override
+  String get scrapeJobsTitle => 'スクレイプジョブ';
+
+  @override
+  String get scrapeJobsEmpty => 'スクレイプジョブはありません。';
+
+  @override
+  String get scrapeJobDetailTitle => 'スクレイプジョブ詳細';
+
+  @override
+  String get scrapeJobPause => '一時停止';
+
+  @override
+  String get scrapeJobResume => '再開';
+
+  @override
+  String get scrapeJobCancel => 'キャンセル';
+
+  @override
+  String get scrapeJobRetryFailed => '失敗した作品だけ再試行';
+
+  @override
+  String get scrapeJobEvents => 'イベント履歴';
+
+  @override
+  String get scrapeJobDiagnostics => '刮削診断';
+
+  @override
+  String get scrapeJobItems => '作品チェックポイント';
+
+  @override
+  String get scrapeJobNoEvents => 'イベントはまだありません。';
+
+  @override
+  String get scrapeJobNoItems => '作品チェックポイントはまだありません。';
+
+  @override
+  String get scrapeJobStateQueued => '待機中';
+
+  @override
+  String get scrapeJobStateRunning => '実行中';
+
+  @override
+  String get scrapeJobStatePaused => '一時停止';
+
+  @override
+  String get scrapeJobStateWaiting => '認証待ち';
+
+  @override
+  String get scrapeJobStateSucceeded => '成功';
+
+  @override
+  String get scrapeJobStatePartial => '一部完了';
+
+  @override
+  String get scrapeJobStateFailed => '失敗';
+
+  @override
+  String get scrapeJobStateCancelled => 'キャンセル済み';
+
+  @override
+  String get scrapeJobStateExcluded => '除外';
+
+  @override
+  String scrapeJobProgress(int processed, int saved, int failed) {
+    return '処理 $processed、成功 $saved、失敗 $failed';
+  }
+
+  @override
+  String scrapeJobRulesVersion(String version) {
+    return 'ルールバージョン：$version';
+  }
+
+  @override
+  String get settingsDataHealthTitle => 'データ健全性';
+
+  @override
+  String get settingsDataHealthSubtitle => 'データ完全性とスクレイプの可観測性を確認します。';
+
+  @override
+  String get settingsScrapeJobsTitle => 'スクレイプジョブ';
+
+  @override
+  String get settingsScrapeJobsSubtitle => 'キュー、復旧、一時停止、失敗再試行を確認します。';
 }
 
 /// The translations for Japanese, as used in Japan (`ja_JP`).
@@ -1984,4 +2120,140 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
   @override
   String get prefixRouteForgetMessage =>
       'この Prefix の学習データと手動指定を削除します。ダウンロード済み画像と作品データは変更されません。';
+
+  @override
+  String get workFieldProvenanceTitle => '項目ソース';
+
+  @override
+  String get workFieldProvenanceSource => 'ソース';
+
+  @override
+  String get workFieldProvenanceObservedAt => '観測時刻';
+
+  @override
+  String get workFieldProvenanceUnknown => '不明なソース';
+
+  @override
+  String get dataHealthTitle => 'データ健全性';
+
+  @override
+  String get dataHealthSubtitle => '作品データ、スクレイプジョブ、ソースエラーを確認します。';
+
+  @override
+  String get dataHealthRefresh => '更新';
+
+  @override
+  String get dataHealthActresses => '女優';
+
+  @override
+  String get dataHealthWorks => '作品';
+
+  @override
+  String get dataHealthStored => '保存済み動画';
+
+  @override
+  String get dataHealthNotStored => '未保存';
+
+  @override
+  String get dataHealthMetadataIssues => '不足している作品項目';
+
+  @override
+  String get dataHealthMissingImages => '不足している画像参照';
+
+  @override
+  String get dataHealthMissingProvenance => '不足している項目ソース';
+
+  @override
+  String get dataHealthPendingDeletions => '保留中のファイル削除';
+
+  @override
+  String get dataHealthJobStates => 'スクレイプジョブ状態';
+
+  @override
+  String get dataHealthSourceErrors => '過去 7 日間のソースエラー';
+
+  @override
+  String get scrapeJobsTitle => 'スクレイプジョブ';
+
+  @override
+  String get scrapeJobsEmpty => 'スクレイプジョブはありません。';
+
+  @override
+  String get scrapeJobDetailTitle => 'スクレイプジョブ詳細';
+
+  @override
+  String get scrapeJobPause => '一時停止';
+
+  @override
+  String get scrapeJobResume => '再開';
+
+  @override
+  String get scrapeJobCancel => 'キャンセル';
+
+  @override
+  String get scrapeJobRetryFailed => '失敗した作品だけ再試行';
+
+  @override
+  String get scrapeJobEvents => 'イベント履歴';
+
+  @override
+  String get scrapeJobDiagnostics => '刮削診断';
+
+  @override
+  String get scrapeJobItems => '作品チェックポイント';
+
+  @override
+  String get scrapeJobNoEvents => 'イベントはまだありません。';
+
+  @override
+  String get scrapeJobNoItems => '作品チェックポイントはまだありません。';
+
+  @override
+  String get scrapeJobStateQueued => '待機中';
+
+  @override
+  String get scrapeJobStateRunning => '実行中';
+
+  @override
+  String get scrapeJobStatePaused => '一時停止';
+
+  @override
+  String get scrapeJobStateWaiting => '認証待ち';
+
+  @override
+  String get scrapeJobStateSucceeded => '成功';
+
+  @override
+  String get scrapeJobStatePartial => '一部完了';
+
+  @override
+  String get scrapeJobStateFailed => '失敗';
+
+  @override
+  String get scrapeJobStateCancelled => 'キャンセル済み';
+
+  @override
+  String get scrapeJobStateExcluded => '除外';
+
+  @override
+  String scrapeJobProgress(int processed, int saved, int failed) {
+    return '処理 $processed、成功 $saved、失敗 $failed';
+  }
+
+  @override
+  String scrapeJobRulesVersion(String version) {
+    return 'ルールバージョン：$version';
+  }
+
+  @override
+  String get settingsDataHealthTitle => 'データ健全性';
+
+  @override
+  String get settingsDataHealthSubtitle => 'データ完全性とスクレイプの可観測性を確認します。';
+
+  @override
+  String get settingsScrapeJobsTitle => 'スクレイプジョブ';
+
+  @override
+  String get settingsScrapeJobsSubtitle => 'キュー、復旧、一時停止、失敗再試行を確認します。';
 }

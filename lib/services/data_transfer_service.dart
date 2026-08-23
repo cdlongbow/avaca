@@ -93,6 +93,32 @@ class DataTransferService {
       ],
       orderBy: 'code COLLATE NOCASE ASC, code ASC, id ASC',
     );
+    final provenanceRows = await database.query(
+      'work_field_provenance',
+      columns: const [
+        'work_id',
+        'field',
+        'source',
+        'source_uri',
+        'observed_at',
+      ],
+      orderBy: 'work_id ASC, field ASC',
+    );
+    final provenanceByWork = <int, List<DataTransferProvenance>>{};
+    for (final row in provenanceRows) {
+      final workId = _asInt(row['work_id']);
+      final field = row['field']?.toString().trim() ?? '';
+      final source = row['source']?.toString().trim() ?? '';
+      if (workId == null || field.isEmpty || source.isEmpty) continue;
+      (provenanceByWork[workId] ??= <DataTransferProvenance>[]).add(
+        DataTransferProvenance(
+          field: field,
+          source: source,
+          sourceUri: _asNullableString(row['source_uri']),
+          observedAt: _asNullableString(row['observed_at']),
+        ),
+      );
+    }
     final relationRows = await database.query(
       'actress_works',
       columns: const ['actress_id', 'work_id'],
@@ -204,6 +230,7 @@ class DataTransferService {
           storageFrameRate: _asInt(row['storage_frame_rate']),
           createdAt: _asNullableString(row['created_at']),
           modifiedAt: _asNullableString(row['modified_at']),
+          provenance: List.unmodifiable(provenanceByWork[id] ?? const []),
         ),
       );
     }
@@ -267,6 +294,7 @@ class DataTransferService {
           isStored: draft.isStored,
           storageQuality: draft.storageQuality,
           storageFrameRate: draft.storageFrameRate,
+          provenance: draft.provenance,
         ),
       );
     }
@@ -345,6 +373,7 @@ class DataTransferService {
               isStored: item.isStored,
               storageQuality: item.storageQuality,
               storageFrameRate: item.storageFrameRate,
+              provenance: item.provenance,
             ),
           )
           .toList(growable: false),
@@ -897,7 +926,17 @@ class DataTransferService {
       }
       final existing = await transaction.query(
         'works',
-        columns: const ['id', 'card_image_path', 'detail_image_path'],
+        columns: const [
+          'id',
+          'title',
+          'release_date',
+          'duration_minutes',
+          'studio',
+          'publisher',
+          'series',
+          'card_image_path',
+          'detail_image_path',
+        ],
         where: 'code = ? COLLATE NOCASE',
         whereArgs: [code],
         limit: 1,
@@ -922,6 +961,12 @@ class DataTransferService {
           if (work.modifiedAt != null) 'modified_at': work.modifiedAt,
         });
         workIds[work.id] = id;
+        await _importProvenance(
+          transaction,
+          workId: id,
+          work: work,
+          existing: null,
+        );
         continue;
       }
 
@@ -984,6 +1029,12 @@ class DataTransferService {
           oldDetail != detailImage) {
         await _queueOldImage(transaction, oldDetail);
       }
+      await _importProvenance(
+        transaction,
+        workId: id,
+        work: work,
+        existing: row,
+      );
     }
 
     for (final relation in prepared.manifest.relations) {
@@ -999,6 +1050,43 @@ class DataTransferService {
         'actress_id': actressId,
         'work_id': workId,
       }, conflictAlgorithm: ConflictAlgorithm.ignore);
+    }
+  }
+
+  Future<void> _importProvenance(
+    DatabaseExecutor transaction, {
+    required int workId,
+    required DataTransferWork work,
+    required Map<String, Object?>? existing,
+  }) async {
+    final incoming = <String, Object?>{
+      'title': work.title,
+      'release_date': work.releaseDate,
+      'duration_minutes': work.durationMinutes,
+      'studio': work.studio,
+      'publisher': work.publisher,
+      'series': work.series,
+    };
+    for (final item in work.provenance) {
+      final incomingValue = incoming[item.field];
+      if (incomingValue == null || incomingValue.toString().trim().isEmpty) {
+        continue;
+      }
+      final existingValue = existing?[item.field];
+      final wins =
+          item.field == 'title' ||
+          existing == null ||
+          existingValue == null ||
+          existingValue.toString().trim().isEmpty;
+      if (!wins) continue;
+      await transaction.insert('work_field_provenance', {
+        'work_id': workId,
+        'field': item.field,
+        'source': item.source,
+        'source_uri': item.sourceUri,
+        'observed_at': item.observedAt,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
     }
   }
 
@@ -1159,6 +1247,7 @@ class _ExportWorkDraft {
     required this.storageFrameRate,
     required this.createdAt,
     required this.modifiedAt,
+    required this.provenance,
   });
 
   final int sourceId;
@@ -1176,6 +1265,7 @@ class _ExportWorkDraft {
   final int? storageFrameRate;
   final String? createdAt;
   final String? modifiedAt;
+  final List<DataTransferProvenance> provenance;
 }
 
 class _ExportImage {

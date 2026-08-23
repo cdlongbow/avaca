@@ -1027,4 +1027,143 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get prefixRouteForgetMessage =>
       'The learned data and manual override for this Prefix will be removed. Downloaded images and work data will not be changed.';
+
+  @override
+  String get workFieldProvenanceTitle => 'Field provenance';
+
+  @override
+  String get workFieldProvenanceSource => 'Source';
+
+  @override
+  String get workFieldProvenanceObservedAt => 'Observed';
+
+  @override
+  String get workFieldProvenanceUnknown => 'Unknown source';
+
+  @override
+  String get dataHealthTitle => 'Data health';
+
+  @override
+  String get dataHealthSubtitle =>
+      'Inspect data completeness, scrape jobs, and source error observability.';
+
+  @override
+  String get dataHealthRefresh => 'Refresh';
+
+  @override
+  String get dataHealthActresses => 'Actresses';
+
+  @override
+  String get dataHealthWorks => 'Works';
+
+  @override
+  String get dataHealthStored => 'Stored videos';
+
+  @override
+  String get dataHealthNotStored => 'Not stored';
+
+  @override
+  String get dataHealthMetadataIssues => 'Missing work fields';
+
+  @override
+  String get dataHealthMissingImages => 'Missing image references';
+
+  @override
+  String get dataHealthMissingProvenance => 'Missing field provenance';
+
+  @override
+  String get dataHealthPendingDeletions => 'Pending file cleanup';
+
+  @override
+  String get dataHealthJobStates => 'Scrape job states';
+
+  @override
+  String get dataHealthSourceErrors => 'Source errors in the last 7 days';
+
+  @override
+  String get scrapeJobsTitle => 'Scrape jobs';
+
+  @override
+  String get scrapeJobsEmpty => 'There are no scrape jobs yet.';
+
+  @override
+  String get scrapeJobDetailTitle => 'Scrape job details';
+
+  @override
+  String get scrapeJobPause => 'Pause';
+
+  @override
+  String get scrapeJobResume => 'Resume';
+
+  @override
+  String get scrapeJobCancel => 'Cancel';
+
+  @override
+  String get scrapeJobRetryFailed => 'Retry failed works only';
+
+  @override
+  String get scrapeJobEvents => 'Event journal';
+
+  @override
+  String get scrapeJobDiagnostics => 'Scrape diagnostics';
+
+  @override
+  String get scrapeJobItems => 'Work checkpoints';
+
+  @override
+  String get scrapeJobNoEvents => 'No events have been recorded.';
+
+  @override
+  String get scrapeJobNoItems => 'No work checkpoints have been recorded.';
+
+  @override
+  String get scrapeJobStateQueued => 'Queued';
+
+  @override
+  String get scrapeJobStateRunning => 'Running';
+
+  @override
+  String get scrapeJobStatePaused => 'Paused';
+
+  @override
+  String get scrapeJobStateWaiting => 'Waiting for verification';
+
+  @override
+  String get scrapeJobStateSucceeded => 'Succeeded';
+
+  @override
+  String get scrapeJobStatePartial => 'Partially complete';
+
+  @override
+  String get scrapeJobStateFailed => 'Failed';
+
+  @override
+  String get scrapeJobStateCancelled => 'Cancelled';
+
+  @override
+  String get scrapeJobStateExcluded => 'Excluded';
+
+  @override
+  String scrapeJobProgress(int processed, int saved, int failed) {
+    return 'Processed $processed, saved $saved, failed $failed';
+  }
+
+  @override
+  String scrapeJobRulesVersion(String version) {
+    return 'Rules version: $version';
+  }
+
+  @override
+  String get settingsDataHealthTitle => 'Data health';
+
+  @override
+  String get settingsDataHealthSubtitle =>
+      'Inspect data completeness and scrape observability.';
+
+  @override
+  String get settingsScrapeJobsTitle => 'Scrape jobs';
+
+  @override
+  String get settingsScrapeJobsSubtitle =>
+      'Inspect queue, recovery, pause, and failed-work retry.';
 }

@@ -7,6 +7,7 @@ import 'package:path/path.dart' as path;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../models/scraped_actress_details.dart';
+import '../models/scrape_job.dart';
 import '../models/work.dart';
 import '../models/work_storage.dart';
 import 'platform_adapter.dart';
@@ -391,11 +392,13 @@ class AppDatabase {
         await _createBaseTable(db);
         await _createSettingsTable(db);
         await _createWorksTables(db);
+        await _createOperationalTables(db);
       },
       onOpen: (db) async {
         await _migrateActressesTable(db);
         await _createSettingsTable(db);
         await _createWorksTables(db);
+        await _createOperationalTables(db);
       },
     );
     final factory = _databaseFactoryOverride;
@@ -622,6 +625,127 @@ class AppDatabase {
     ''');
   }
 
+  // Operational tables are additive and idempotent so existing version-1
+  // databases receive the same schema on open without rewriting user data.
+  Future<void> _createOperationalTables(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS work_field_provenance (
+        work_id INTEGER NOT NULL,
+        field TEXT NOT NULL,
+        source TEXT NOT NULL,
+        source_uri TEXT,
+        observed_at TEXT,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (work_id, field),
+        FOREIGN KEY (work_id) REFERENCES works(id) ON DELETE CASCADE
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_work_field_provenance_source '
+      'ON work_field_provenance(source, field)',
+    );
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS scrape_jobs (
+        id TEXT PRIMARY KEY,
+        actress_id INTEGER NOT NULL,
+        actress_name_snapshot TEXT NOT NULL,
+        state TEXT NOT NULL,
+        phase TEXT NOT NULL,
+        options_snapshot TEXT NOT NULL,
+        source_settings_snapshot TEXT NOT NULL,
+        rules_version_snapshot TEXT NOT NULL,
+        rules_snapshot TEXT NOT NULL,
+        retry_target_codes TEXT NOT NULL DEFAULT '[]',
+        discovered_count INTEGER NOT NULL DEFAULT 0,
+        processed_count INTEGER NOT NULL DEFAULT 0,
+        saved_count INTEGER NOT NULL DEFAULT 0,
+        excluded_count INTEGER NOT NULL DEFAULT 0,
+        failed_count INTEGER NOT NULL DEFAULT 0,
+        image_failure_count INTEGER NOT NULL DEFAULT 0,
+        attempt_count INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        started_at TEXT,
+        updated_at TEXT NOT NULL,
+        finished_at TEXT,
+        last_error TEXT,
+        FOREIGN KEY (actress_id) REFERENCES actresses(id) ON DELETE CASCADE
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_scrape_jobs_actress_state '
+      'ON scrape_jobs(actress_id, state, updated_at DESC)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_scrape_jobs_state_updated '
+      'ON scrape_jobs(state, updated_at DESC)',
+    );
+    await db.execute('''
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_scrape_jobs_one_active_per_actress
+      ON scrape_jobs(actress_id)
+      WHERE state IN ('queued', 'running', 'paused', 'waiting_for_verification')
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS scrape_job_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_id TEXT NOT NULL,
+        canonical_code TEXT NOT NULL,
+        observed_raw_code TEXT,
+        state TEXT NOT NULL,
+        stage TEXT,
+        attempt_count INTEGER NOT NULL DEFAULT 0,
+        last_error TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(job_id, canonical_code),
+        FOREIGN KEY (job_id) REFERENCES scrape_jobs(id) ON DELETE CASCADE
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_scrape_job_items_job_state '
+      'ON scrape_job_items(job_id, state, updated_at DESC)',
+    );
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS scrape_job_source_progress (
+        job_id TEXT NOT NULL,
+        source TEXT NOT NULL,
+        phase TEXT NOT NULL,
+        current_value INTEGER NOT NULL DEFAULT 0,
+        total_value INTEGER NOT NULL DEFAULT 0,
+        total_known INTEGER NOT NULL DEFAULT 0,
+        work_code TEXT,
+        state TEXT,
+        last_error TEXT,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (job_id, source),
+        FOREIGN KEY (job_id) REFERENCES scrape_jobs(id) ON DELETE CASCADE
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS scrape_job_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_id TEXT NOT NULL,
+        item_id INTEGER,
+        canonical_code TEXT,
+        source TEXT,
+        severity TEXT NOT NULL,
+        stage TEXT NOT NULL,
+        message TEXT NOT NULL,
+        metadata_json TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (job_id) REFERENCES scrape_jobs(id) ON DELETE CASCADE,
+        FOREIGN KEY (item_id) REFERENCES scrape_job_items(id) ON DELETE SET NULL
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_scrape_job_events_job_time '
+      'ON scrape_job_events(job_id, created_at DESC, id DESC)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_scrape_job_events_source_severity '
+      'ON scrape_job_events(source, severity, created_at DESC)',
+    );
+  }
+
   // 依搜尋、分類與排序條件取得收藏列表。
   Future<List<Map<String, Object?>>> getAllActresses({
     String searchKeyword = '',
@@ -825,6 +949,30 @@ class AppDatabase {
       workId,
       currentActressId: currentActressId,
     );
+    final provenanceRows = await db.query(
+      'work_field_provenance',
+      columns: const [
+        'field',
+        'source',
+        'source_uri',
+        'observed_at',
+        'updated_at',
+      ],
+      where: 'work_id = ?',
+      whereArgs: [workId],
+      orderBy: 'field ASC',
+    );
+    work['field_provenance'] = provenanceRows
+        .map((row) {
+          final item = WorkFieldProvenance.fromRow(row);
+          return <String, Object?>{
+            'field': item.field,
+            'source': item.source,
+            'source_uri': item.sourceUri?.toString(),
+            'observed_at': item.observedAt?.toIso8601String(),
+          };
+        })
+        .toList(growable: false);
     return work;
   }
 
@@ -960,15 +1108,33 @@ class AppDatabase {
     bool missingOnly = false,
     String? performerSource,
     Iterable<WorkPerformer>? performers,
+    Iterable<WorkFieldProvenance>? provenance,
   }) async {
     return runManagedImageLifecycle(() async {
       final db = await database;
       return db.transaction((transaction) async {
+        final existingRows = await transaction.query(
+          'works',
+          columns: _workColumns,
+          where: 'code = ? COLLATE NOCASE',
+          whereArgs: [work.code.trim().toUpperCase()],
+          limit: 1,
+        );
         final workId = await _upsertWork(
           transaction,
           work,
           missingOnly: missingOnly,
         );
+        if (provenance != null) {
+          await _upsertWorkProvenance(
+            transaction,
+            workId: workId,
+            work: work,
+            missingOnly: missingOnly,
+            provenance: provenance,
+            existing: existingRows.firstOrNull,
+          );
+        }
         await transaction.insert('actress_works', {
           'actress_id': actressId,
           'work_id': workId,
@@ -984,6 +1150,39 @@ class AppDatabase {
         return workId;
       });
     });
+  }
+
+  Future<void> _upsertWorkProvenance(
+    DatabaseExecutor executor, {
+    required int workId,
+    required Work work,
+    required bool missingOnly,
+    required Iterable<WorkFieldProvenance> provenance,
+    required Map<String, Object?>? existing,
+  }) async {
+    final values = work.toDatabaseMap();
+    const fields = <String>{
+      'title',
+      'release_date',
+      'duration_minutes',
+      'studio',
+      'publisher',
+      'series',
+    };
+    for (final entry in provenance) {
+      if (!fields.contains(entry.field)) continue;
+      final incoming = values[entry.field];
+      if (incoming == null || incoming.toString().trim().isEmpty) continue;
+      final previous = existing?[entry.field];
+      final previousIsPresent =
+          previous != null && previous.toString().trim().isNotEmpty;
+      if (missingOnly && previousIsPresent) continue;
+      await executor.insert(
+        'work_field_provenance',
+        entry.copyWith(workId: workId).toRow(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
   }
 
   Future<void> _replaceWorkPerformers(

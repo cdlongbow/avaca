@@ -1,0 +1,394 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+
+import '../components/adaptive_page_layout.dart';
+import '../components/aligned_app_bar_back_button.dart';
+import '../components/javbus_verification_dialog.dart';
+import '../core/database.dart';
+import '../core/layout.dart';
+import '../l10n/app_localizations.dart';
+import '../models/scrape_job.dart';
+import '../services/javbus/javbus_verification.dart';
+import '../services/scrape_job_coordinator.dart';
+
+class ScrapeJobDetailView extends StatefulWidget {
+  const ScrapeJobDetailView({
+    super.key,
+    required this.db,
+    required this.coordinator,
+    required this.jobId,
+  });
+
+  final AppDatabase db;
+  final ScrapeJobCoordinator coordinator;
+  final String jobId;
+
+  @override
+  State<ScrapeJobDetailView> createState() => _ScrapeJobDetailViewState();
+}
+
+class _ScrapeJobDetailViewState extends State<ScrapeJobDetailView> {
+  _JobDetailData _detail = const _JobDetailData.empty();
+  bool _loading = true;
+  int _loadGeneration = 0;
+  late final ScrollController _itemsScrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    _itemsScrollController = ScrollController();
+    widget.coordinator.addListener(_handleChanged);
+    widget.coordinator.verificationHandler ??= _showVerification;
+    _reload();
+  }
+
+  @override
+  void dispose() {
+    _loadGeneration++;
+    widget.coordinator.removeListener(_handleChanged);
+    _itemsScrollController.dispose();
+    super.dispose();
+  }
+
+  void _handleChanged() {
+    if (!mounted) return;
+    _reload();
+  }
+
+  void _reload() {
+    if (!mounted) return;
+    final generation = ++_loadGeneration;
+    unawaited(_loadLatest(generation));
+  }
+
+  Future<void> _loadLatest(int generation) async {
+    final detail = await _load();
+    if (!mounted || generation != _loadGeneration) return;
+    setState(() {
+      _detail = detail;
+      _loading = false;
+    });
+  }
+
+  Future<_JobDetailData> _load() async {
+    final job = await widget.coordinator.repository.get(widget.jobId);
+    if (job == null) return const _JobDetailData.empty();
+    return _JobDetailData(
+      job: job,
+      items: await widget.coordinator.repository.listItems(widget.jobId),
+      events: await widget.coordinator.repository.listEvents(widget.jobId),
+    );
+  }
+
+  Future<Map<String, String>?> _showVerification(
+    JavBusVerificationChallenge challenge,
+  ) {
+    if (!mounted) return Future.value(null);
+    return showDialog<Map<String, String>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => JavBusVerificationDialog(challenge: challenge),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        leading: const AlignedAppBarBackButton(),
+        title: Text(AppLocalizations.of(context).scrapeJobDetailTitle),
+      ),
+      body: AdaptivePageLayout(
+        compactBuilder: (context, tokens) => _buildBody(context, tokens),
+        expandedBuilder: (context, tokens) => _buildBody(context, tokens),
+      ),
+    );
+  }
+
+  Widget _buildBody(BuildContext context, AppLayoutTokens tokens) {
+    if (_loading && _detail.job == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    final detail = _detail;
+    final job = detail.job;
+    if (job == null) {
+      return Center(child: Text(AppLocalizations.of(context).dataNotFound));
+    }
+    return ListView(
+      padding: EdgeInsets.only(bottom: tokens.sectionGap * 2),
+      children: [
+        Card(
+          margin: EdgeInsets.zero,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  job.actressNameSnapshot,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 8),
+                Text(_stateLabel(context, job.state)),
+                const SizedBox(height: 4),
+                Text(
+                  AppLocalizations.of(context).scrapeJobProgress(
+                    job.processedCount,
+                    job.savedCount,
+                    job.failedCount,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  AppLocalizations.of(
+                    context,
+                  ).scrapeJobRulesVersion(job.rulesVersionSnapshot),
+                ),
+                if (job.lastError != null) ...[
+                  const SizedBox(height: 12),
+                  _buildDiagnostic(context, job.lastError!),
+                ],
+                const SizedBox(height: 16),
+                _buildActions(context, job),
+              ],
+            ),
+          ),
+        ),
+        SizedBox(height: tokens.sectionGap),
+        _buildSection(
+          context,
+          AppLocalizations.of(context).scrapeJobItems,
+          _buildItemsPanel(context, detail.items),
+        ),
+        SizedBox(height: tokens.sectionGap),
+        _buildSection(
+          context,
+          AppLocalizations.of(context).scrapeJobEvents,
+          detail.events.isEmpty
+              ? Text(AppLocalizations.of(context).scrapeJobNoEvents)
+              : Column(
+                  children: detail.events
+                      .map((event) => _eventTile(context, event))
+                      .toList(),
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDiagnostic(BuildContext context, String diagnostic) {
+    final color = Theme.of(context).colorScheme.error;
+    return Container(
+      key: const Key('scrape-job-diagnostic'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.warning_amber_rounded, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  AppLocalizations.of(context).scrapeJobDiagnostics,
+                  style: TextStyle(color: color, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 4),
+                Text(diagnostic, maxLines: 8, overflow: TextOverflow.ellipsis),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildItemsPanel(BuildContext context, List<ScrapeJobItem> items) {
+    if (items.isEmpty) {
+      return Text(AppLocalizations.of(context).scrapeJobNoItems);
+    }
+
+    final screenHeight = MediaQuery.of(context).size.height;
+    final maxHeight = (screenHeight * 0.42).clamp(180.0, 480.0).toDouble();
+    final estimatedContentHeight = (items.length * 56.0 + 8)
+        .clamp(56.0, maxHeight)
+        .toDouble();
+
+    return SizedBox(
+      key: const Key('scrape-job-items-viewport'),
+      height: estimatedContentHeight,
+      child: Scrollbar(
+        controller: _itemsScrollController,
+        thumbVisibility: items.length > 2,
+        child: ListView.separated(
+          key: const Key('scrape-job-items-list'),
+          controller: _itemsScrollController,
+          primary: false,
+          shrinkWrap: false,
+          padding: const EdgeInsets.only(right: 8),
+          itemCount: items.length,
+          itemBuilder: (context, index) => _itemTile(context, items[index]),
+          separatorBuilder: (_, _) => const Divider(height: 1),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActions(BuildContext context, ScrapeJob job) {
+    final canPause =
+        job.state == ScrapeJobState.running ||
+        job.state == ScrapeJobState.queued;
+    final canResume =
+        job.state == ScrapeJobState.paused ||
+        job.state == ScrapeJobState.waitingForVerification;
+    final canCancel = job.isActive;
+    final canRetry =
+        job.state == ScrapeJobState.failed ||
+        job.state == ScrapeJobState.partial;
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        if (canPause)
+          OutlinedButton.icon(
+            onPressed: () => widget.coordinator.pause(job.id),
+            icon: const Icon(Icons.pause),
+            label: Text(AppLocalizations.of(context).scrapeJobPause),
+          ),
+        if (canResume)
+          FilledButton.icon(
+            onPressed: () => widget.coordinator.resume(job.id),
+            icon: const Icon(Icons.play_arrow),
+            label: Text(AppLocalizations.of(context).scrapeJobResume),
+          ),
+        if (canCancel)
+          TextButton.icon(
+            onPressed: () => widget.coordinator.cancel(job.id),
+            icon: const Icon(Icons.cancel_outlined),
+            label: Text(AppLocalizations.of(context).scrapeJobCancel),
+          ),
+        if (canRetry)
+          OutlinedButton.icon(
+            onPressed: () => widget.coordinator.retryFailed(job.id),
+            icon: const Icon(Icons.replay),
+            label: Text(AppLocalizations.of(context).scrapeJobRetryFailed),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildSection(BuildContext context, String title, Widget child) {
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            child,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _itemTile(BuildContext context, ScrapeJobItem item) {
+    return ListTile(
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(switch (item.state) {
+        ScrapeJobItemState.succeeded => Icons.check,
+        ScrapeJobItemState.failed => Icons.error_outline,
+        ScrapeJobItemState.excluded => Icons.remove_circle_outline,
+        _ => Icons.sync,
+      }),
+      title: Text(item.canonicalCode),
+      subtitle: item.lastError == null
+          ? null
+          : Text(item.lastError!, maxLines: 2, overflow: TextOverflow.ellipsis),
+      trailing: Text(_itemStateLabel(context, item.state)),
+    );
+  }
+
+  Widget _eventTile(BuildContext context, ScrapeJobEvent event) {
+    return ListTile(
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(
+        event.severity == ScrapeJobEventSeverity.error
+            ? Icons.error_outline
+            : Icons.info_outline,
+      ),
+      title: Text(event.message),
+      subtitle: Text(
+        '${_phaseLabel(context, event.stage)} · ${event.createdAt.toLocal()}',
+      ),
+    );
+  }
+
+  String _stateLabel(BuildContext context, ScrapeJobState state) {
+    final l10n = AppLocalizations.of(context);
+    return switch (state) {
+      ScrapeJobState.queued => l10n.scrapeJobStateQueued,
+      ScrapeJobState.running => l10n.scrapeJobStateRunning,
+      ScrapeJobState.paused => l10n.scrapeJobStatePaused,
+      ScrapeJobState.waitingForVerification => l10n.scrapeJobStateWaiting,
+      ScrapeJobState.succeeded => l10n.scrapeJobStateSucceeded,
+      ScrapeJobState.partial => l10n.scrapeJobStatePartial,
+      ScrapeJobState.failed => l10n.scrapeJobStateFailed,
+      ScrapeJobState.cancelled => l10n.scrapeJobStateCancelled,
+    };
+  }
+
+  String _itemStateLabel(BuildContext context, ScrapeJobItemState state) {
+    final l10n = AppLocalizations.of(context);
+    return switch (state) {
+      ScrapeJobItemState.queued => l10n.scrapeJobStateQueued,
+      ScrapeJobItemState.running => l10n.scrapeJobStateRunning,
+      ScrapeJobItemState.succeeded => l10n.scrapeJobStateSucceeded,
+      ScrapeJobItemState.excluded => l10n.scrapeJobStateExcluded,
+      ScrapeJobItemState.failed => l10n.scrapeJobStateFailed,
+      ScrapeJobItemState.cancelled => l10n.scrapeJobStateCancelled,
+    };
+  }
+
+  String _phaseLabel(BuildContext context, ScrapeJobPhase phase) {
+    final l10n = AppLocalizations.of(context);
+    return switch (phase) {
+      ScrapeJobPhase.queued => l10n.scrapeJobStateQueued,
+      ScrapeJobPhase.collectingSources => l10n.scrapePhaseCollecting,
+      ScrapeJobPhase.syncingActress => l10n.scrapePhaseSyncingActress,
+      ScrapeJobPhase.fetchingDetails => l10n.scrapePhaseFetchingDetails,
+      ScrapeJobPhase.resolvingWorks => l10n.scrapePhaseResolvingWorks,
+      ScrapeJobPhase.savingWorks ||
+      ScrapeJobPhase.downloadingImages => l10n.scrapePhaseSavingWorks,
+      ScrapeJobPhase.completed => l10n.scrapePhaseCompleted,
+    };
+  }
+}
+
+class _JobDetailData {
+  const _JobDetailData({
+    required this.job,
+    required this.items,
+    required this.events,
+  });
+  const _JobDetailData.empty()
+    : job = null,
+      items = const [],
+      events = const [];
+
+  final ScrapeJob? job;
+  final List<ScrapeJobItem> items;
+  final List<ScrapeJobEvent> events;
+}

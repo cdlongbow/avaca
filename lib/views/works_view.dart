@@ -29,6 +29,7 @@ import '../services/scrape/scrape_image_downloader.dart';
 import '../services/scrape/scrape_models.dart';
 import '../services/scrape/scrape_source.dart';
 import '../services/scrape/scrape_source_registry.dart';
+import '../services/scrape_job_coordinator.dart';
 import '../services/works_scrape_service.dart';
 import '../controllers/settings_controller.dart';
 import 'work_detail_view.dart';
@@ -43,6 +44,7 @@ typedef WorksScrapeExecutor =
 enum _WorksMenuAction {
   search,
   scrape,
+  jobs,
   filterStored,
   filterNotStored,
   filterAll,
@@ -56,11 +58,13 @@ class WorksView extends StatefulWidget {
     required this.db,
     required this.actressId,
     this.scrapeExecutor,
+    this.scrapeJobCoordinator,
   });
 
   final AppDatabase db;
   final int actressId;
   final WorksScrapeExecutor? scrapeExecutor;
+  final ScrapeJobCoordinator? scrapeJobCoordinator;
 
   @override
   State<WorksView> createState() => _WorksViewState();
@@ -359,6 +363,8 @@ class _WorksViewState extends State<WorksView> {
             _openSearch();
           case _WorksMenuAction.scrape:
             _openScrapeSettings();
+          case _WorksMenuAction.jobs:
+            Navigator.of(context).pushNamed('/scrape-jobs');
           case _WorksMenuAction.filterStored:
             controller.changeStorageFilter(WorkStorageFilter.stored);
           case _WorksMenuAction.filterNotStored:
@@ -389,6 +395,17 @@ class _WorksViewState extends State<WorksView> {
               const Icon(Icons.manage_search),
               const SizedBox(width: 12),
               Text(l10n.scrapeWorks),
+            ],
+          ),
+        ),
+        PopupMenuItem<_WorksMenuAction>(
+          key: const Key('works-scrape-jobs-menu-item'),
+          value: _WorksMenuAction.jobs,
+          child: Row(
+            children: [
+              const Icon(Icons.queue_play_next_outlined),
+              const SizedBox(width: 12),
+              Text(l10n.scrapeJobsTitle),
             ],
           ),
         ),
@@ -720,6 +737,28 @@ class _WorksViewState extends State<WorksView> {
     }
 
     await saveOptions(options);
+
+    final coordinator = widget.scrapeJobCoordinator;
+    if (coordinator != null) {
+      ScrapeSourceSettings sourceSettings;
+      try {
+        sourceSettings = ScrapeSourceSettings.decode(
+          await widget.db.getSetting(scrapeSourceSettingsKey),
+        );
+      } catch (_) {
+        sourceSettings = const ScrapeSourceSettings();
+      }
+      final job = await coordinator.enqueue(
+        actressId: widget.actressId,
+        actressName: controller.actressName,
+        options: options,
+        sourceSettings: sourceSettings,
+      );
+      if (!mounted) return;
+      await Navigator.of(context).pushNamed('/scrape-job/${job.id}');
+      await controller.reloadWorks();
+      return;
+    }
 
     await _runScrape(options);
   }

@@ -13,6 +13,7 @@ import 'package:avaca/services/javbus/prefix_exclusion.dart';
 import 'package:avaca/services/javbus/work_image_downloader.dart';
 import 'package:avaca/services/javbus/work_image_policy.dart';
 import 'package:avaca/services/javbus/work_image_route_resolver.dart';
+import 'package:avaca/services/scrape_run_observer.dart';
 import 'package:avaca/services/works_scrape_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as image;
@@ -84,6 +85,7 @@ void main() {
       final client = _FakeJavBusClient();
       final workImages = _FakeWorkImageDownloader();
       final actressImages = _FakeActressImageDownloader();
+      final observer = _RecordingScrapeObserver();
       final service = WorksScrapeService(
         db: database,
         client: client,
@@ -100,6 +102,7 @@ void main() {
           excludedPrefixes: ['fc2-ppv_123'],
         ),
         sourceSettings: const ScrapeSourceSettings.legacyJavBus(),
+        observer: observer,
       );
 
       expect(client.receivedExclusions, isEmpty);
@@ -138,6 +141,10 @@ void main() {
       expect(result.saved, 1);
       expect(result.excluded, 1);
       expect(result.actressImageStatus, ActressImageSyncStatus.replaced);
+      expect(
+        observer.outcomes,
+        contains(const (code: 'ABF-367', state: ScrapeWorkOutcomeState.saved)),
+      );
     },
   );
 
@@ -522,6 +529,22 @@ class _NeverTransport implements JavBusTransport {
   @override
   Future<String> get(Uri uri) {
     throw StateError('Unexpected live request: $uri');
+  }
+}
+
+class _RecordingScrapeObserver extends ScrapeRunObserver {
+  final outcomes = <({String code, ScrapeWorkOutcomeState state})>[];
+
+  @override
+  void onWorkOutcome({
+    required String code,
+    required ScrapeSourceId source,
+    required ScrapeWorkOutcomeState outcome,
+    Object? error,
+    String? reason,
+    Iterable<String> imageFailureVariants = const <String>[],
+  }) {
+    outcomes.add((code: code, state: outcome));
   }
 }
 

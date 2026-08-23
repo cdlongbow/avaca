@@ -7,6 +7,7 @@ class WorkScrapeOptions {
     this.fillMissingOnly = true,
     this.maxActressCount,
     this.excludedPrefixes = const [],
+    this.retryWorkCodes = const [],
   }) : assert(maxActressCount == null || maxActressCount > 0);
 
   final bool syncDetails;
@@ -14,6 +15,17 @@ class WorkScrapeOptions {
   final bool fillMissingOnly;
   final int? maxActressCount;
   final List<String> excludedPrefixes;
+  final List<String> retryWorkCodes;
+
+  WorkScrapeOptions copyWith({List<String>? retryWorkCodes}) =>
+      WorkScrapeOptions(
+        syncDetails: syncDetails,
+        replaceActressImage: replaceActressImage,
+        fillMissingOnly: fillMissingOnly,
+        maxActressCount: maxActressCount,
+        excludedPrefixes: excludedPrefixes,
+        retryWorkCodes: retryWorkCodes ?? this.retryWorkCodes,
+      );
 
   String encode() {
     return jsonEncode({
@@ -22,6 +34,7 @@ class WorkScrapeOptions {
       'fillMissingOnly': fillMissingOnly,
       'maxActressCount': maxActressCount,
       'excludedPrefixes': excludedPrefixes,
+      'retryWorkCodes': retryWorkCodes,
     });
   }
 
@@ -37,6 +50,7 @@ class WorkScrapeOptions {
       }
       final prefixes = json['excludedPrefixes'];
       final rawMaxActressCount = json['maxActressCount'];
+      final retryCodes = json['retryWorkCodes'];
       return WorkScrapeOptions(
         syncDetails: json['syncDetails'] is bool
             ? json['syncDetails'] as bool
@@ -52,6 +66,14 @@ class WorkScrapeOptions {
             : null,
         excludedPrefixes: prefixes is List
             ? prefixes
+                  .whereType<String>()
+                  .map((value) => value.trim().toUpperCase())
+                  .where((value) => value.isNotEmpty)
+                  .toSet()
+                  .toList(growable: false)
+            : const [],
+        retryWorkCodes: retryCodes is List
+            ? retryCodes
                   .whereType<String>()
                   .map((value) => value.trim().toUpperCase())
                   .where((value) => value.isNotEmpty)

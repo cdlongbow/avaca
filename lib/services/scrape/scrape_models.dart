@@ -2,6 +2,13 @@ import '../../models/scraped_actress_details.dart';
 import '../../models/work.dart';
 import '../../models/scrape_source_settings.dart';
 
+final class WorkFieldSourceEvidence {
+  const WorkFieldSourceEvidence({required this.source, this.sourceUri});
+
+  final String source;
+  final Uri? sourceUri;
+}
+
 final class ScrapeActressSearchResult {
   const ScrapeActressSearchResult({
     required this.source,
@@ -63,6 +70,8 @@ final class ScrapeWorkDetails {
     this.performers,
     this.imageUris = const [],
     this.originalImageEvidenceUris = const [],
+    this.fieldSources = const {},
+    this.sourceUri,
   });
 
   final ScrapeSourceId source;
@@ -78,6 +87,26 @@ final class ScrapeWorkDetails {
   final List<WorkPerformer>? performers;
   final List<Uri> imageUris;
   final List<Uri> originalImageEvidenceUris;
+  final Map<String, WorkFieldSourceEvidence> fieldSources;
+  final Uri? sourceUri;
+
+  ScrapeWorkDetails copyWith({Uri? sourceUri}) => ScrapeWorkDetails(
+    source: source,
+    code: code,
+    rawCode: rawCode,
+    title: title,
+    releaseDate: releaseDate,
+    durationMinutes: durationMinutes,
+    studio: studio,
+    publisher: publisher,
+    series: series,
+    performerCount: performerCount,
+    performers: performers,
+    imageUris: imageUris,
+    originalImageEvidenceUris: originalImageEvidenceUris,
+    fieldSources: fieldSources,
+    sourceUri: sourceUri ?? this.sourceUri,
+  );
 
   Work toWork({String? cardImagePath, String? detailImagePath}) {
     return Work(
