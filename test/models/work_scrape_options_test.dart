@@ -9,11 +9,13 @@ void main() {
       fillMissingOnly: false,
       maxActressCount: 3,
       excludedPrefixes: ['FC2-PPV_123', '1PON'],
+      scrapeAliases: true,
     );
 
     final decoded = WorkScrapeOptions.decode(options.encode());
     expect(decoded.maxActressCount, 3);
     expect(decoded.excludedPrefixes, ['FC2-PPV_123', '1PON']);
+    expect(decoded.scrapeAliases, isTrue);
   });
 
   test('normalizes persisted prefixes without limiting their characters', () {

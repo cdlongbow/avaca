@@ -704,6 +704,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get scrapeSourceWorksTitle => '作品の取得元';
 
   @override
+  String get scrapeSourceAliasTitle => '女優別名の取得元';
+
+  @override
   String get scrapeSourceMinnanoAv => 'みんなのAV';
 
   @override
@@ -741,6 +744,13 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get scrapeSourceVerificationRequired => '確認が必要';
+
+  @override
+  String get scrapeAliases => '別名を取得';
+
+  @override
+  String get scrapeAliasesDescription =>
+      '別名の取得元で見つかった名前を、現在の名前を除いて女優の別名に保存します。';
 
   @override
   String get scrapePartial => '一部の取得元または作品を処理できませんでした。';
@@ -1010,7 +1020,13 @@ class AppLocalizationsJa extends AppLocalizations {
   String get dataHealthTitle => 'データ健全性';
 
   @override
-  String get dataHealthSubtitle => '作品データ、スクレイプジョブ、ソースエラーを確認します。';
+  String get dataHealthSubtitle =>
+      '件数、不足している作品項目や画像、項目ソース、保留中の削除、取得元エラーを確認します。';
+
+  @override
+  String dataHealthSectionUnavailable(String section) {
+    return 'このセクションを読み込めませんでした: $section';
+  }
 
   @override
   String get dataHealthRefresh => '更新';
@@ -1050,6 +1066,34 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get scrapeJobsEmpty => 'スクレイプジョブはありません。';
+
+  @override
+  String scrapeJobsSelectedCount(int count) {
+    return '$count 件を選択中';
+  }
+
+  @override
+  String get scrapeJobsDelete => '削除';
+
+  @override
+  String get scrapeJobsDeleteTitle => '選択したスクレイプジョブを削除しますか？';
+
+  @override
+  String scrapeJobsDeleteMessage(int count) {
+    return '$count 件の完了したスクレイプジョブの記録を削除しますか？作品、女優、設定は変更されません。';
+  }
+
+  @override
+  String get scrapeJobsDeleteActive =>
+      '実行中または待機中のジョブは削除できません。完了したジョブだけを選択してください。';
+
+  @override
+  String scrapeJobsDeleted(int count) {
+    return '$count 件のスクレイプジョブを削除しました。';
+  }
+
+  @override
+  String get scrapeJobsDeleteFailed => 'スクレイプジョブの記録を削除できませんでした。';
 
   @override
   String get scrapeJobDetailTitle => 'スクレイプジョブ詳細';
@@ -1831,6 +1875,9 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
   String get scrapeSourceWorksTitle => '作品の取得元';
 
   @override
+  String get scrapeSourceAliasTitle => '女優別名の取得元';
+
+  @override
   String get scrapeSourceMinnanoAv => 'みんなのAV';
 
   @override
@@ -1868,6 +1915,13 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
 
   @override
   String get scrapeSourceVerificationRequired => '確認が必要';
+
+  @override
+  String get scrapeAliases => '別名を取得';
+
+  @override
+  String get scrapeAliasesDescription =>
+      '別名の取得元で見つかった名前を、現在の名前を除いて女優の別名に保存します。';
 
   @override
   String get scrapePartial => '一部の取得元または作品を処理できませんでした。';
@@ -2137,7 +2191,13 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
   String get dataHealthTitle => 'データ健全性';
 
   @override
-  String get dataHealthSubtitle => '作品データ、スクレイプジョブ、ソースエラーを確認します。';
+  String get dataHealthSubtitle =>
+      '件数、不足している作品項目や画像、項目ソース、保留中の削除、取得元エラーを確認します。';
+
+  @override
+  String dataHealthSectionUnavailable(String section) {
+    return 'このセクションを読み込めませんでした: $section';
+  }
 
   @override
   String get dataHealthRefresh => '更新';
@@ -2177,6 +2237,34 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
 
   @override
   String get scrapeJobsEmpty => 'スクレイプジョブはありません。';
+
+  @override
+  String scrapeJobsSelectedCount(int count) {
+    return '$count 件を選択中';
+  }
+
+  @override
+  String get scrapeJobsDelete => '削除';
+
+  @override
+  String get scrapeJobsDeleteTitle => '選択したスクレイプジョブを削除しますか？';
+
+  @override
+  String scrapeJobsDeleteMessage(int count) {
+    return '$count 件の完了したスクレイプジョブの記録を削除しますか？作品、女優、設定は変更されません。';
+  }
+
+  @override
+  String get scrapeJobsDeleteActive =>
+      '実行中または待機中のジョブは削除できません。完了したジョブだけを選択してください。';
+
+  @override
+  String scrapeJobsDeleted(int count) {
+    return '$count 件のスクレイプジョブを削除しました。';
+  }
+
+  @override
+  String get scrapeJobsDeleteFailed => 'スクレイプジョブの記録を削除できませんでした。';
 
   @override
   String get scrapeJobDetailTitle => 'スクレイプジョブ詳細';

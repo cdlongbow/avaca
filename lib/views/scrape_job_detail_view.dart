@@ -139,12 +139,6 @@ class _ScrapeJobDetailViewState extends State<ScrapeJobDetailView> {
                     job.failedCount,
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  AppLocalizations.of(
-                    context,
-                  ).scrapeJobRulesVersion(job.rulesVersionSnapshot),
-                ),
                 if (job.lastError != null) ...[
                   const SizedBox(height: 12),
                   _buildDiagnostic(context, job.lastError!),

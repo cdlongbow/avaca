@@ -46,29 +46,35 @@ final class ScrapeSourceSettings {
   const ScrapeSourceSettings({
     this.actressDetailsSource = ScrapeSourceId.minnanoAv,
     this.worksSource = WorksSourceSelection.javbus,
+    this.aliasSource = ScrapeSourceId.avbase,
   });
 
   const ScrapeSourceSettings.legacyJavBus()
     : actressDetailsSource = ScrapeSourceId.javbus,
-      worksSource = WorksSourceSelection.javbus;
+      worksSource = WorksSourceSelection.javbus,
+      aliasSource = ScrapeSourceId.avbase;
 
   final ScrapeSourceId actressDetailsSource;
   final WorksSourceSelection worksSource;
+  final ScrapeSourceId aliasSource;
 
   String encode() {
     return jsonEncode({
       'actressDetailsSource': actressDetailsSource.storageValue,
       'worksSource': worksSource.storageValue,
+      'aliasSource': aliasSource.storageValue,
     });
   }
 
   ScrapeSourceSettings copyWith({
     ScrapeSourceId? actressDetailsSource,
     WorksSourceSelection? worksSource,
+    ScrapeSourceId? aliasSource,
   }) {
     return ScrapeSourceSettings(
       actressDetailsSource: actressDetailsSource ?? this.actressDetailsSource,
       worksSource: worksSource ?? this.worksSource,
+      aliasSource: aliasSource ?? this.aliasSource,
     );
   }
 
@@ -88,9 +94,13 @@ final class ScrapeSourceSettings {
       final works = WorksSourceSelection.fromStorage(
         decoded['worksSource']?.toString(),
       );
+      final aliases = ScrapeSourceId.fromStorage(
+        decoded['aliasSource']?.toString(),
+      );
       return ScrapeSourceSettings(
         actressDetailsSource: details ?? ScrapeSourceId.minnanoAv,
         worksSource: works ?? WorksSourceSelection.javbus,
+        aliasSource: aliases ?? ScrapeSourceId.avbase,
       );
     } on Object {
       return const ScrapeSourceSettings();

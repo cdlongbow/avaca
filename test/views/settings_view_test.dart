@@ -169,6 +169,7 @@ void main() {
 
     expect(find.text('Actress details source'), findsOneWidget);
     expect(find.text('Works source'), findsOneWidget);
+    expect(find.text('Actress aliases source'), findsOneWidget);
     _expectBorderlessExpansionTile(
       tester,
       'Actress details source',
@@ -204,6 +205,7 @@ void main() {
     );
     expect(settings.actressDetailsSource, ScrapeSourceId.javbus);
     expect(settings.worksSource, WorksSourceSelection.javbus);
+    expect(settings.aliasSource, ScrapeSourceId.avbase);
 
     // Reopening the category must read the latest persisted pair rather than
     // restoring either source's default.
@@ -230,6 +232,7 @@ void main() {
     );
     expect(reopenedSettings.actressDetailsSource, ScrapeSourceId.javbus);
     expect(reopenedSettings.worksSource, WorksSourceSelection.javbus);
+    expect(reopenedSettings.aliasSource, ScrapeSourceId.avbase);
   });
 
   testWidgets('scrape source connections can be retested and verified', (

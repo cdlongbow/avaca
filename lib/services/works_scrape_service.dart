@@ -345,6 +345,7 @@ class WorksScrapeService {
     final requestedWorkIds = ScrapeSourceRegistry.resolveWorksSources(
       settings.worksSource,
     );
+    final aliasSourceId = options.scrapeAliases ? settings.aliasSource : null;
     _detailsSource = settings.actressDetailsSource;
     _worksSources = List.unmodifiable(requestedWorkIds);
     final sourceResults = <ScrapeSourceId, ScrapeSourceRunResult>{};
@@ -355,6 +356,10 @@ class WorksScrapeService {
       ...requestedWorkIds,
       if (!requestedWorkIds.contains(settings.actressDetailsSource))
         settings.actressDetailsSource,
+      if (aliasSourceId != null &&
+          !requestedWorkIds.contains(aliasSourceId) &&
+          aliasSourceId != settings.actressDetailsSource)
+        aliasSourceId,
     ];
 
     // Start every source collection immediately.  Each works source then
@@ -399,7 +404,8 @@ class WorksScrapeService {
         collectedById[sourceId] = collected;
       }
       if (requestedWorkIds.contains(sourceId) ||
-          sourceId == settings.actressDetailsSource) {
+          sourceId == settings.actressDetailsSource ||
+          sourceId == aliasSourceId) {
         sourceResults[sourceId] = outcome.result;
         _observer?.onSourceResult(outcome.result);
       }
@@ -493,6 +499,38 @@ class WorksScrapeService {
       }
     }
 
+    ScrapeSourceRunResult? aliasSyncResult;
+    final aliasOutcome = aliasSourceId == null
+        ? null
+        : aliasSourceId == detailsSourceId
+        ? detailsOutcome
+        : await collectionFutures[aliasSourceId];
+    final aliasId = aliasSourceId;
+    if (aliasOutcome != null && aliasId != null && aliasId != detailsSourceId) {
+      recordCollectionOutcome(aliasId, aliasOutcome);
+    }
+    final aliasPages = aliasOutcome?.collected?.pages.values.toList(
+      growable: false,
+    );
+    if (aliasPages != null &&
+        aliasPages.isNotEmpty &&
+        !_isCancelled(cancellationToken)) {
+      try {
+        await _syncActressAliases(actressId: actressId, pages: aliasPages);
+      } on Object catch (error) {
+        if (aliasId != null) {
+          final failedAliasResult = ScrapeSourceRunResult(
+            source: aliasId,
+            state: ScrapeSourceRunState.failed,
+            error: error,
+          );
+          aliasSyncResult = failedAliasResult;
+          sourceResults[aliasId] = failedAliasResult;
+          _observer?.onSourceResult(failedAliasResult);
+        }
+      }
+    }
+
     final pipelineResults = await Future.wait(sourcePipelines);
     for (final pipeline in pipelineResults) {
       recordCollectionOutcome(
@@ -502,6 +540,9 @@ class WorksScrapeService {
           result: pipeline.result,
         ),
       );
+    }
+    if (aliasSyncResult != null) {
+      sourceResults[aliasSyncResult.source] = aliasSyncResult;
     }
 
     if (_isCancelled(cancellationToken) && !streamImagesWhileFetching) {
@@ -1874,6 +1915,18 @@ class WorksScrapeService {
       bust: firstValue((details) => details.bust),
       waist: firstValue((details) => details.waist),
       hip: firstValue((details) => details.hip),
+    );
+  }
+
+  Future<void> _syncActressAliases({
+    required int actressId,
+    required List<ScrapeActressPage> pages,
+  }) async {
+    final existing = await db.getActressAliases(actressId);
+    final scraped = pages.expand((page) => page.aliases);
+    await db.replaceActressAliases(
+      actressId: actressId,
+      aliases: [...existing, ...scraped],
     );
   }
 

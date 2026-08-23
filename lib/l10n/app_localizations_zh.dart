@@ -702,6 +702,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get scrapeSourceWorksTitle => '作品來源';
 
   @override
+  String get scrapeSourceAliasTitle => '女優别名来源';
+
+  @override
   String get scrapeSourceMinnanoAv => 'Minnano AV';
 
   @override
@@ -739,6 +742,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get scrapeSourceVerificationRequired => '需要驗證';
+
+  @override
+  String get scrapeAliases => '刮削别名';
+
+  @override
+  String get scrapeAliasesDescription => '将别名来源找到的名称写入女优别名，不包含当前名称。';
 
   @override
   String get scrapePartial => '部分來源或作品無法處理。';
@@ -1002,7 +1011,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get dataHealthTitle => '資料健康度';
 
   @override
-  String get dataHealthSubtitle => '查看作品資料、刮削工作與來源錯誤的可觀測性摘要。';
+  String get dataHealthSubtitle => '检查数量、作品字段与图片缺漏、字段来源、待清理文件及刮削来源错误。';
+
+  @override
+  String dataHealthSectionUnavailable(String section) {
+    return '此区段无法加载：$section';
+  }
 
   @override
   String get dataHealthRefresh => '重新整理';
@@ -1042,6 +1056,33 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get scrapeJobsEmpty => '目前沒有刮削工作。';
+
+  @override
+  String scrapeJobsSelectedCount(int count) {
+    return '已选择 $count 项';
+  }
+
+  @override
+  String get scrapeJobsDelete => '删除';
+
+  @override
+  String get scrapeJobsDeleteTitle => '删除选中的刮削工作？';
+
+  @override
+  String scrapeJobsDeleteMessage(int count) {
+    return '删除 $count 条已结束的刮削记录？不会删除作品、女优或设置。';
+  }
+
+  @override
+  String get scrapeJobsDeleteActive => '进行中的刮削工作不能删除，请只选择已结束的工作。';
+
+  @override
+  String scrapeJobsDeleted(int count) {
+    return '已删除 $count 条刮削记录。';
+  }
+
+  @override
+  String get scrapeJobsDeleteFailed => '删除刮削记录失败。';
 
   @override
   String get scrapeJobDetailTitle => '刮削工作詳情';
@@ -1821,6 +1862,9 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get scrapeSourceWorksTitle => '作品来源';
 
   @override
+  String get scrapeSourceAliasTitle => '女优别名来源';
+
+  @override
   String get scrapeSourceMinnanoAv => 'Minnano AV';
 
   @override
@@ -1858,6 +1902,12 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get scrapeSourceVerificationRequired => '需要验证';
+
+  @override
+  String get scrapeAliases => '刮削别名';
+
+  @override
+  String get scrapeAliasesDescription => '将别名来源找到的名称写入女优别名，不包含当前名称。';
 
   @override
   String get scrapePartial => '部分来源或作品无法处理。';
@@ -2121,7 +2171,12 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get dataHealthTitle => '数据健康度';
 
   @override
-  String get dataHealthSubtitle => '查看作品数据、刮削任务与来源错误的可观测性摘要。';
+  String get dataHealthSubtitle => '检查数量、作品字段与图片缺漏、字段来源、待清理文件及刮削来源错误。';
+
+  @override
+  String dataHealthSectionUnavailable(String section) {
+    return '此区段无法加载：$section';
+  }
 
   @override
   String get dataHealthRefresh => '刷新';
@@ -2161,6 +2216,33 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get scrapeJobsEmpty => '目前没有刮削任务。';
+
+  @override
+  String scrapeJobsSelectedCount(int count) {
+    return '已选择 $count 项';
+  }
+
+  @override
+  String get scrapeJobsDelete => '删除';
+
+  @override
+  String get scrapeJobsDeleteTitle => '删除选中的刮削任务？';
+
+  @override
+  String scrapeJobsDeleteMessage(int count) {
+    return '删除 $count 条已结束的刮削记录？不会删除作品、女优或设置。';
+  }
+
+  @override
+  String get scrapeJobsDeleteActive => '进行中的刮削任务不能删除，请只选择已结束的任务。';
+
+  @override
+  String scrapeJobsDeleted(int count) {
+    return '已删除 $count 条刮削记录。';
+  }
+
+  @override
+  String get scrapeJobsDeleteFailed => '删除刮削记录失败。';
 
   @override
   String get scrapeJobDetailTitle => '刮削任务详情';
@@ -2940,6 +3022,9 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get scrapeSourceWorksTitle => '作品來源';
 
   @override
+  String get scrapeSourceAliasTitle => '女優別名來源';
+
+  @override
   String get scrapeSourceMinnanoAv => 'Minnano AV';
 
   @override
@@ -2977,6 +3062,12 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get scrapeSourceVerificationRequired => '需要驗證';
+
+  @override
+  String get scrapeAliases => '刮削別名';
+
+  @override
+  String get scrapeAliasesDescription => '將別名來源找到的名稱寫入女優別名，不包含目前名稱。';
 
   @override
   String get scrapePartial => '部分來源或作品無法處理。';
@@ -3240,7 +3331,12 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get dataHealthTitle => '資料健康度';
 
   @override
-  String get dataHealthSubtitle => '查看作品資料、刮削工作與來源錯誤的可觀測性摘要。';
+  String get dataHealthSubtitle => '檢查數量、作品欄位與圖片缺漏、欄位來源、待清理檔案及刮削來源錯誤。';
+
+  @override
+  String dataHealthSectionUnavailable(String section) {
+    return '此區段無法載入：$section';
+  }
 
   @override
   String get dataHealthRefresh => '重新整理';
@@ -3280,6 +3376,33 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get scrapeJobsEmpty => '目前沒有刮削工作。';
+
+  @override
+  String scrapeJobsSelectedCount(int count) {
+    return '已選取 $count 項';
+  }
+
+  @override
+  String get scrapeJobsDelete => '刪除';
+
+  @override
+  String get scrapeJobsDeleteTitle => '刪除選取的刮削工作？';
+
+  @override
+  String scrapeJobsDeleteMessage(int count) {
+    return '刪除 $count 筆已結束的刮削紀錄？不會刪除作品、女優或設定。';
+  }
+
+  @override
+  String get scrapeJobsDeleteActive => '進行中的刮削工作不能刪除，請只選取已結束的工作。';
+
+  @override
+  String scrapeJobsDeleted(int count) {
+    return '已刪除 $count 筆刮削紀錄。';
+  }
+
+  @override
+  String get scrapeJobsDeleteFailed => '刪除刮削紀錄失敗。';
 
   @override
   String get scrapeJobDetailTitle => '刮削工作詳情';

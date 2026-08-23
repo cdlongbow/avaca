@@ -150,6 +150,35 @@ void main() {
     expect(find.text('新女優'), findsOneWidget);
     expect(find.text('舊女優'), findsNothing);
   });
+
+  testWidgets('long press selects a job and exposes the delete action', (
+    tester,
+  ) async {
+    final db = AppDatabase();
+    final job = _job(
+      id: 'terminal-job',
+      name: '可刪除女優',
+      state: ScrapeJobState.succeeded,
+    );
+    final repository = _FakeScrapeJobRepository(db: db, job: job);
+    final coordinator = ScrapeJobCoordinator(db: db, repository: repository);
+    addTearDown(coordinator.dispose);
+
+    await tester.pumpWidget(
+      _testApp(ScrapeJobsView(db: db, coordinator: coordinator)),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    await tester.longPress(find.text('可刪除女優'));
+    await tester.pump();
+
+    expect(find.text('已選取 1 項'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('scrape-jobs-delete-selected')),
+      findsOneWidget,
+    );
+  });
 }
 
 Widget _testApp(Widget child) {
@@ -161,13 +190,23 @@ Widget _testApp(Widget child) {
   );
 }
 
-ScrapeJob _job({required String id, required String name}) {
+ScrapeJob _job({
+  required String id,
+  required String name,
+  ScrapeJobState state = ScrapeJobState.running,
+}) {
   return ScrapeJob(
     id: id,
     actressId: 1,
     actressNameSnapshot: name,
-    state: ScrapeJobState.running,
-    phase: ScrapeJobPhase.savingWorks,
+    state: state,
+    phase: switch (state) {
+      ScrapeJobState.succeeded ||
+      ScrapeJobState.partial ||
+      ScrapeJobState.failed ||
+      ScrapeJobState.cancelled => ScrapeJobPhase.completed,
+      _ => ScrapeJobPhase.savingWorks,
+    },
     optionsSnapshot: '{}',
     sourceSettingsSnapshot: '{}',
     rulesVersionSnapshot: 'builtin-1',

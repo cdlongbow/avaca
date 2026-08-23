@@ -32,6 +32,7 @@ class _PrefixRouteRulesBodyState extends State<PrefixRouteRulesBody> {
   late final PrefixRouteRepository _repository;
   late final PrefixRouteFilePicker _filePicker;
   late final TextEditingController _searchController;
+  final _rulesScrollController = ScrollController();
   List<WorkImagePrefixRouteRule> _rules = const [];
   bool _isLoading = true;
   String? _loadError;
@@ -51,6 +52,7 @@ class _PrefixRouteRulesBodyState extends State<PrefixRouteRulesBody> {
     _searchController
       ..removeListener(_onSearchChanged)
       ..dispose();
+    _rulesScrollController.dispose();
     super.dispose();
   }
 
@@ -167,11 +169,34 @@ class _PrefixRouteRulesBodyState extends State<PrefixRouteRulesBody> {
                 : localizations.prefixRouteNoSearchResults,
           )
         else
-          for (final rule in filteredRules) ...[
-            _ruleCard(context, rule),
-            const SizedBox(height: 8),
-          ],
+          _rulesViewport(context, filteredRules),
       ],
+    );
+  }
+
+  Widget _rulesViewport(
+    BuildContext context,
+    List<WorkImagePrefixRouteRule> rules,
+  ) {
+    final maxHeight = (MediaQuery.sizeOf(context).height * 0.46).clamp(
+      220.0,
+      480.0,
+    );
+    return ConstrainedBox(
+      key: const ValueKey('prefix-route-rules-viewport'),
+      constraints: BoxConstraints(maxHeight: maxHeight),
+      child: Scrollbar(
+        controller: _rulesScrollController,
+        thumbVisibility: rules.length > 8,
+        child: ListView.separated(
+          controller: _rulesScrollController,
+          primary: false,
+          shrinkWrap: true,
+          itemCount: rules.length,
+          separatorBuilder: (_, _) => const SizedBox(height: 8),
+          itemBuilder: (context, index) => _ruleCard(context, rules[index]),
+        ),
+      ),
     );
   }
 

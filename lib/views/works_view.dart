@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -81,6 +82,8 @@ class _WorksViewState extends State<WorksView> {
 
   var deletionBusy = false;
   var searchOpen = false;
+  Timer? _scrapeReloadTimer;
+  int _lastWorkDataRevision = 0;
   late final SettingsController settingsController;
 
   @override
@@ -98,6 +101,12 @@ class _WorksViewState extends State<WorksView> {
     controller.addListener(_handleControllerChanged);
 
     settingsController.addListener(_handleSettingsChanged);
+
+    final coordinator = widget.scrapeJobCoordinator;
+    if (coordinator != null) {
+      _lastWorkDataRevision = coordinator.workDataRevision;
+      coordinator.addListener(_handleScrapeJobChanged);
+    }
   }
 
   @override
@@ -105,6 +114,9 @@ class _WorksViewState extends State<WorksView> {
     controller.removeListener(_handleControllerChanged);
 
     settingsController.removeListener(_handleSettingsChanged);
+
+    _scrapeReloadTimer?.cancel();
+    widget.scrapeJobCoordinator?.removeListener(_handleScrapeJobChanged);
 
     settingsController.dispose();
 
@@ -126,6 +138,18 @@ class _WorksViewState extends State<WorksView> {
     if (mounted) {
       setState(() {});
     }
+  }
+
+  void _handleScrapeJobChanged() {
+    final coordinator = widget.scrapeJobCoordinator;
+    if (!mounted || coordinator == null) return;
+    final revision = coordinator.workDataRevision;
+    if (revision <= _lastWorkDataRevision) return;
+    _lastWorkDataRevision = revision;
+    _scrapeReloadTimer ??= Timer(const Duration(milliseconds: 120), () {
+      _scrapeReloadTimer = null;
+      if (mounted) unawaited(controller.reloadWorks());
+    });
   }
 
   bool get isSelecting => selectedWorkIds.isNotEmpty;
@@ -911,6 +935,9 @@ class _WorksViewState extends State<WorksView> {
       sourceSettings.actressDetailsSource,
       ...ScrapeSourceRegistry.resolveWorksSources(sourceSettings.worksSource),
     };
+    if (options.scrapeAliases) {
+      requestedSourceIds.add(sourceSettings.aliasSource);
+    }
     final configuredSources = <ScrapeSourceId, ScrapeSource>{};
     HttpJavBusTransport? javBusTransport;
     HttpMinnanoTransport? minnanoTransport;
@@ -1181,6 +1208,7 @@ class _ScrapeSettingsDialogState extends State<_ScrapeSettingsDialog> {
   final maxActressCountController = TextEditingController();
   final prefixes = <String>[];
   late bool syncDetails;
+  late bool scrapeAliases;
   late bool replaceImage;
   late bool fillMissingOnly;
   bool prefixesExpanded = false;
@@ -1190,6 +1218,7 @@ class _ScrapeSettingsDialogState extends State<_ScrapeSettingsDialog> {
   void initState() {
     super.initState();
     syncDetails = widget.initial.syncDetails;
+    scrapeAliases = widget.initial.scrapeAliases;
     replaceImage = widget.initial.replaceActressImage;
     fillMissingOnly = widget.initial.fillMissingOnly;
     maxActressCountController.text =
@@ -1235,6 +1264,7 @@ class _ScrapeSettingsDialogState extends State<_ScrapeSettingsDialog> {
     final maxActressCount = int.tryParse(maxActressCountController.text.trim());
     return WorkScrapeOptions(
       syncDetails: syncDetails,
+      scrapeAliases: scrapeAliases,
       replaceActressImage: replaceImage,
       fillMissingOnly: fillMissingOnly,
       maxActressCount: maxActressCount == null || maxActressCount <= 0
@@ -1292,6 +1322,23 @@ class _ScrapeSettingsDialogState extends State<_ScrapeSettingsDialog> {
                   },
                 ),
                 const SizedBox(key: Key('scrape-settings-gap-sync'), height: 8),
+                SwitchListTile(
+                  key: const Key('scrape-aliases-switch'),
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  controlAffinity: ListTileControlAffinity.trailing,
+                  title: Text(l10n.scrapeAliases),
+                  subtitle: Text(l10n.scrapeAliasesDescription),
+                  value: scrapeAliases,
+                  onChanged: (value) {
+                    setState(() => scrapeAliases = value);
+                    _scheduleSave();
+                  },
+                ),
+                const SizedBox(
+                  key: Key('scrape-settings-gap-aliases'),
+                  height: 8,
+                ),
                 SwitchListTile(
                   key: const Key('scrape-replace-actress-image-switch'),
                   contentPadding: EdgeInsets.zero,

@@ -533,13 +533,15 @@ void main() {
           .widgetList<SwitchListTile>(find.byType(SwitchListTile))
           .toList(growable: false);
 
-      expect(switchTiles, hasLength(3));
+      expect(switchTiles, hasLength(4));
 
       for (final tile in switchTiles) {
         expect(tile.controlAffinity, ListTileControlAffinity.trailing);
       }
 
       expect(find.text('同步詳細資料'), findsOneWidget);
+
+      expect(find.text('刮削別名'), findsOneWidget);
 
       expect(find.text('更換女優頭像'), findsOneWidget);
 
@@ -623,6 +625,8 @@ void main() {
 
       final settingsRowKeys = <String>[
         'scrape-sync-details-switch',
+
+        'scrape-aliases-switch',
 
         'scrape-replace-actress-image-switch',
 

@@ -35,6 +35,7 @@ final class AvBaseScrapeSource
     return ScrapeActressPage(
       source: id,
       details: page.details,
+      aliases: page.aliases,
       works: page.works.map(_summary).toList(growable: false),
       pageCount: page.pageCount,
     );
@@ -48,6 +49,7 @@ final class AvBaseScrapeSource
   }) async {
     final firstAvBasePage = AvBaseActressPage(
       details: firstPage.details,
+      aliases: firstPage.aliases,
       works: firstPage.works
           .map(
             (work) => AvBaseWorkSummary(

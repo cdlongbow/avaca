@@ -59,6 +59,9 @@ class _DataHealthViewState extends State<DataHealthView> {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
+        if (snapshot.hasError) {
+          return _loadError(context, tokens);
+        }
         final health = snapshot.data;
         if (health == null) {
           return Center(
@@ -73,6 +76,10 @@ class _DataHealthViewState extends State<DataHealthView> {
               l10n.dataHealthSubtitle,
               style: Theme.of(context).textTheme.bodyMedium,
             ),
+            if (health.warnings.isNotEmpty) ...[
+              SizedBox(height: tokens.sectionGap),
+              _warningCard(context, health.warnings),
+            ],
             SizedBox(height: tokens.sectionGap),
             _metricGrid(context, tokens, [
               _Metric(l10n.dataHealthActresses, health.actressCount),
@@ -117,6 +124,76 @@ class _DataHealthViewState extends State<DataHealthView> {
         );
       },
     );
+  }
+
+  Widget _loadError(BuildContext context, AppLayoutTokens tokens) {
+    final l10n = AppLocalizations.of(context);
+    return Center(
+      child: Card(
+        margin: EdgeInsets.all(tokens.sectionGap),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(l10n.loadFailedGeneric),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: _refresh,
+                icon: const Icon(Icons.refresh),
+                label: Text(l10n.dataHealthRefresh),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _warningCard(BuildContext context, List<String> warnings) {
+    final l10n = AppLocalizations.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
+    return Card(
+      margin: EdgeInsets.zero,
+      color: colorScheme.errorContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.warning_amber_outlined, color: colorScheme.error),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                warnings
+                    .map(
+                      (warning) => l10n.dataHealthSectionUnavailable(
+                        _warningLabel(context, warning),
+                      ),
+                    )
+                    .join('\n'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _warningLabel(BuildContext context, String warning) {
+    final l10n = AppLocalizations.of(context);
+    return switch (warning) {
+      'actresses' => l10n.dataHealthActresses,
+      'works' => l10n.dataHealthWorks,
+      'storedWorks' => l10n.dataHealthStored,
+      'pendingDeletions' => l10n.dataHealthPendingDeletions,
+      'metadata' => l10n.dataHealthMetadataIssues,
+      'images' => l10n.dataHealthMissingImages,
+      'provenance' => l10n.dataHealthMissingProvenance,
+      'jobStates' => l10n.dataHealthJobStates,
+      'sourceErrors' => l10n.dataHealthSourceErrors,
+      _ => warning,
+    };
   }
 
   Widget _metricGrid(

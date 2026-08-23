@@ -54,6 +54,7 @@ void main() {
             series: 'AvBase 系列',
             durationMinutes: 20,
             performerCount: 3,
+            aliases: const ['測試女優', '別名 A'],
           ),
         },
         workImageDownloader: _FakeWorkImageDownloader(),
@@ -138,6 +139,25 @@ void main() {
       );
       expect(atLimitResult.saved, 1);
       expect(atLimitResult.excluded, 0);
+
+      await database.replaceActressAliases(
+        actressId: actressId,
+        aliases: const ['舊別名'],
+      );
+      final aliasResult = await service.scrape(
+        actressId: actressId,
+        actressName: '測試女優',
+        options: const WorkScrapeOptions(
+          syncDetails: false,
+          scrapeAliases: true,
+        ),
+        sourceSettings: const ScrapeSourceSettings(
+          actressDetailsSource: ScrapeSourceId.javbus,
+          worksSource: WorksSourceSelection.javbus,
+        ),
+      );
+      expect(aliasResult.saved, 1);
+      expect(await database.getActressAliases(actressId), ['別名 A', '舊別名']);
       service.close();
     },
   );
@@ -151,6 +171,7 @@ final class _FakeScrapeSource implements ScrapeSource {
     this.series,
     required this.durationMinutes,
     required this.performerCount,
+    this.aliases = const [],
   });
 
   @override
@@ -160,6 +181,7 @@ final class _FakeScrapeSource implements ScrapeSource {
   final String? series;
   final int durationMinutes;
   final int performerCount;
+  final List<String> aliases;
 
   final _actressUri = Uri.parse('https://example.test/talents/test');
   final _workUri = Uri.parse('https://example.test/works/abc-123');
@@ -178,6 +200,7 @@ final class _FakeScrapeSource implements ScrapeSource {
     return ScrapeActressPage(
       source: id,
       details: const ScrapedActressDetails(name: '測試女優'),
+      aliases: aliases,
       works: [
         ScrapeWorkSummary(
           source: id,

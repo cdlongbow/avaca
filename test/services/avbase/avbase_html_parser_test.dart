@@ -12,6 +12,7 @@ void main() {
     final page = parser.parseActressPage('''
       <html><body>
         <h1>石川澪</h1>
+        <p><a href="/talents/%E7%9F%B3%E5%B7%9D%E6%BE%AA">いしかわみお</a></p>
         <img alt="石川澪" src="https://pics.dmm.co.jp/mono/actjpgs/isikawa_mio.jpg">
         <div class="flex justify-between items-start"><span>生年月日</span><span>2002-03-02</span></div>
         <div class="flex justify-between items-start"><span>身長</span><span>158 cm</span></div>
@@ -32,6 +33,7 @@ void main() {
       ''', pageUri: talentUri);
 
     expect(page.details.name, '石川澪');
+    expect(page.aliases, ['いしかわみお']);
     expect(page.details.birthDate, '2002-03-02');
     expect(page.details.height, '158');
     expect(page.details.cup, 'B');

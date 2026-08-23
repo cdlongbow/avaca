@@ -1429,6 +1429,12 @@ abstract class AppLocalizations {
   /// **'作品來源'**
   String get scrapeSourceWorksTitle;
 
+  /// No description provided for @scrapeSourceAliasTitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'女優別名來源'**
+  String get scrapeSourceAliasTitle;
+
   /// No description provided for @scrapeSourceMinnanoAv.
   ///
   /// In zh_TW, this message translates to:
@@ -1506,6 +1512,18 @@ abstract class AppLocalizations {
   /// In zh_TW, this message translates to:
   /// **'需要驗證'**
   String get scrapeSourceVerificationRequired;
+
+  /// No description provided for @scrapeAliases.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'刮削別名'**
+  String get scrapeAliases;
+
+  /// No description provided for @scrapeAliasesDescription.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'將別名來源找到的名稱寫入女優別名，不包含目前名稱。'**
+  String get scrapeAliasesDescription;
 
   /// No description provided for @scrapePartial.
   ///
@@ -2002,8 +2020,14 @@ abstract class AppLocalizations {
   /// No description provided for @dataHealthSubtitle.
   ///
   /// In zh_TW, this message translates to:
-  /// **'查看作品資料、刮削工作與來源錯誤的可觀測性摘要。'**
+  /// **'檢查數量、作品欄位與圖片缺漏、欄位來源、待清理檔案及刮削來源錯誤。'**
   String get dataHealthSubtitle;
+
+  /// No description provided for @dataHealthSectionUnavailable.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'此區段無法載入：{section}'**
+  String dataHealthSectionUnavailable(String section);
 
   /// No description provided for @dataHealthRefresh.
   ///
@@ -2082,6 +2106,48 @@ abstract class AppLocalizations {
   /// In zh_TW, this message translates to:
   /// **'目前沒有刮削工作。'**
   String get scrapeJobsEmpty;
+
+  /// No description provided for @scrapeJobsSelectedCount.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'已選取 {count} 項'**
+  String scrapeJobsSelectedCount(int count);
+
+  /// No description provided for @scrapeJobsDelete.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'刪除'**
+  String get scrapeJobsDelete;
+
+  /// No description provided for @scrapeJobsDeleteTitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'刪除選取的刮削工作？'**
+  String get scrapeJobsDeleteTitle;
+
+  /// No description provided for @scrapeJobsDeleteMessage.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'刪除 {count} 筆已結束的刮削紀錄？不會刪除作品、女優或設定。'**
+  String scrapeJobsDeleteMessage(int count);
+
+  /// No description provided for @scrapeJobsDeleteActive.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'進行中的刮削工作不能刪除，請只選取已結束的工作。'**
+  String get scrapeJobsDeleteActive;
+
+  /// No description provided for @scrapeJobsDeleted.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'已刪除 {count} 筆刮削紀錄。'**
+  String scrapeJobsDeleted(int count);
+
+  /// No description provided for @scrapeJobsDeleteFailed.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'刪除刮削紀錄失敗。'**
+  String get scrapeJobsDeleteFailed;
 
   /// No description provided for @scrapeJobDetailTitle.
   ///

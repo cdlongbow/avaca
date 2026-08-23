@@ -1,6 +1,7 @@
 import '../core/database.dart';
 import '../models/scrape_job.dart';
 import '../models/scrape_source_settings.dart';
+import '../models/work_scrape_options.dart';
 import 'avbase/avbase_client.dart';
 import 'avbase/avbase_scrape_source.dart';
 import 'avbase/avbase_transport.dart';
@@ -39,6 +40,9 @@ class WorksScrapeSessionFactory {
       sourceSettings.actressDetailsSource,
       ...ScrapeSourceRegistry.resolveWorksSources(sourceSettings.worksSource),
     };
+    if (WorkScrapeOptions.decode(job.optionsSnapshot).scrapeAliases) {
+      requestedSourceIds.add(sourceSettings.aliasSource);
+    }
     final configuredSources = <ScrapeSourceId, ScrapeSource>{};
     HttpJavBusTransport? javBusTransport;
     HttpMinnanoTransport? minnanoTransport;

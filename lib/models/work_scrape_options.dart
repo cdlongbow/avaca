@@ -8,6 +8,7 @@ class WorkScrapeOptions {
     this.maxActressCount,
     this.excludedPrefixes = const [],
     this.retryWorkCodes = const [],
+    this.scrapeAliases = false,
   }) : assert(maxActressCount == null || maxActressCount > 0);
 
   final bool syncDetails;
@@ -16,16 +17,20 @@ class WorkScrapeOptions {
   final int? maxActressCount;
   final List<String> excludedPrefixes;
   final List<String> retryWorkCodes;
+  final bool scrapeAliases;
 
-  WorkScrapeOptions copyWith({List<String>? retryWorkCodes}) =>
-      WorkScrapeOptions(
-        syncDetails: syncDetails,
-        replaceActressImage: replaceActressImage,
-        fillMissingOnly: fillMissingOnly,
-        maxActressCount: maxActressCount,
-        excludedPrefixes: excludedPrefixes,
-        retryWorkCodes: retryWorkCodes ?? this.retryWorkCodes,
-      );
+  WorkScrapeOptions copyWith({
+    List<String>? retryWorkCodes,
+    bool? scrapeAliases,
+  }) => WorkScrapeOptions(
+    syncDetails: syncDetails,
+    replaceActressImage: replaceActressImage,
+    fillMissingOnly: fillMissingOnly,
+    maxActressCount: maxActressCount,
+    excludedPrefixes: excludedPrefixes,
+    retryWorkCodes: retryWorkCodes ?? this.retryWorkCodes,
+    scrapeAliases: scrapeAliases ?? this.scrapeAliases,
+  );
 
   String encode() {
     return jsonEncode({
@@ -35,6 +40,7 @@ class WorkScrapeOptions {
       'maxActressCount': maxActressCount,
       'excludedPrefixes': excludedPrefixes,
       'retryWorkCodes': retryWorkCodes,
+      'scrapeAliases': scrapeAliases,
     });
   }
 
@@ -80,6 +86,9 @@ class WorkScrapeOptions {
                   .toSet()
                   .toList(growable: false)
             : const [],
+        scrapeAliases: json['scrapeAliases'] is bool
+            ? json['scrapeAliases'] as bool
+            : false,
       );
     } on FormatException {
       return const WorkScrapeOptions();

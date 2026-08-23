@@ -47,6 +47,40 @@ class ScrapeJobRepository {
     return rows.map(ScrapeJob.fromRow).toList(growable: false);
   }
 
+  Future<void> deleteTerminalJobs(Iterable<String> ids) async {
+    final jobIds = ids
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (jobIds.isEmpty) return;
+
+    final database = await db.database;
+    await database.transaction((transaction) async {
+      final placeholders = List.filled(jobIds.length, '?').join(', ');
+      final rows = await transaction.query(
+        'scrape_jobs',
+        columns: const ['id', 'state'],
+        where: 'id IN ($placeholders)',
+        whereArgs: jobIds,
+      );
+      if (rows.length != jobIds.length ||
+          rows.any(
+            (row) => !terminalStates.contains(
+              ScrapeJobStateCodec.parse(row['state']),
+            ),
+          )) {
+        throw StateError('Only terminal scrape jobs can be deleted.');
+      }
+
+      await transaction.delete(
+        'scrape_jobs',
+        where: 'id IN ($placeholders)',
+        whereArgs: jobIds,
+      );
+    });
+  }
+
   Future<ScrapeJob?> findActiveForActress(int actressId) async {
     final database = await db.database;
     final rows = await database.rawQuery(

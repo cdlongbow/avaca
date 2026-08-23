@@ -102,4 +102,71 @@ void main() {
       if (await directory.exists()) await directory.delete(recursive: true);
     }
   });
+
+  test('deletes terminal jobs as an all-or-nothing batch', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'avaca-job-delete-test-',
+    );
+    final db = AppDatabase.forTesting(
+      baseDir: directory.path,
+      databaseFactory: databaseFactoryFfi,
+    );
+    try {
+      await db.init();
+      await db.addActress(name: 'Terminal Actress');
+      await db.addActress(name: 'Active Actress');
+      final actressRows = await (await db.database).query(
+        'actresses',
+        columns: const ['id', 'name'],
+      );
+      final terminalActressId =
+          actressRows.singleWhere(
+                (row) => row['name'] == 'Terminal Actress',
+              )['id']
+              as int;
+      final activeActressId =
+          actressRows.singleWhere(
+                (row) => row['name'] == 'Active Actress',
+              )['id']
+              as int;
+      final repository = ScrapeJobRepository(db: db);
+      final terminalJob = await repository.create(
+        actressId: terminalActressId,
+        actressName: 'Terminal Actress',
+        optionsSnapshot: '{}',
+        sourceSettingsSnapshot: '{}',
+        rulesVersionSnapshot: 'builtin-1',
+        rulesSnapshot: '{}',
+      );
+      await repository.updateJob(
+        terminalJob.id,
+        state: ScrapeJobState.succeeded,
+        phase: ScrapeJobPhase.completed,
+        finishedAt: DateTime.now().toUtc(),
+      );
+      final activeJob = await repository.create(
+        actressId: activeActressId,
+        actressName: 'Active Actress',
+        optionsSnapshot: '{}',
+        sourceSettingsSnapshot: '{}',
+        rulesVersionSnapshot: 'builtin-1',
+        rulesSnapshot: '{}',
+      );
+
+      await expectLater(
+        repository.deleteTerminalJobs([terminalJob.id, activeJob.id]),
+        throwsStateError,
+      );
+      expect(await repository.get(terminalJob.id), isNotNull);
+      expect(await repository.get(activeJob.id), isNotNull);
+
+      await repository.deleteTerminalJobs([terminalJob.id]);
+      expect(await repository.get(terminalJob.id), isNull);
+      expect(await repository.listEvents(terminalJob.id), isEmpty);
+      expect(await repository.get(activeJob.id), isNotNull);
+    } finally {
+      await db.close();
+      if (await directory.exists()) await directory.delete(recursive: true);
+    }
+  });
 }

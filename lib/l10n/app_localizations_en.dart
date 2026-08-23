@@ -724,6 +724,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get scrapeSourceWorksTitle => 'Works source';
 
   @override
+  String get scrapeSourceAliasTitle => 'Actress aliases source';
+
+  @override
   String get scrapeSourceMinnanoAv => 'Minnano AV';
 
   @override
@@ -762,6 +765,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get scrapeSourceVerificationRequired => 'Verification required';
+
+  @override
+  String get scrapeAliases => 'Scrape aliases';
+
+  @override
+  String get scrapeAliasesDescription =>
+      'Save names found by the alias source as actress aliases, excluding the current name.';
 
   @override
   String get scrapePartial => 'Some sources or records could not be processed.';
@@ -1045,7 +1055,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dataHealthSubtitle =>
-      'Inspect data completeness, scrape jobs, and source error observability.';
+      'Check counts, missing metadata/images, provenance, pending cleanup, and scrape-source errors.';
+
+  @override
+  String dataHealthSectionUnavailable(String section) {
+    return 'This section could not be loaded: $section';
+  }
 
   @override
   String get dataHealthRefresh => 'Refresh';
@@ -1085,6 +1100,34 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get scrapeJobsEmpty => 'There are no scrape jobs yet.';
+
+  @override
+  String scrapeJobsSelectedCount(int count) {
+    return '$count selected';
+  }
+
+  @override
+  String get scrapeJobsDelete => 'Delete';
+
+  @override
+  String get scrapeJobsDeleteTitle => 'Delete selected scrape jobs?';
+
+  @override
+  String scrapeJobsDeleteMessage(int count) {
+    return 'Delete $count completed scrape-job records? Works, actresses, and settings will not be changed.';
+  }
+
+  @override
+  String get scrapeJobsDeleteActive =>
+      'Running or queued jobs cannot be deleted. Select completed jobs only.';
+
+  @override
+  String scrapeJobsDeleted(int count) {
+    return 'Deleted $count scrape-job records.';
+  }
+
+  @override
+  String get scrapeJobsDeleteFailed => 'Could not delete scrape-job records.';
 
   @override
   String get scrapeJobDetailTitle => 'Scrape job details';

@@ -27,8 +27,10 @@ class ScrapeJobsView extends StatefulWidget {
 
 class _ScrapeJobsViewState extends State<ScrapeJobsView> {
   List<ScrapeJob> _jobs = const <ScrapeJob>[];
+  final Set<String> _selectedJobIds = <String>{};
   Object? _loadError;
   bool _loading = true;
+  bool _deleting = false;
   int _loadGeneration = 0;
 
   @override
@@ -60,6 +62,7 @@ class _ScrapeJobsViewState extends State<ScrapeJobsView> {
       if (!mounted || generation != _loadGeneration) return;
       setState(() {
         _jobs = jobs;
+        _selectedJobIds.retainAll(jobs.map((job) => job.id));
         _loading = false;
         _loadError = null;
       });
@@ -75,10 +78,29 @@ class _ScrapeJobsViewState extends State<ScrapeJobsView> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final selecting = _selectedJobIds.isNotEmpty;
     return Scaffold(
       appBar: AppBar(
         leading: const AlignedAppBarBackButton(),
-        title: Text(l10n.scrapeJobsTitle),
+        title: Text(
+          selecting
+              ? l10n.scrapeJobsSelectedCount(_selectedJobIds.length)
+              : l10n.scrapeJobsTitle,
+        ),
+        actions: [
+          if (selecting)
+            IconButton(
+              key: const ValueKey('scrape-jobs-delete-selected'),
+              tooltip: l10n.scrapeJobsDelete,
+              onPressed: _deleting ? null : _deleteSelected,
+              icon: _deleting
+                  ? const SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.delete_outline),
+            ),
+        ],
       ),
       body: AdaptivePageLayout(
         compactBuilder: (context, tokens) => _buildBody(context, tokens),
@@ -107,9 +129,12 @@ class _ScrapeJobsViewState extends State<ScrapeJobsView> {
       itemBuilder: (context, index) {
         final job = _jobs[index];
         final l10n = AppLocalizations.of(context);
+        final selected = _selectedJobIds.contains(job.id);
         return Card(
           margin: EdgeInsets.zero,
           child: ListTile(
+            selected: selected,
+            selectedTileColor: Theme.of(context).colorScheme.secondaryContainer,
             leading: _stateIcon(job.state),
             title: Text(job.actressNameSnapshot),
             subtitle: Column(
@@ -130,20 +155,107 @@ class _ScrapeJobsViewState extends State<ScrapeJobsView> {
                   ),
               ],
             ),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => Navigator.of(context).push<void>(
-              MaterialPageRoute(
-                builder: (_) => ScrapeJobDetailView(
-                  db: widget.db,
-                  coordinator: widget.coordinator,
-                  jobId: job.id,
+            trailing: _selectedJobIds.isNotEmpty
+                ? Checkbox(
+                    value: selected,
+                    onChanged: (_) => _toggleSelection(job.id),
+                  )
+                : const Icon(Icons.chevron_right),
+            onTap: () {
+              if (_selectedJobIds.isNotEmpty) {
+                _toggleSelection(job.id);
+                return;
+              }
+              unawaited(
+                Navigator.of(context).push<void>(
+                  MaterialPageRoute(
+                    builder: (_) => ScrapeJobDetailView(
+                      db: widget.db,
+                      coordinator: widget.coordinator,
+                      jobId: job.id,
+                    ),
+                  ),
                 ),
-              ),
-            ),
+              );
+            },
+            onLongPress: () => _toggleSelection(job.id),
           ),
         );
       },
     );
+  }
+
+  void _toggleSelection(String jobId) {
+    setState(() {
+      if (!_selectedJobIds.add(jobId)) {
+        _selectedJobIds.remove(jobId);
+      }
+    });
+  }
+
+  Future<void> _deleteSelected() async {
+    final selectedIds = _selectedJobIds.toList(growable: false);
+    if (selectedIds.isEmpty) {
+      return;
+    }
+    final selectedJobs = _jobs
+        .where((job) => _selectedJobIds.contains(job.id))
+        .toList(growable: false);
+    if (selectedJobs.any((job) => job.isActive)) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context).scrapeJobsDeleteActive),
+          ),
+        );
+      return;
+    }
+
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l10n.scrapeJobsDeleteTitle),
+        content: Text(l10n.scrapeJobsDeleteMessage(selectedIds.length)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(l10n.scrapeJobsDelete),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    setState(() => _deleting = true);
+    try {
+      await widget.coordinator.deleteJobs(selectedIds);
+      if (!mounted) return;
+      setState(() {
+        _selectedJobIds.clear();
+        _deleting = false;
+      });
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text(l10n.scrapeJobsDeleted(selectedIds.length))),
+        );
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() => _deleting = false);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text('${l10n.scrapeJobsDeleteFailed}: $error')),
+        );
+    }
   }
 
   Icon _stateIcon(ScrapeJobState state) {

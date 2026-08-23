@@ -1288,6 +1288,7 @@ class _ScrapeSourcesSettingsBodyState
   Future<void> _select({
     ScrapeSourceId? actressDetailsSource,
     WorksSourceSelection? worksSource,
+    ScrapeSourceId? aliasSource,
   }) async {
     final current = _settings;
     if (current == null) {
@@ -1296,6 +1297,7 @@ class _ScrapeSourcesSettingsBodyState
     final next = current.copyWith(
       actressDetailsSource: actressDetailsSource,
       worksSource: worksSource,
+      aliasSource: aliasSource,
     );
     final version = ++_selectionVersion;
     setState(() => _settings = next);
@@ -1427,6 +1429,16 @@ class _ScrapeSourcesSettingsBodyState
                 (WorksSourceSelection.avbase, localizations.scrapeSourceAvBase),
               ],
               onChanged: (value) => unawaited(_select(worksSource: value)),
+            ),
+            const SizedBox(height: 12),
+            _sourceSelector<ScrapeSourceId>(
+              key: const PageStorageKey('scrape-alias-source'),
+              title: localizations.scrapeSourceAliasTitle,
+              value: settings.aliasSource,
+              options: [
+                (ScrapeSourceId.avbase, localizations.scrapeSourceAvBase),
+              ],
+              onChanged: (value) => unawaited(_select(aliasSource: value)),
             ),
           ],
         );

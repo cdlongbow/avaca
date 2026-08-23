@@ -4,11 +4,13 @@ import '../../models/work.dart';
 final class AvBaseActressPage {
   const AvBaseActressPage({
     required this.details,
+    this.aliases = const [],
     this.works = const [],
     this.pageCount = 1,
   });
 
   final ScrapedActressDetails details;
+  final List<String> aliases;
   final List<AvBaseWorkSummary> works;
   final int pageCount;
 }

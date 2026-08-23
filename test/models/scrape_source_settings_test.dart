@@ -7,12 +7,14 @@ void main() {
 
     expect(settings.actressDetailsSource, ScrapeSourceId.minnanoAv);
     expect(settings.worksSource, WorksSourceSelection.javbus);
+    expect(settings.aliasSource, ScrapeSourceId.avbase);
   });
 
   test('round trips selections and tolerates malformed values', () {
     const settings = ScrapeSourceSettings(
       actressDetailsSource: ScrapeSourceId.javbus,
       worksSource: WorksSourceSelection.minnanoAv,
+      aliasSource: ScrapeSourceId.avbase,
     );
 
     expect(
@@ -22,6 +24,10 @@ void main() {
     expect(
       ScrapeSourceSettings.decode(settings.encode()).worksSource,
       WorksSourceSelection.minnanoAv,
+    );
+    expect(
+      ScrapeSourceSettings.decode(settings.encode()).aliasSource,
+      ScrapeSourceId.avbase,
     );
     expect(
       ScrapeSourceSettings.decode('{"worksSource":"unknown"}').worksSource,

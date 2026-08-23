@@ -399,6 +399,13 @@ class ScrapeJobCoordinator extends ChangeNotifier {
 
   Future<List<ScrapeJob>> listJobs() => repository.list();
 
+  Future<void> deleteJobs(Iterable<String> ids) async {
+    await initialize();
+    await _drainWrites();
+    await repository.deleteTerminalJobs(ids);
+    _emitChanged();
+  }
+
   Future<List<ScrapeJobEvent>> eventsFor(String jobId) =>
       repository.listEvents(jobId);
 
@@ -435,6 +442,7 @@ class ScrapeJobCoordinator extends ChangeNotifier {
     final token = WorksScrapeCancellationToken();
     _tokens[queued.id] = token;
     _JobObserver? observer;
+    var workDataChanged = false;
     try {
       await repository.updateJob(
         queued.id,
@@ -478,6 +486,7 @@ class ScrapeJobCoordinator extends ChangeNotifier {
           cancellationToken: token,
           observer: observer,
         );
+        workDataChanged = true;
         for (final failure in result.failedWorks) {
           await observer.complete(
             failure.code,
@@ -576,6 +585,7 @@ class ScrapeJobCoordinator extends ChangeNotifier {
           : waiting
           ? ScrapeJobState.waitingForVerification
           : ScrapeJobState.failed;
+      workDataChanged = ScrapeJobRepository.terminalStates.contains(state);
       final safeError = ScrapeEventSanitizer.message(error);
       await _queueWrite(() async {
         await repository.updateJob(
@@ -603,7 +613,7 @@ class ScrapeJobCoordinator extends ChangeNotifier {
       });
     } finally {
       _tokens.remove(queued.id);
-      _emitChanged();
+      _emitChanged(workDataChanged: workDataChanged);
     }
   }
 
@@ -640,8 +650,13 @@ class ScrapeJobCoordinator extends ChangeNotifier {
     });
   }
 
-  void _emitChanged() {
+  int _workDataRevision = 0;
+
+  int get workDataRevision => _workDataRevision;
+
+  void _emitChanged({bool workDataChanged = false}) {
     if (_disposed) return;
+    if (workDataChanged) _workDataRevision++;
     _notificationTimer?.cancel();
     _notificationTimer = null;
     notifyListeners();

@@ -15,6 +15,7 @@ class DataHealthSnapshot {
     required this.pendingDeletionCount,
     required this.jobCounts,
     required this.sourceErrorCounts,
+    this.warnings = const [],
   });
 
   final DateTime generatedAt;
@@ -32,6 +33,7 @@ class DataHealthSnapshot {
   final int pendingDeletionCount;
   final Map<String, int> jobCounts;
   final Map<String, int> sourceErrorCounts;
+  final List<String> warnings;
 
   double get storedRatio => workCount == 0 ? 0 : storedWorkCount / workCount;
 

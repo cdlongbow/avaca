@@ -11,6 +11,7 @@ final class AvBaseHtmlParser {
   AvBaseActressPage parseActressPage(String source, {required Uri pageUri}) {
     final document = html.parse(source);
     final name = _clean(document.querySelector('h1')?.text);
+    final aliases = _profileAliases(document, name);
     final fields = _profileFields(document);
     final size = _parseSize(fields['サイズ'] ?? '');
     final avatar = _findAvatar(document, pageUri, name);
@@ -31,6 +32,7 @@ final class AvBaseHtmlParser {
         waist: size.waist,
         hip: size.hip,
       ),
+      aliases: aliases,
       works: works,
       pageCount: _pageCount(document),
     );
@@ -93,6 +95,60 @@ final class AvBaseHtmlParser {
       }
     }
     return fields;
+  }
+
+  List<String> _profileAliases(Document document, String? canonicalName) {
+    final heading = document.querySelector('h1');
+    if (heading == null) {
+      return const [];
+    }
+    final canonicalKey = _aliasKey(canonicalName);
+    final aliases = <String>[];
+    final seen = <String>{};
+
+    void add(String? raw) {
+      final value = _clean(raw)?.replaceAll(RegExp(r'\s+'), ' ');
+      final key = _aliasKey(value);
+      if (value == null ||
+          key == null ||
+          key == canonicalKey ||
+          !seen.add(key)) {
+        return;
+      }
+      aliases.add(value);
+    }
+
+    Element? ancestor = heading.parent;
+    for (var level = 0; ancestor != null && level < 2; level++) {
+      for (final element in ancestor.querySelectorAll(
+        'a[href*="/talents/"], p',
+      )) {
+        if (element == heading || element.querySelector('h1') != null) {
+          continue;
+        }
+      final isTalentLink =
+            element.localName == 'a' &&
+            (element.attributes['href'] ?? '').contains('/talents/');
+      final isSimpleParagraph =
+            element.localName == 'p' &&
+            element.parent == ancestor &&
+            element.children.length <= 1;
+        if (isTalentLink || isSimpleParagraph) {
+          add(element.text);
+        }
+      }
+      if (aliases.isNotEmpty) {
+        break;
+      }
+      final parent = ancestor.parent;
+      ancestor = parent is Element ? parent : null;
+    }
+    return List.unmodifiable(aliases);
+  }
+
+  String? _aliasKey(String? value) {
+    final cleaned = value?.trim().toLowerCase();
+    return cleaned == null || cleaned.isEmpty ? null : cleaned;
   }
 
   Map<String, String> _detailFields(Document document) {
