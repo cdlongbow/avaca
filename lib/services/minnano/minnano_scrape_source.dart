@@ -45,6 +45,7 @@ final class MinnanoScrapeSource implements ScrapeSource {
     ScrapeActressSearchResult actress, {
     required ScrapeActressPage firstPage,
     bool Function()? isCancelled,
+    void Function(ScrapeCollectionProgress progress)? onProgress,
   }) async {
     final firstMinnanoPage = MinnanoActressPage(
       details: firstPage.details,

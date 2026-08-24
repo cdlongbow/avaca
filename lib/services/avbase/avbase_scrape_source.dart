@@ -46,6 +46,7 @@ final class AvBaseScrapeSource
     ScrapeActressSearchResult actress, {
     required ScrapeActressPage firstPage,
     bool Function()? isCancelled,
+    void Function(ScrapeCollectionProgress progress)? onProgress,
   }) async {
     final firstAvBasePage = AvBaseActressPage(
       details: firstPage.details,
@@ -66,6 +67,13 @@ final class AvBaseScrapeSource
       actress.uri,
       firstPage: firstAvBasePage,
       isCancelled: isCancelled,
+      onProgress: (currentPage, totalPages, discovered) => onProgress?.call(
+        ScrapeCollectionProgress(
+          currentPage: currentPage,
+          totalPages: totalPages,
+          discovered: discovered,
+        ),
+      ),
     );
     final issues = collection.issues;
     if (issues.isNotEmpty) {

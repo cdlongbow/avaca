@@ -8,17 +8,22 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-Future<void>? _uiTestFontsFuture;
+bool _uiTestFontsLoaded = false;
 
 /// Widget-test golden captures do not always register pubspec fonts eagerly.
 /// Keep the production font path explicit so CJK wrapping and glyph shape are
 /// part of the visual regression instead of tofu placeholders.
-Future<void> loadUiTestFonts() {
-  return _uiTestFontsFuture ??= (() async {
-    final loader = FontLoader('NotoSansCjkTcVariable')
-      ..addFont(rootBundle.load('assets/fonts/NotoSansCJKtc-VF.ttf'));
-    await loader.load();
-  })();
+Future<void> loadUiTestFonts() async {
+  if (_uiTestFontsLoaded) {
+    return;
+  }
+
+  final appFontLoader = FontLoader('NotoSansCjkTcVariable')
+    ..addFont(rootBundle.load('assets/fonts/NotoSansCJKtc-VF.ttf'));
+  final materialIconsLoader = FontLoader('MaterialIcons')
+    ..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'));
+  await Future.wait([appFontLoader.load(), materialIconsLoader.load()]);
+  _uiTestFontsLoaded = true;
 }
 
 class GoldenFixtureDatabase extends AppDatabase {

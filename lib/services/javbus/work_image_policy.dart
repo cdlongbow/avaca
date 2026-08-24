@@ -7,13 +7,6 @@ enum WorkImageSource { dmm, mgstage }
 
 enum WorkImageVariant { card, detail }
 
-enum WorkImageTokenFamily {
-  standardDmm,
-  leadingOneDmm,
-  h1711Dmm,
-  rebeccaH346Dmm,
-}
-
 const approvedWorkImageEndpointExamples = <String>[
   'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
       'sone00833/sone00833ps.jpg',
@@ -117,16 +110,13 @@ class WorkImagePolicy {
   }) {
     final imageCode = _localImageCode(code);
     final suffix = variant == WorkImageVariant.card ? 'ps' : 'pl';
-    return imageCode + suffix + '.jpg';
+    return '$imageCode$suffix.jpg';
   }
 
   WorkImageUrls urlsFor({
     required String code,
     String? studio,
     String? publisher,
-    // Retained for compatibility with older callers. Route selection is
-    // intentionally metadata-only and never inspects source image URLs.
-    List<Uri> evidenceUris = const [],
     WorkImageRouteResolution? route,
   }) {
     final resolved =
@@ -152,31 +142,25 @@ class WorkImagePolicy {
   }) {
     final parts = _parseCode(code);
     if (family == WorkImageNormalizationFamily.mgstagePrestige) {
-      final normalizedCode = parts.prefix + '-' + parts.number;
+      final normalizedCode = '${parts.prefix}-${parts.number}';
       final base =
-          'https://image.mgstage.com/images/prestige/' +
-          parts.prefix +
-          '/' +
-          parts.number;
+          'https://image.mgstage.com/images/prestige/${parts.prefix}/${parts.number}';
       final urls = WorkImageUrls(
-        card: Uri.parse(base + '/pf_e_' + normalizedCode + '.jpg'),
-        detail: Uri.parse(base + '/pb_e_' + normalizedCode + '.jpg'),
+        card: Uri.parse('$base/pf_e_$normalizedCode.jpg'),
+        detail: Uri.parse('$base/pb_e_$normalizedCode.jpg'),
         source: WorkImageSource.mgstage,
       );
       _assertApproved(urls);
       return urls;
     }
     if (family == WorkImageNormalizationFamily.mgstageSeikyouiku) {
-      final tokenPrefix = '502' + parts.prefix;
-      final token = tokenPrefix + '-' + parts.number;
+      final tokenPrefix = '502${parts.prefix}';
+      final token = '$tokenPrefix-${parts.number}';
       final base =
-          'https://image.mgstage.com/images/seikyouiku/' +
-          tokenPrefix +
-          '/' +
-          parts.number;
+          'https://image.mgstage.com/images/seikyouiku/$tokenPrefix/${parts.number}';
       final urls = WorkImageUrls(
-        card: Uri.parse(base + '/pf_e_' + token + '.jpg'),
-        detail: Uri.parse(base + '/pb_e_' + token + '.jpg'),
+        card: Uri.parse('$base/pf_e_$token.jpg'),
+        detail: Uri.parse('$base/pb_e_$token.jpg'),
         source: WorkImageSource.mgstage,
       );
       _assertApproved(urls);
@@ -185,13 +169,10 @@ class WorkImagePolicy {
 
     final imageCode = _dmmImageCode(parts, family);
     final base =
-        'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/' +
-        imageCode +
-        '/' +
-        imageCode;
+        'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/$imageCode/$imageCode';
     final urls = WorkImageUrls(
-      card: Uri.parse(base + 'ps.jpg'),
-      detail: Uri.parse(base + 'pl.jpg'),
+      card: Uri.parse('${base}ps.jpg'),
+      detail: Uri.parse('${base}pl.jpg'),
       source: WorkImageSource.dmm,
     );
     _assertApproved(urls);
@@ -211,14 +192,14 @@ class WorkImagePolicy {
   ) {
     final paddedNumber = parts.number.padLeft(5, '0');
     return switch (family) {
-      WorkImageNormalizationFamily.dmmStandard => parts.prefix + paddedNumber,
+      WorkImageNormalizationFamily.dmmStandard => '${parts.prefix}$paddedNumber',
       WorkImageNormalizationFamily.dmmLeadingOne =>
-        '1' + parts.prefix + paddedNumber,
+        '1${parts.prefix}$paddedNumber',
       WorkImageNormalizationFamily.dmmH1711 =>
-        'h_1711' + parts.prefix + paddedNumber,
+        'h_1711${parts.prefix}$paddedNumber',
       WorkImageNormalizationFamily.dmmRebeccaH346 =>
         parts.prefix == 'rebd'
-            ? 'h_346' + parts.prefix + paddedNumber
+            ? 'h_346${parts.prefix}$paddedNumber'
             : throw FormatException(
                 'Rebecca H346 is not applicable to ${parts.prefix}.',
               ),
@@ -227,38 +208,6 @@ class WorkImagePolicy {
         'MGStage route must not format a DMM URL.',
       ),
     };
-  }
-
-  WorkImageTokenFamily? tokenFamilyFor(
-    String code, {
-    String? studio,
-    String? publisher,
-    // Retained for compatibility with older callers. Route selection is
-    // intentionally metadata-only and never inspects source image URLs.
-    List<Uri> evidenceUris = const [],
-  }) {
-    try {
-      final route = const WorkImageRouteResolver().resolve(
-        studio: studio,
-        publisher: publisher,
-      );
-      if (!route.isResolved) {
-        return null;
-      }
-      return switch (route.family!) {
-        WorkImageNormalizationFamily.dmmStandard =>
-          WorkImageTokenFamily.standardDmm,
-        WorkImageNormalizationFamily.dmmLeadingOne =>
-          WorkImageTokenFamily.leadingOneDmm,
-        WorkImageNormalizationFamily.dmmH1711 => WorkImageTokenFamily.h1711Dmm,
-        WorkImageNormalizationFamily.dmmRebeccaH346 =>
-          WorkImageTokenFamily.rebeccaH346Dmm,
-        WorkImageNormalizationFamily.mgstagePrestige ||
-        WorkImageNormalizationFamily.mgstageSeikyouiku => null,
-      };
-    } on FormatException {
-      return null;
-    }
   }
 
   String _localImageCode(String code) {
@@ -281,14 +230,14 @@ class WorkImagePolicy {
   ({String prefix, String number}) _parseCode(String code) {
     final identity = parseScrapeWorkCodeIdentity(code);
     if (identity == null || !identity.isStructured) {
-      throw FormatException('Unsupported work code: ' + code);
+      throw FormatException('Unsupported work code: $code');
     }
     final match = RegExp(
       r'^([A-Z0-9][A-Z0-9]*)-(\d+)$',
       caseSensitive: false,
     ).firstMatch(identity.displayCode);
     if (match == null) {
-      throw FormatException('Unsupported work code: ' + code);
+      throw FormatException('Unsupported work code: $code');
     }
     return (prefix: match.group(1)!.toLowerCase(), number: match.group(2)!);
   }

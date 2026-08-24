@@ -22,13 +22,17 @@ void main() {
         ),
       });
       final client = JavBusClient(transport: transport);
+      final pageProgress = <(int, int, int)>[];
 
       final works = await client.fetchAllActressWorks(
         Uri.parse('https://www.javbus.com/star/uly'),
         exclusions: PrefixExclusion(['FC2']),
+        onProgress: (current, total, discovered) =>
+            pageProgress.add((current, total, discovered)),
       );
 
       expect(works.map((work) => work.code), ['ABF-183', 'SONE-833']);
+      expect(pageProgress, [(1, 2, 1), (2, 2, 2)]);
       expect(transport.requested, [
         'https://www.javbus.com/star/uly',
         'https://www.javbus.com/star/uly/2',

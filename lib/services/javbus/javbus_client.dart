@@ -215,10 +215,7 @@ class JavBusRequestException implements Exception {
 
   @override
   String toString() =>
-      'JavBus request failed (' +
-      (statusCode ?? kind.name).toString() +
-      '): ' +
-      uri.toString();
+      'JavBus request failed (${statusCode ?? kind.name}): $uri';
 }
 
 class JavBusVerificationRequiredException implements Exception {
@@ -287,12 +284,14 @@ class JavBusClient {
     PrefixExclusion? exclusions,
     bool Function()? isCancelled,
     JavBusActressPage? firstPage,
+    void Function(int currentPage, int totalPages, int discovered)? onProgress,
   }) async {
     return (await fetchAllActressWorksResult(
       actressUri,
       exclusions: exclusions,
       isCancelled: isCancelled,
       firstPage: firstPage,
+      onProgress: onProgress,
     )).works;
   }
 
@@ -301,6 +300,7 @@ class JavBusClient {
     PrefixExclusion? exclusions,
     bool Function()? isCancelled,
     JavBusActressPage? firstPage,
+    void Function(int currentPage, int totalPages, int discovered)? onProgress,
   }) async {
     _lastWorkCollectionIssues = const [];
     _validateNavigationUri(actressUri);
@@ -338,6 +338,7 @@ class JavBusClient {
     }
 
     append(resolvedFirstPage.works);
+    onProgress?.call(1, resolvedFirstPage.pageCount, result.length);
     for (var page = 2; page <= resolvedFirstPage.pageCount; page++) {
       if (isCancelled?.call() ?? false) {
         break;
@@ -356,6 +357,7 @@ class JavBusClient {
           ),
         );
       }
+      onProgress?.call(page, resolvedFirstPage.pageCount, result.length);
     }
     final collection = JavBusWorkCollectionResult(
       works: List.unmodifiable(result),

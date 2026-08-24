@@ -7,11 +7,13 @@ class AlignedAppBarBackButton extends StatelessWidget {
     this.onPressed,
     this.verticalOffset = 2,
     this.expandToToolbar = false,
+    this.enabled = true,
   });
 
   final VoidCallback? onPressed;
   final double verticalOffset;
   final bool expandToToolbar;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -21,7 +23,9 @@ class AlignedAppBarBackButton extends StatelessWidget {
         offset: Offset(0, verticalOffset),
         child: const Icon(Icons.arrow_back),
       ),
-      onPressed: onPressed ?? () => Navigator.of(context).maybePop(),
+      onPressed: enabled
+          ? onPressed ?? () => Navigator.of(context).maybePop()
+          : null,
     );
     if (!expandToToolbar) return button;
     return SizedBox.expand(child: Center(child: button));

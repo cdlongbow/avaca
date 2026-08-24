@@ -101,7 +101,9 @@ void main() {
           replaceActressImage: true,
           excludedPrefixes: ['fc2-ppv_123'],
         ),
-        sourceSettings: const ScrapeSourceSettings.legacyJavBus(),
+        sourceSettings: const ScrapeSourceSettings(
+          actressDetailsSource: ScrapeSourceId.javbus,
+        ),
         observer: observer,
       );
 
@@ -148,7 +150,7 @@ void main() {
     },
   );
 
-  test('overlaps image saving with the next JavBus detail request', () async {
+  test('reports image work separately after all details are ready', () async {
     final directory = await Directory.systemTemp.createTemp(
       'avaca_javbus_image_overlap_test_',
     );
@@ -174,14 +176,15 @@ void main() {
       workImageDownloader: images,
       imageDirectory: directory.path,
       javBusDetailDelay: Duration.zero,
-      imageDownloadConcurrency: 2,
     );
 
     final scrape = service.scrape(
       actressId: actressId,
       actressName: '涼森?��?',
       options: const WorkScrapeOptions(syncDetails: false),
-      sourceSettings: const ScrapeSourceSettings.legacyJavBus(),
+      sourceSettings: const ScrapeSourceSettings(
+        actressDetailsSource: ScrapeSourceId.javbus,
+      ),
       onProgress: progress.add,
     );
 
@@ -208,7 +211,8 @@ void main() {
         .where((item) => item.phase == WorksScrapePhase.downloadingImages)
         .map((item) => item.current)
         .toList();
-    expect(imageProgress, containsAll(<int>[0, 1, 2]));
+    expect(imageProgress, containsAll(<int>[0, 1]));
+    expect(imageProgress, isNot(contains(2)));
   });
 
   test('missing-only mode keeps existing downloaded image files', () async {
@@ -257,7 +261,9 @@ void main() {
         fillMissingOnly: true,
         excludedPrefixes: ['FC2-PPV_123'],
       ),
-      sourceSettings: const ScrapeSourceSettings.legacyJavBus(),
+      sourceSettings: const ScrapeSourceSettings(
+        actressDetailsSource: ScrapeSourceId.javbus,
+      ),
     );
 
     expect(workImages.downloads, isEmpty);
@@ -295,7 +301,9 @@ void main() {
           actressId: 1,
           actressName: '涼森れむ',
           options: const WorkScrapeOptions(),
-          sourceSettings: const ScrapeSourceSettings.legacyJavBus(),
+          sourceSettings: const ScrapeSourceSettings(
+            actressDetailsSource: ScrapeSourceId.javbus,
+          ),
         ),
         throwsA(isA<WorksScrapeException>()),
       );
@@ -337,7 +345,9 @@ void main() {
           replaceActressImage: true,
           maxActressCount: 2,
         ),
-        sourceSettings: const ScrapeSourceSettings.legacyJavBus(),
+        sourceSettings: const ScrapeSourceSettings(
+          actressDetailsSource: ScrapeSourceId.javbus,
+        ),
       );
 
       expect(client.actressPageRequests, [
@@ -401,7 +411,9 @@ void main() {
         actressName: '涼森れむ',
         aliases: const ['  Remu  ', 'Remu', 'missing', 'Broken', '涼森れむ'],
         options: const WorkScrapeOptions(fillMissingOnly: false),
-        sourceSettings: const ScrapeSourceSettings.legacyJavBus(),
+        sourceSettings: const ScrapeSourceSettings(
+          actressDetailsSource: ScrapeSourceId.javbus,
+        ),
       );
 
       expect(client.searchRequests, ['涼森れむ', 'Remu', 'missing', 'Broken']);
@@ -461,7 +473,9 @@ void main() {
         actressName: '涼森れむ',
         aliases: const ['Remu'],
         options: const WorkScrapeOptions(excludedPrefixes: ['FC2']),
-        sourceSettings: const ScrapeSourceSettings.legacyJavBus(),
+        sourceSettings: const ScrapeSourceSettings(
+          actressDetailsSource: ScrapeSourceId.javbus,
+        ),
       );
 
       expect(client.pageRequests, 2);
@@ -513,7 +527,9 @@ void main() {
           replaceActressImage: true,
           excludedPrefixes: ['FC2-PPV_123'],
         ),
-        sourceSettings: const ScrapeSourceSettings.legacyJavBus(),
+        sourceSettings: const ScrapeSourceSettings(
+          actressDetailsSource: ScrapeSourceId.javbus,
+        ),
       );
 
       expect(
@@ -601,6 +617,7 @@ class _FakeJavBusClient extends JavBusClient {
     PrefixExclusion? exclusions,
     bool Function()? isCancelled,
     JavBusActressPage? firstPage,
+    void Function(int currentPage, int totalPages, int discovered)? onProgress,
   }) async {
     receivedExclusions = exclusions?.values ?? [];
     return [
@@ -660,6 +677,7 @@ class _OverlapJavBusClient extends _FakeJavBusClient {
     PrefixExclusion? exclusions,
     bool Function()? isCancelled,
     JavBusActressPage? firstPage,
+    void Function(int currentPage, int totalPages, int discovered)? onProgress,
   }) async {
     return [
       JavBusWorkSummary(
@@ -801,6 +819,7 @@ class _MergedJavBusClient extends JavBusClient {
     PrefixExclusion? exclusions,
     bool Function()? isCancelled,
     JavBusActressPage? firstPage,
+    void Function(int currentPage, int totalPages, int discovered)? onProgress,
   }) async {
     final second = actressUri.pathSegments.last == 'zh5';
     return (second
@@ -903,6 +922,7 @@ class _AliasAwareJavBusClient extends JavBusClient {
     PrefixExclusion? exclusions,
     bool Function()? isCancelled,
     JavBusActressPage? firstPage,
+    void Function(int currentPage, int totalPages, int discovered)? onProgress,
   }) async {
     final canonical = actressUri.pathSegments.last == 'canonical';
     return (canonical ? ['DUP-001', 'CAN-002'] : ['dup-001', 'ALIAS-003'])

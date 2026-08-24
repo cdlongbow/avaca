@@ -20,6 +20,21 @@ class _RecordingDatabase extends AppDatabase {
 
 void main() {
   group('HomeController public query behavior', () {
+    test('search transition exposes typed state without string keys', () {
+      final controller = HomeController(db: _RecordingDatabase());
+
+      final opened = controller.toggleSearch();
+      expect(opened.isOpen, isTrue);
+      expect(opened.searchValue, isEmpty);
+      expect(opened.refreshGallery, isFalse);
+
+      controller.changeSearch('測試');
+      final closed = controller.toggleSearch();
+      expect(closed.isOpen, isFalse);
+      expect(closed.searchValue, isEmpty);
+      expect(closed.refreshGallery, isTrue);
+    });
+
     test('exposes every supported sort in the intended UI order', () {
       final controller = HomeController(db: _RecordingDatabase());
 

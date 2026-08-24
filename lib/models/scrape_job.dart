@@ -137,6 +137,10 @@ class ScrapeJob {
     required this.rulesVersionSnapshot,
     required this.rulesSnapshot,
     this.discoveredCount = 0,
+    this.rawDiscoveredCount = 0,
+    this.duplicateCount = 0,
+    this.detailCompletedCount = 0,
+    this.detailTotalCount = 0,
     this.processedCount = 0,
     this.savedCount = 0,
     this.excludedCount = 0,
@@ -161,6 +165,10 @@ class ScrapeJob {
   final String rulesVersionSnapshot;
   final String rulesSnapshot;
   final int discoveredCount;
+  final int rawDiscoveredCount;
+  final int duplicateCount;
+  final int detailCompletedCount;
+  final int detailTotalCount;
   final int processedCount;
   final int savedCount;
   final int excludedCount;
@@ -182,48 +190,6 @@ class ScrapeJob {
     _ => false,
   };
 
-  ScrapeJob copyWith({
-    ScrapeJobState? state,
-    ScrapeJobPhase? phase,
-    int? discoveredCount,
-    int? processedCount,
-    int? savedCount,
-    int? excludedCount,
-    int? failedCount,
-    int? imageFailureCount,
-    int? attemptCount,
-    List<String>? retryTargetCodes,
-    DateTime? startedAt,
-    DateTime? updatedAt,
-    DateTime? finishedAt,
-    String? lastError,
-  }) {
-    return ScrapeJob(
-      id: id,
-      actressId: actressId,
-      actressNameSnapshot: actressNameSnapshot,
-      state: state ?? this.state,
-      phase: phase ?? this.phase,
-      optionsSnapshot: optionsSnapshot,
-      sourceSettingsSnapshot: sourceSettingsSnapshot,
-      rulesVersionSnapshot: rulesVersionSnapshot,
-      rulesSnapshot: rulesSnapshot,
-      discoveredCount: discoveredCount ?? this.discoveredCount,
-      processedCount: processedCount ?? this.processedCount,
-      savedCount: savedCount ?? this.savedCount,
-      excludedCount: excludedCount ?? this.excludedCount,
-      failedCount: failedCount ?? this.failedCount,
-      imageFailureCount: imageFailureCount ?? this.imageFailureCount,
-      attemptCount: attemptCount ?? this.attemptCount,
-      retryTargetCodes: retryTargetCodes ?? this.retryTargetCodes,
-      createdAt: createdAt,
-      startedAt: startedAt ?? this.startedAt,
-      updatedAt: updatedAt ?? this.updatedAt,
-      finishedAt: finishedAt ?? this.finishedAt,
-      lastError: lastError ?? this.lastError,
-    );
-  }
-
   Map<String, Object?> toRow() => {
     'id': id,
     'actress_id': actressId,
@@ -236,6 +202,10 @@ class ScrapeJob {
     'rules_snapshot': rulesSnapshot,
     'retry_target_codes': jsonEncode(retryTargetCodes),
     'discovered_count': discoveredCount,
+    'raw_discovered_count': rawDiscoveredCount,
+    'duplicate_count': duplicateCount,
+    'detail_completed_count': detailCompletedCount,
+    'detail_total_count': detailTotalCount,
     'processed_count': processedCount,
     'saved_count': savedCount,
     'excluded_count': excludedCount,
@@ -264,6 +234,10 @@ class ScrapeJob {
       rulesSnapshot: row['rules_snapshot']?.toString() ?? '{}',
       retryTargetCodes: _strings(row['retry_target_codes']),
       discoveredCount: _int(row['discovered_count']),
+      rawDiscoveredCount: _int(row['raw_discovered_count']),
+      duplicateCount: _int(row['duplicate_count']),
+      detailCompletedCount: _int(row['detail_completed_count']),
+      detailTotalCount: _int(row['detail_total_count']),
       processedCount: _int(row['processed_count']),
       savedCount: _int(row['saved_count']),
       excludedCount: _int(row['excluded_count']),
@@ -342,6 +316,7 @@ class ScrapeJobSourceProgress {
     required this.total,
     required this.totalKnown,
     this.workCode,
+    this.discovered = 0,
     this.state,
     this.lastError,
     this.updatedAt,
@@ -354,6 +329,7 @@ class ScrapeJobSourceProgress {
   final int total;
   final bool totalKnown;
   final String? workCode;
+  final int discovered;
   final String? state;
   final String? lastError;
   final DateTime? updatedAt;
@@ -366,6 +342,7 @@ class ScrapeJobSourceProgress {
     'total_value': total,
     'total_known': totalKnown ? 1 : 0,
     'work_code': workCode,
+    'discovered_count': discovered,
     'state': state,
     'last_error': lastError,
     'updated_at': updatedAt?.toUtc().toIso8601String(),
@@ -384,6 +361,7 @@ class ScrapeJobSourceProgress {
       total: _int(row['total_value']),
       totalKnown: _int(row['total_known']) != 0,
       workCode: row['work_code']?.toString(),
+      discovered: _int(row['discovered_count']),
       state: row['state']?.toString(),
       lastError: row['last_error']?.toString(),
       updatedAt: _date(row['updated_at']),

@@ -110,7 +110,7 @@ class _AddViewState extends State<AddView> {
   // 照片預覽區塊。
   Widget _buildImageArea(AppLayoutTokens tokens) {
     final imageState = controller.imageState;
-    final hasPreview = imageState['preview_visible'] == true;
+    final hasPreview = imageState.hasImage;
 
     return SizedBox(
       width: 180,
@@ -128,7 +128,7 @@ class _AddViewState extends State<AddView> {
   // 已選擇照片時顯示預覽。
   Widget _buildImagePreview(AppLayoutTokens tokens) {
     final imageState = controller.imageState;
-    final previewSrc = imageState['preview_src']?.toString() ?? '';
+    final previewSrc = imageState.previewSrc;
     final imageBytes = _decodeDataImage(previewSrc);
 
     if (imageBytes == null) {
@@ -175,7 +175,7 @@ class _AddViewState extends State<AddView> {
   // 照片選擇與移除按鈕列。
   Widget _buildImageActionRow(AppLayoutTokens tokens) {
     final imageState = controller.imageState;
-    final showDeleteButton = imageState['delete_button_visible'] == true;
+    final showDeleteButton = imageState.hasImage;
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,

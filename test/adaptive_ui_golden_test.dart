@@ -6,6 +6,7 @@ import 'package:avaca/views/home_view.dart';
 import 'package:avaca/views/settings_view.dart';
 import 'package:avaca/views/work_detail_view.dart';
 import 'package:avaca/views/works_view.dart';
+import 'package:avaca/models/scrape_source_settings.dart';
 import 'package:avaca/services/works_scrape_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -277,11 +278,24 @@ void main() {
           scrapeExecutor: (options, token, onProgress) async {
             onProgress(
               const WorksScrapeProgress(
+                phase: WorksScrapePhase.fetchingDetails,
                 current: 1,
                 total: 3,
                 saved: 0,
                 excluded: 0,
                 failed: 0,
+                totalKnown: true,
+                source: ScrapeSourceId.javbus,
+                detailsSource: ScrapeSourceId.javbus,
+                worksSources: [ScrapeSourceId.javbus],
+                sourceProgress: {
+                  ScrapeSourceId.javbus: WorksScrapeSourceProgress(
+                    phase: WorksScrapePhase.fetchingDetails,
+                    current: 1,
+                    total: 3,
+                    totalKnown: true,
+                  ),
+                },
               ),
             );
             return result.future;
@@ -294,11 +308,18 @@ void main() {
       await tester.tap(find.byKey(const Key('works-scrape-menu-item')));
       await tester.pumpAndSettle();
       await tester.tap(find.byType(FilledButton).last);
+      await tester.pump(const Duration(milliseconds: 500));
       await tester.pump();
 
-      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+      expect(find.byKey(const Key('scrape-progress-dialog')), findsOneWidget);
+      expect(find.byKey(const Key('scrape-progress-sources')), findsOneWidget);
+      expect(find.byKey(const Key('scrape-progress-summary')), findsOneWidget);
+      expect(find.byKey(const Key('scrape-progress-count')), findsOneWidget);
+      expect(find.byKey(const Key('scrape-progress-circular')), findsOneWidget);
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+      await tester.pump(const Duration(milliseconds: 100));
       await expectLater(
-        find.byType(Scaffold),
+        find.byKey(const Key('scrape-progress-dialog')),
         matchesGoldenFile('goldens/compact/works-scrape.png'),
       );
 

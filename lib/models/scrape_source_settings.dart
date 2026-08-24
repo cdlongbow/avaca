@@ -21,59 +21,35 @@ enum ScrapeSourceId {
   }
 }
 
-enum WorksSourceSelection {
-  all('all'),
-  javbus('javbus'),
-  avbase('avbase'),
-  // Kept for decoding existing settings. Minnano AV is actress-detail only.
-  minnanoAv('minnanoAv');
-
-  const WorksSourceSelection(this.storageValue);
-
-  final String storageValue;
-
-  static WorksSourceSelection? fromStorage(String? value) {
-    for (final selection in values) {
-      if (selection.storageValue == value) {
-        return selection;
-      }
-    }
-    return null;
-  }
-}
-
 final class ScrapeSourceSettings {
   const ScrapeSourceSettings({
     this.actressDetailsSource = ScrapeSourceId.minnanoAv,
-    this.worksSource = WorksSourceSelection.javbus,
+    this.worksSources = const [ScrapeSourceId.javbus],
     this.aliasSource = ScrapeSourceId.avbase,
   });
 
-  const ScrapeSourceSettings.legacyJavBus()
-    : actressDetailsSource = ScrapeSourceId.javbus,
-      worksSource = WorksSourceSelection.javbus,
-      aliasSource = ScrapeSourceId.avbase;
-
   final ScrapeSourceId actressDetailsSource;
-  final WorksSourceSelection worksSource;
+  final List<ScrapeSourceId> worksSources;
   final ScrapeSourceId aliasSource;
 
   String encode() {
     return jsonEncode({
       'actressDetailsSource': actressDetailsSource.storageValue,
-      'worksSource': worksSource.storageValue,
+      'worksSources': worksSources
+          .map((source) => source.storageValue)
+          .toList(growable: false),
       'aliasSource': aliasSource.storageValue,
     });
   }
 
   ScrapeSourceSettings copyWith({
     ScrapeSourceId? actressDetailsSource,
-    WorksSourceSelection? worksSource,
+    List<ScrapeSourceId>? worksSources,
     ScrapeSourceId? aliasSource,
   }) {
     return ScrapeSourceSettings(
       actressDetailsSource: actressDetailsSource ?? this.actressDetailsSource,
-      worksSource: worksSource ?? this.worksSource,
+      worksSources: List.unmodifiable(worksSources ?? this.worksSources),
       aliasSource: aliasSource ?? this.aliasSource,
     );
   }
@@ -91,19 +67,42 @@ final class ScrapeSourceSettings {
       final details = ScrapeSourceId.fromStorage(
         decoded['actressDetailsSource']?.toString(),
       );
-      final works = WorksSourceSelection.fromStorage(
-        decoded['worksSource']?.toString(),
-      );
+      final works = _decodeWorksSources(decoded);
       final aliases = ScrapeSourceId.fromStorage(
         decoded['aliasSource']?.toString(),
       );
       return ScrapeSourceSettings(
         actressDetailsSource: details ?? ScrapeSourceId.minnanoAv,
-        worksSource: works ?? WorksSourceSelection.javbus,
+        worksSources: works,
         aliasSource: aliases ?? ScrapeSourceId.avbase,
       );
     } on Object {
       return const ScrapeSourceSettings();
     }
   }
+
+  static List<ScrapeSourceId> _decodeWorksSources(Map<dynamic, dynamic> json) {
+    final decoded = <ScrapeSourceId>[];
+    final rawSources = json['worksSources'];
+    if (rawSources is Iterable) {
+      for (final raw in rawSources) {
+        final source = ScrapeSourceId.fromStorage(raw?.toString());
+        if (_isWorksSource(source) && !decoded.contains(source)) {
+          decoded.add(source!);
+        }
+      }
+    }
+    if (decoded.isNotEmpty) return List.unmodifiable(decoded);
+
+    // One compact migration for 0.9.7 snapshots. New writes only use the
+    // ordered worksSources list above.
+    return switch (json['worksSource']?.toString()) {
+      'all' => const [ScrapeSourceId.javbus, ScrapeSourceId.avbase],
+      'avbase' => const [ScrapeSourceId.avbase],
+      _ => const [ScrapeSourceId.javbus],
+    };
+  }
+
+  static bool _isWorksSource(ScrapeSourceId? source) =>
+      source == ScrapeSourceId.javbus || source == ScrapeSourceId.avbase;
 }

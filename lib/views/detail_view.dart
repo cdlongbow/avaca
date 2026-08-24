@@ -273,6 +273,8 @@ class _DetailViewState extends State<DetailView> {
   final TextEditingController memoController = TextEditingController();
   final FocusNode memoFocusNode = FocusNode();
   DateTime? birthDate;
+  Object? _initError;
+  bool _saving = false;
 
   final Set<String> selectedAttrs = <String>{};
 
@@ -289,6 +291,7 @@ class _DetailViewState extends State<DetailView> {
   @override
   void dispose() {
     controller.removeListener(_handleControllerChanged);
+    controller.dispose();
 
     nameController.dispose();
     heightController.dispose();
@@ -302,8 +305,21 @@ class _DetailViewState extends State<DetailView> {
   }
 
   Future<void> _initialize() async {
-    await controller.init();
-    _syncFieldsFromController();
+    try {
+      await controller.init();
+      _initError = null;
+      _syncFieldsFromController();
+    } on Object catch (error) {
+      _initError = error;
+      rethrow;
+    }
+  }
+
+  void _retryInitialize() {
+    setState(() {
+      _initError = null;
+      initFuture = _initialize();
+    });
   }
 
   void _handleControllerChanged() {
@@ -314,13 +330,13 @@ class _DetailViewState extends State<DetailView> {
   void _syncFieldsFromController() {
     final data = controller.actressData;
 
-    nameController.text = data['name']?.toString() ?? '';
-    heightController.text = data['height']?.toString() ?? '';
-    weightController.text = data['weight']?.toString() ?? '';
-    cupController.text = data['cup']?.toString() ?? '';
-    bwhController.text = data['bwh']?.toString() ?? '';
-    memoController.text = data['memo']?.toString() ?? '';
-    birthDate = _parseBirthDate(data['birth_date']?.toString());
+    nameController.text = data.name;
+    heightController.text = data.height;
+    weightController.text = data.weight;
+    cupController.text = data.cup;
+    bwhController.text = data.bwh;
+    memoController.text = data.memo;
+    birthDate = _parseBirthDate(data.birthDate);
 
     selectedAttrs
       ..clear()
@@ -328,15 +344,19 @@ class _DetailViewState extends State<DetailView> {
   }
 
   Future<void> _toggleEditMode() async {
-    final editState = await controller.toggleEditMode(context, _getFormData());
+    if (_saving) return;
+    final wasEditing = controller.isEditing;
+    if (wasEditing) setState(() => _saving = true);
+    late DetailEditState editState;
+    try {
+      editState = await controller.toggleEditMode(context, _getFormData());
+    } finally {
+      if (mounted && wasEditing) setState(() => _saving = false);
+    }
 
     selectedAttrs
       ..clear()
-      ..addAll(
-        (editState['current_attrs'] as List<dynamic>? ?? []).map(
-          (e) => e.toString(),
-        ),
-      );
+      ..addAll(editState.currentAttrs);
 
     if (!controller.isEditing) {
       _syncFieldsFromController();
@@ -349,19 +369,19 @@ class _DetailViewState extends State<DetailView> {
     _syncFieldsFromController();
   }
 
-  Map<String, Object?> _getFormData() {
-    return {
-      'name': nameController.text,
-      'img_path': controller.actressData['img_path']?.toString() ?? '',
-      'main_type': selectedAttrs.join(','),
-      'selected_attrs': selectedAttrs.toList(),
-      'memo': memoController.text,
-      'height': heightController.text,
-      'weight': weightController.text,
-      'bwh': bwhController.text,
-      'cup': cupController.text,
-      'birth_date': birthDate == null ? null : _toIsoDate(birthDate!),
-    };
+  DetailFormData _getFormData() {
+    return DetailFormData(
+      name: nameController.text,
+      imgPath: controller.actressData.imgPath,
+      mainType: selectedAttrs.join(','),
+      selectedAttrs: selectedAttrs.toList(growable: false),
+      memo: memoController.text,
+      height: heightController.text,
+      weight: weightController.text,
+      bwh: bwhController.text,
+      cup: cupController.text,
+      birthDate: birthDate == null ? null : _toIsoDate(birthDate!),
+    );
   }
 
   @override
@@ -374,6 +394,29 @@ class _DetailViewState extends State<DetailView> {
         if (snapshot.connectionState != ConnectionState.done) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (snapshot.hasError || _initError != null) {
+          return Scaffold(
+            appBar: AppBar(leading: const AlignedAppBarBackButton()),
+            body: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    (snapshot.error ?? _initError).toString(),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton.tonalIcon(
+                    onPressed: _retryInitialize,
+                    icon: const Icon(Icons.refresh),
+                    label: Text(AppLocalizations.of(context).reload),
+                  ),
+                ],
+              ),
+            ),
           );
         }
 
@@ -399,8 +442,15 @@ class _DetailViewState extends State<DetailView> {
                   ? [
                       IconButton(
                         key: const Key('detail-save-button'),
-                        icon: const Icon(Icons.save),
-                        onPressed: _toggleEditMode,
+                        icon: _saving
+                            ? const SizedBox.square(
+                                dimension: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.save),
+                        onPressed: _saving ? null : _toggleEditMode,
                       ),
                     ]
                   : [_buildOverflowMenu()],
@@ -485,7 +535,7 @@ class _DetailViewState extends State<DetailView> {
 
   Widget _buildWideProfileVisual(double imageSize) {
     final colorScheme = Theme.of(context).colorScheme;
-    final name = controller.actressData['name']?.toString() ?? '';
+    final name = controller.actressData.name;
     final isEditing = controller.isEditing;
 
     return Container(
@@ -561,7 +611,7 @@ class _DetailViewState extends State<DetailView> {
     required double radius,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
-    final textStyle = const TextStyle(
+    final textStyle = Theme.of(context).textTheme.titleMedium!.copyWith(
       fontSize: 18,
       fontWeight: FontWeight.w500,
     );
@@ -667,8 +717,9 @@ class _DetailViewState extends State<DetailView> {
     }
 
     return Text(
-      controller.actressData['name']?.toString() ??
-          AppLocalizations.of(context).dataNotFound,
+      controller.actressData.name.isEmpty
+          ? AppLocalizations.of(context).dataNotFound
+          : controller.actressData.name,
       style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
     );
   }
@@ -730,7 +781,7 @@ class _DetailViewState extends State<DetailView> {
   }
 
   Widget _buildProfileImage(double imageSize) {
-    final imgPath = controller.actressData['img_path']?.toString() ?? '';
+    final imgPath = controller.actressData.imgPath;
     final colorScheme = Theme.of(context).colorScheme;
 
     if (imgPath.isEmpty) {
@@ -1392,10 +1443,6 @@ class _DetailViewState extends State<DetailView> {
 
   // 開啟刪除確認視窗，實際刪除流程交給 controller 處理。
   Future<void> _openDeleteDialog() async {
-    final dialogState = controller.openDeleteDialog();
-
-    if (dialogState['open'] != true) return;
-
     _dismissKeyboard();
     await showDialog<void>(
       context: context,
@@ -1407,14 +1454,12 @@ class _DetailViewState extends State<DetailView> {
           actions: [
             TextButton(
               onPressed: () {
-                controller.closeDeleteDialog();
                 Navigator.of(dialogContext).pop();
               },
               child: Text(AppLocalizations.of(context).cancel),
             ),
             TextButton(
               onPressed: () async {
-                controller.closeDeleteDialog();
                 Navigator.of(dialogContext).pop();
                 await controller.executeDelete(context);
               },

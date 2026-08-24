@@ -217,6 +217,12 @@ abstract class AppLocalizations {
   /// **'取消'**
   String get cancel;
 
+  /// No description provided for @reload.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'重新載入'**
+  String get reload;
+
   /// No description provided for @confirmDelete.
   ///
   /// In zh_TW, this message translates to:
@@ -1429,6 +1435,12 @@ abstract class AppLocalizations {
   /// **'作品來源'**
   String get scrapeSourceWorksTitle;
 
+  /// No description provided for @scrapeSourcePriorityHint.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'勾選來源並拖曳調整優先順序'**
+  String get scrapeSourcePriorityHint;
+
   /// No description provided for @scrapeSourceAliasTitle.
   ///
   /// In zh_TW, this message translates to:
@@ -2263,11 +2275,29 @@ abstract class AppLocalizations {
   /// **'已排除'**
   String get scrapeJobStateExcluded;
 
-  /// No description provided for @scrapeJobProgress.
+  /// No description provided for @scrapeJobCollectionSummary.
   ///
   /// In zh_TW, this message translates to:
-  /// **'已處理 {processed}，成功 {saved}，失敗 {failed}'**
-  String scrapeJobProgress(int processed, int saved, int failed);
+  /// **'取得 {raw} 筆，去重後 {unique} 筆，重複 {duplicates} 筆'**
+  String scrapeJobCollectionSummary(int raw, int unique, int duplicates);
+
+  /// No description provided for @scrapeJobDetailProgress.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'作品詳細 {current}/{total}'**
+  String scrapeJobDetailProgress(int current, int total);
+
+  /// No description provided for @scrapeJobTerminalProgress.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'已處理 {processed}/{total}，保存 {saved}，排除 {excluded}，失敗 {failed}'**
+  String scrapeJobTerminalProgress(
+    int processed,
+    int total,
+    int saved,
+    int excluded,
+    int failed,
+  );
 
   /// No description provided for @scrapeJobRulesVersion.
   ///

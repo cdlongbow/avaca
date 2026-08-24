@@ -126,10 +126,10 @@ final class AvBaseHtmlParser {
         if (element == heading || element.querySelector('h1') != null) {
           continue;
         }
-      final isTalentLink =
+        final isTalentLink =
             element.localName == 'a' &&
             (element.attributes['href'] ?? '').contains('/talents/');
-      final isSimpleParagraph =
+        final isSimpleParagraph =
             element.localName == 'p' &&
             element.parent == ancestor &&
             element.children.length <= 1;

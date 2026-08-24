@@ -25,6 +25,14 @@ class _RecordingAddDatabase extends AppDatabase {
 }
 
 void main() {
+  test('image state is a typed immutable value', () {
+    final controller = AddController(db: _RecordingAddDatabase());
+
+    expect(controller.imageState, isA<AddImageState>());
+    expect(controller.imageState.previewSrc, isEmpty);
+    expect(controller.imageState.hasImage, isFalse);
+  });
+
   testWidgets('saveActress preserves the existing name trimming behavior', (
     tester,
   ) async {

@@ -24,6 +24,10 @@ class ScrapeJobProgressAccumulator {
     this.savedCount = 0,
     this.excludedCount = 0,
     this.failedCount = 0,
+    this.rawDiscoveredCount = 0,
+    this.duplicateCount = 0,
+    this.detailCompletedCount = 0,
+    this.detailTotalCount = 0,
   });
 
   int discoveredCount;
@@ -31,6 +35,10 @@ class ScrapeJobProgressAccumulator {
   int savedCount;
   int excludedCount;
   int failedCount;
+  int rawDiscoveredCount;
+  int duplicateCount;
+  int detailCompletedCount;
+  int detailTotalCount;
   final _outcomes = <String, ScrapeWorkOutcomeState>{};
   int _excludedBaseline = 0;
   bool _hasOutcome = false;
@@ -41,6 +49,13 @@ class ScrapeJobProgressAccumulator {
     savedCount = math.max(savedCount, job.savedCount);
     excludedCount = math.max(excludedCount, job.excludedCount);
     failedCount = math.max(failedCount, job.failedCount);
+    rawDiscoveredCount = math.max(rawDiscoveredCount, job.rawDiscoveredCount);
+    duplicateCount = math.max(duplicateCount, job.duplicateCount);
+    detailCompletedCount = math.max(
+      detailCompletedCount,
+      job.detailCompletedCount,
+    );
+    detailTotalCount = math.max(detailTotalCount, job.detailTotalCount);
   }
 
   void seedItems(Iterable<ScrapeJobItem> items) {
@@ -75,7 +90,24 @@ class ScrapeJobProgressAccumulator {
   }
 
   void apply(WorksScrapeProgress progress) {
-    discoveredCount = math.max(discoveredCount, progress.total);
+    if (progress.phase != WorksScrapePhase.collectingSources) {
+      discoveredCount = math.max(discoveredCount, progress.total);
+    }
+    final sourceDiscovered = progress.worksSources.fold<int>(
+      0,
+      (total, source) =>
+          total + (progress.sourceProgress[source]?.discovered ?? 0),
+    );
+    rawDiscoveredCount = math.max(
+      rawDiscoveredCount,
+      math.max(progress.rawDiscovered, sourceDiscovered),
+    );
+    duplicateCount = math.max(duplicateCount, progress.duplicateCount);
+    detailCompletedCount = math.max(
+      detailCompletedCount,
+      progress.detailCompleted,
+    );
+    detailTotalCount = math.max(detailTotalCount, progress.detailTotal);
     if (!_hasOutcome) {
       savedCount = math.max(savedCount, progress.saved);
       excludedCount = math.max(excludedCount, progress.excluded);
@@ -89,7 +121,7 @@ class ScrapeJobProgressAccumulator {
     }
     processedCount = math.max(
       processedCount,
-      math.max(progress.current, savedCount + excludedCount + failedCount),
+      savedCount + excludedCount + failedCount,
     );
   }
 
@@ -237,6 +269,7 @@ class ScrapeJobCoordinator extends ChangeNotifier {
   bool _pumpRequested = false;
   String? _runningJobId;
   final _tokens = <String, WorksScrapeCancellationToken>{};
+  final _retryingJobIds = <String>{};
   Future<void> _writeQueue = Future<void>.value();
   Timer? _notificationTimer;
   bool _disposed = false;
@@ -350,48 +383,58 @@ class ScrapeJobCoordinator extends ChangeNotifier {
   }
 
   Future<void> retryFailed(String jobId) async {
-    final items = await repository.listItems(jobId);
-    final retryCodes = items
-        .where((item) => item.state == ScrapeJobItemState.failed)
-        .map((item) => item.canonicalCode)
-        .toList(growable: false);
-    final job = await repository.get(jobId);
-    if (job == null || retryCodes.isEmpty) return;
-    await repository.updateJob(
-      jobId,
-      state: ScrapeJobState.queued,
-      phase: ScrapeJobPhase.queued,
-      retryTargetCodes: retryCodes,
-      clearError: true,
-      clearFinishedAt: true,
-    );
-    for (final item in items.where(
-      (item) => retryCodes.contains(item.canonicalCode),
-    )) {
-      await repository.upsertItem(
-        ScrapeJobItem(
-          id: item.id,
-          jobId: item.jobId,
-          canonicalCode: item.canonicalCode,
-          observedRawCode: item.observedRawCode,
-          state: ScrapeJobItemState.queued,
-          stage: ScrapeJobPhase.queued,
-          attemptCount: item.attemptCount,
-          createdAt: item.createdAt,
-          updatedAt: DateTime.now().toUtc(),
-        ),
-        existingId: item.id,
+    if (!_retryingJobIds.add(jobId)) return;
+    try {
+      final items = await repository.listItems(jobId);
+      final retryCodes = items
+          .where((item) => item.state == ScrapeJobItemState.failed)
+          .map((item) => item.canonicalCode)
+          .toList(growable: false);
+      final job = await repository.get(jobId);
+      if (job == null ||
+          retryCodes.isEmpty ||
+          job.state == ScrapeJobState.queued ||
+          job.state == ScrapeJobState.running) {
+        return;
+      }
+      await repository.updateJob(
+        jobId,
+        state: ScrapeJobState.queued,
+        phase: ScrapeJobPhase.queued,
+        retryTargetCodes: retryCodes,
+        clearError: true,
+        clearFinishedAt: true,
       );
+      for (final item in items.where(
+        (item) => retryCodes.contains(item.canonicalCode),
+      )) {
+        await repository.upsertItem(
+          ScrapeJobItem(
+            id: item.id,
+            jobId: item.jobId,
+            canonicalCode: item.canonicalCode,
+            observedRawCode: item.observedRawCode,
+            state: ScrapeJobItemState.queued,
+            stage: ScrapeJobPhase.queued,
+            attemptCount: item.attemptCount,
+            createdAt: item.createdAt,
+            updatedAt: DateTime.now().toUtc(),
+          ),
+          existingId: item.id,
+        );
+      }
+      await repository.appendEvent(
+        jobId,
+        severity: ScrapeJobEventSeverity.info,
+        stage: ScrapeJobPhase.queued,
+        message: '只重試失敗作品',
+        metadata: {'count': retryCodes.length},
+      );
+      _emitChanged();
+      unawaited(_pump());
+    } finally {
+      _retryingJobIds.remove(jobId);
     }
-    await repository.appendEvent(
-      jobId,
-      severity: ScrapeJobEventSeverity.info,
-      stage: ScrapeJobPhase.queued,
-      message: '只重試失敗作品',
-      metadata: {'count': retryCodes.length},
-    );
-    _emitChanged();
-    unawaited(_pump());
   }
 
   Future<ScrapeJob?> latestForActress(int actressId) =>
@@ -418,10 +461,7 @@ class ScrapeJobCoordinator extends ChangeNotifier {
       while (_pumpRequested && !_disposed) {
         _pumpRequested = false;
         while (_runningJobId == null && !_disposed) {
-          final jobs = await repository.list(limit: 100);
-          final next = jobs.firstWhereOrNull(
-            (job) => job.state == ScrapeJobState.queued,
-          );
+          final next = await repository.nextQueued();
           if (next == null) break;
           _runningJobId = next.id;
           await _run(next);
@@ -685,11 +725,12 @@ class _JobObserver extends ScrapeRunObserver {
   final ScrapeJobRepository repository;
   final String jobId;
   final ScrapeJobWriteFence writeFence;
-  final _items = <String, int?>{};
+  final _items = <String, ScrapeJobItem>{};
   final _progress = ScrapeJobProgressAccumulator();
   bool _progressSeeded = false;
   bool _accepting = true;
   ScrapeJobPhase? _lastPhase;
+  String? _lastProgressKey;
 
   void stopAccepting() {
     _accepting = false;
@@ -707,12 +748,31 @@ class _JobObserver extends ScrapeRunObserver {
     if (_progressSeeded) return;
     final currentJob = await repository.get(jobId);
     if (currentJob != null) _progress.seed(currentJob);
-    _progress.seedItems(await repository.listItems(jobId));
+    final items = await repository.listItems(jobId);
+    _progress.seedItems(items);
+    for (final item in items) {
+      _items[item.canonicalCode] = item;
+    }
     _progressSeeded = true;
   }
 
   @override
   void onProgress(WorksScrapeProgress progress) {
+    final sourceKey = progress.sourceProgress.entries
+        .map(
+          (entry) =>
+              '${entry.key.storageValue}:${entry.value.phase.name}:'
+              '${entry.value.current}:${entry.value.total}:'
+              '${entry.value.discovered}:${entry.value.workCode ?? ''}',
+        )
+        .join('|');
+    final progressKey = '${progress.phase.name}:${progress.current}:'
+        '${progress.total}:${progress.saved}:${progress.excluded}:'
+        '${progress.failed}:${progress.rawDiscovered}:'
+        '${progress.duplicateCount}:${progress.detailCompleted}:'
+        '${progress.detailTotal}:$sourceKey';
+    if (_lastProgressKey == progressKey) return;
+    _lastProgressKey = progressKey;
     _enqueue(() async {
       await _ensureProgressState();
       _progress.apply(progress);
@@ -720,6 +780,10 @@ class _JobObserver extends ScrapeRunObserver {
         jobId,
         phase: _phase(progress.phase),
         discoveredCount: _progress.discoveredCount,
+        rawDiscoveredCount: _progress.rawDiscoveredCount,
+        duplicateCount: _progress.duplicateCount,
+        detailCompletedCount: _progress.detailCompletedCount,
+        detailTotalCount: _progress.detailTotalCount,
         processedCount: _progress.processedCount,
         savedCount: _progress.savedCount,
         excludedCount: _progress.excludedCount,
@@ -735,6 +799,7 @@ class _JobObserver extends ScrapeRunObserver {
             total: entry.value.total,
             totalKnown: entry.value.totalKnown,
             workCode: entry.value.workCode,
+            discovered: entry.value.discovered,
           ),
         );
       }
@@ -907,11 +972,14 @@ class _JobObserver extends ScrapeRunObserver {
 
   @override
   void onError({required String stage, Object? error, String? code}) {
+    final jobStage = stage == WorksScrapePhase.fetchingDetails.name
+        ? ScrapeJobPhase.fetchingDetails
+        : ScrapeJobPhase.savingWorks;
     _enqueue(
       () => repository.appendEvent(
         jobId,
         severity: ScrapeJobEventSeverity.error,
-        stage: ScrapeJobPhase.savingWorks,
+        stage: jobStage,
         canonicalCode: code,
         message: ScrapeEventSanitizer.message(error),
       ),
@@ -925,7 +993,8 @@ class _JobObserver extends ScrapeRunObserver {
     required ScrapeJobPhase stage,
     String? lastError,
   }) async {
-    final existing = await repository.findItem(jobId, code);
+    await _ensureProgressState();
+    final existing = _items[code];
     final item = ScrapeJobItem(
       id: existing?.id,
       jobId: jobId,
@@ -941,7 +1010,18 @@ class _JobObserver extends ScrapeRunObserver {
       updatedAt: DateTime.now().toUtc(),
     );
     final id = await repository.upsertItem(item, existingId: existing?.id);
-    _items[code] = id;
+    _items[code] = ScrapeJobItem(
+      id: id,
+      jobId: item.jobId,
+      canonicalCode: item.canonicalCode,
+      observedRawCode: item.observedRawCode,
+      state: item.state,
+      stage: item.stage,
+      attemptCount: item.attemptCount,
+      lastError: item.lastError,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+    );
   }
 
   ScrapeJobPhase _phase(WorksScrapePhase phase) => switch (phase) {
@@ -953,13 +1033,4 @@ class _JobObserver extends ScrapeRunObserver {
     WorksScrapePhase.downloadingImages => ScrapeJobPhase.downloadingImages,
     WorksScrapePhase.completed => ScrapeJobPhase.completed,
   };
-}
-
-extension<T> on List<T> {
-  T? firstWhereOrNull(bool Function(T value) test) {
-    for (final value in this) {
-      if (test(value)) return value;
-    }
-    return null;
-  }
 }

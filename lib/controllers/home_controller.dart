@@ -1,6 +1,18 @@
 import 'package:flutter/material.dart';
 import '../core/database.dart';
 
+final class HomeSearchState {
+  const HomeSearchState({
+    required this.isOpen,
+    required this.searchValue,
+    required this.refreshGallery,
+  });
+
+  final bool isOpen;
+  final String searchValue;
+  final bool refreshGallery;
+}
+
 /// 管理首頁的搜尋、篩選、排序與頁面導向狀態。
 class HomeController {
   HomeController({required this.db});
@@ -32,7 +44,7 @@ class HomeController {
   /// 切換搜尋列顯示狀態。
   ///
   /// 關閉搜尋列時會清空目前搜尋文字，並通知外部重新整理列表。
-  Map<String, Object> toggleSearch() {
+  HomeSearchState toggleSearch() {
     isSearchOpen = !isSearchOpen;
     var refreshGallery = false;
 
@@ -41,11 +53,11 @@ class HomeController {
       refreshGallery = true;
     }
 
-    return {
-      'is_open': isSearchOpen,
-      'search_value': currentSearch,
-      'refresh_gallery': refreshGallery,
-    };
+    return HomeSearchState(
+      isOpen: isSearchOpen,
+      searchValue: currentSearch,
+      refreshGallery: refreshGallery,
+    );
   }
 
   /// 更新目前搜尋文字。
@@ -54,20 +66,13 @@ class HomeController {
   }
 
   /// 更新目前篩選條件。
-  Map<String, Object> selectFilter(String filterValue) {
+  void selectFilter(String filterValue) {
     currentFilter = filterValue;
-
-    return {'current_filter': currentFilter};
   }
 
   /// 更新目前排序條件。
   void changeSort(String sortValue) {
     currentSort = sortValue;
-  }
-
-  /// 通知外部開啟篩選面板。
-  Map<String, bool> openFilterSheet() {
-    return {'open': true};
   }
 
   /// 使用目前搜尋、篩選與排序狀態取得首頁列表資料。

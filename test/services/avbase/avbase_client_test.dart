@@ -11,20 +11,21 @@ void main() {
 
       final search = await client.searchActresses('石川澪');
       final firstPage = await client.fetchActressPage(search.single.uri);
+      final pageProgress = <(int, int, int)>[];
       final collection = await client.fetchAllActressWorks(
         search.single.uri,
         firstPage: firstPage,
+        onProgress: (current, total, discovered) =>
+            pageProgress.add((current, total, discovered)),
       );
 
-    expect(
-      search.single.uri.path,
-      '/talents/${Uri.encodeComponent('石川澪')}',
-    );
+      expect(search.single.uri.path, '/talents/${Uri.encodeComponent('石川澪')}');
       expect(collection.works.map((work) => work.code), [
         'MIZD-549',
         'MIZD-550',
       ]);
       expect(collection.issues, isEmpty);
+      expect(pageProgress, [(1, 2, 1), (2, 2, 2)]);
       expect(
         transport.requests.any((uri) => uri.queryParameters['page'] == '1'),
         isTrue,

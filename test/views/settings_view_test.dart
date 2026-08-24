@@ -192,8 +192,30 @@ void main() {
 
     await tester.tap(find.byKey(const PageStorageKey('scrape-works-source')));
     await tester.pumpAndSettle();
-    await tester.tap(
-      find.widgetWithText(RadioListTile<WorksSourceSelection>, 'JavBus'),
+    expect(
+      tester
+          .widget<CheckboxListTile>(
+            find.widgetWithText(CheckboxListTile, 'JavBus'),
+          )
+          .value,
+      isTrue,
+    );
+    final availableAvBase = find.byKey(
+      const ValueKey('scrape-works-source-available-avbase'),
+    );
+    await tester.ensureVisible(availableAvBase);
+    await tester.pumpAndSettle();
+    await tester.tap(availableAvBase);
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.drag_handle), findsNWidgets(2));
+    final selectedAvBase = find.byKey(
+      const ValueKey('scrape-works-source-selected-avbase'),
+    );
+    await tester.ensureVisible(selectedAvBase);
+    await tester.pumpAndSettle();
+    await tester.drag(
+      find.byIcon(Icons.drag_handle).last,
+      const Offset(0, -180),
     );
     await tester.pumpAndSettle();
 
@@ -204,7 +226,10 @@ void main() {
       await database.getSetting(scrapeSourceSettingsKey),
     );
     expect(settings.actressDetailsSource, ScrapeSourceId.javbus);
-    expect(settings.worksSource, WorksSourceSelection.javbus);
+    expect(settings.worksSources, [
+      ScrapeSourceId.avbase,
+      ScrapeSourceId.javbus,
+    ]);
     expect(settings.aliasSource, ScrapeSourceId.avbase);
 
     // Reopening the category must read the latest persisted pair rather than
@@ -215,23 +240,20 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Scrape sources'));
     await tester.pumpAndSettle();
-    if (find
-        .widgetWithText(RadioListTile<WorksSourceSelection>, 'JavBus')
-        .evaluate()
-        .isEmpty) {
+    if (find.widgetWithText(CheckboxListTile, 'JavBus').evaluate().isEmpty) {
       await tester.tap(find.byKey(const PageStorageKey('scrape-works-source')));
       await tester.pumpAndSettle();
     }
-    await tester.tap(
-      find.widgetWithText(RadioListTile<WorksSourceSelection>, 'JavBus'),
-    );
-    await tester.pumpAndSettle();
+    expect(find.widgetWithText(CheckboxListTile, 'JavBus'), findsOneWidget);
 
     final reopenedSettings = ScrapeSourceSettings.decode(
       await database.getSetting(scrapeSourceSettingsKey),
     );
     expect(reopenedSettings.actressDetailsSource, ScrapeSourceId.javbus);
-    expect(reopenedSettings.worksSource, WorksSourceSelection.javbus);
+    expect(reopenedSettings.worksSources, [
+      ScrapeSourceId.avbase,
+      ScrapeSourceId.javbus,
+    ]);
     expect(reopenedSettings.aliasSource, ScrapeSourceId.avbase);
   });
 

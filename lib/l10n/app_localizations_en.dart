@@ -67,6 +67,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get cancel => 'Cancel';
 
   @override
+  String get reload => 'Reload';
+
+  @override
   String get confirmDelete => 'Delete';
 
   @override
@@ -724,6 +727,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get scrapeSourceWorksTitle => 'Works source';
 
   @override
+  String get scrapeSourcePriorityHint =>
+      'Select sources and drag to set priority';
+
+  @override
   String get scrapeSourceAliasTitle => 'Actress aliases source';
 
   @override
@@ -1187,8 +1194,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get scrapeJobStateExcluded => 'Excluded';
 
   @override
-  String scrapeJobProgress(int processed, int saved, int failed) {
-    return 'Processed $processed, saved $saved, failed $failed';
+  String scrapeJobCollectionSummary(int raw, int unique, int duplicates) {
+    return 'Found $raw; unique $unique; duplicates $duplicates';
+  }
+
+  @override
+  String scrapeJobDetailProgress(int current, int total) {
+    return 'Details $current/$total';
+  }
+
+  @override
+  String scrapeJobTerminalProgress(
+    int processed,
+    int total,
+    int saved,
+    int excluded,
+    int failed,
+  ) {
+    return 'Processed $processed/$total; saved $saved; excluded $excluded; failed $failed';
   }
 
   @override

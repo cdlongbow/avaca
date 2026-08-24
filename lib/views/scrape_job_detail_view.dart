@@ -9,6 +9,7 @@ import '../core/database.dart';
 import '../core/layout.dart';
 import '../l10n/app_localizations.dart';
 import '../models/scrape_job.dart';
+import '../models/scrape_source_settings.dart';
 import '../services/javbus/javbus_verification.dart';
 import '../services/scrape_job_coordinator.dart';
 
@@ -31,15 +32,21 @@ class ScrapeJobDetailView extends StatefulWidget {
 class _ScrapeJobDetailViewState extends State<ScrapeJobDetailView> {
   _JobDetailData _detail = const _JobDetailData.empty();
   bool _loading = true;
+  Object? _loadError;
+  bool _actionBusy = false;
   int _loadGeneration = 0;
   late final ScrollController _itemsScrollController;
+  late final JavBusVerificationHandler? _previousVerificationHandler;
+  late final JavBusVerificationHandler _installedVerificationHandler;
 
   @override
   void initState() {
     super.initState();
     _itemsScrollController = ScrollController();
     widget.coordinator.addListener(_handleChanged);
-    widget.coordinator.verificationHandler ??= _showVerification;
+    _previousVerificationHandler = widget.coordinator.verificationHandler;
+    _installedVerificationHandler = _showVerification;
+    widget.coordinator.verificationHandler = _installedVerificationHandler;
     _reload();
   }
 
@@ -47,6 +54,12 @@ class _ScrapeJobDetailViewState extends State<ScrapeJobDetailView> {
   void dispose() {
     _loadGeneration++;
     widget.coordinator.removeListener(_handleChanged);
+    if (identical(
+      widget.coordinator.verificationHandler,
+      _installedVerificationHandler,
+    )) {
+      widget.coordinator.verificationHandler = _previousVerificationHandler;
+    }
     _itemsScrollController.dispose();
     super.dispose();
   }
@@ -63,12 +76,21 @@ class _ScrapeJobDetailViewState extends State<ScrapeJobDetailView> {
   }
 
   Future<void> _loadLatest(int generation) async {
-    final detail = await _load();
-    if (!mounted || generation != _loadGeneration) return;
-    setState(() {
-      _detail = detail;
-      _loading = false;
-    });
+    try {
+      final detail = await _load();
+      if (!mounted || generation != _loadGeneration) return;
+      setState(() {
+        _detail = detail;
+        _loading = false;
+        _loadError = null;
+      });
+    } on Object catch (error) {
+      if (!mounted || generation != _loadGeneration) return;
+      setState(() {
+        _loading = false;
+        _loadError = error;
+      });
+    }
   }
 
   Future<_JobDetailData> _load() async {
@@ -78,6 +100,9 @@ class _ScrapeJobDetailViewState extends State<ScrapeJobDetailView> {
       job: job,
       items: await widget.coordinator.repository.listItems(widget.jobId),
       events: await widget.coordinator.repository.listEvents(widget.jobId),
+      sourceProgress: await widget.coordinator.repository.listSourceProgress(
+        widget.jobId,
+      ),
     );
   }
 
@@ -110,6 +135,22 @@ class _ScrapeJobDetailViewState extends State<ScrapeJobDetailView> {
     if (_loading && _detail.job == null) {
       return const Center(child: CircularProgressIndicator());
     }
+    if (_loadError != null && _detail.job == null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(_loadError.toString(), textAlign: TextAlign.center),
+            const SizedBox(height: 12),
+            FilledButton.tonalIcon(
+              onPressed: _reload,
+              icon: const Icon(Icons.refresh),
+              label: Text(AppLocalizations.of(context).reload),
+            ),
+          ],
+        ),
+      );
+    }
     final detail = _detail;
     final job = detail.job;
     if (job == null) {
@@ -132,13 +173,12 @@ class _ScrapeJobDetailViewState extends State<ScrapeJobDetailView> {
                 const SizedBox(height: 8),
                 Text(_stateLabel(context, job.state)),
                 const SizedBox(height: 4),
-                Text(
-                  AppLocalizations.of(context).scrapeJobProgress(
-                    job.processedCount,
-                    job.savedCount,
-                    job.failedCount,
-                  ),
-                ),
+                Text(_progressSummary(context, job)),
+                if (detail.sourceProgress.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  for (final progress in detail.sourceProgress)
+                    Text(_sourceProgressLabel(context, progress)),
+                ],
                 if (job.lastError != null) ...[
                   const SizedBox(height: 12),
                   _buildDiagnostic(context, job.lastError!),
@@ -253,30 +293,96 @@ class _ScrapeJobDetailViewState extends State<ScrapeJobDetailView> {
       children: [
         if (canPause)
           OutlinedButton.icon(
-            onPressed: () => widget.coordinator.pause(job.id),
+            onPressed: _actionBusy
+                ? null
+                : () => _runAction(() => widget.coordinator.pause(job.id)),
             icon: const Icon(Icons.pause),
             label: Text(AppLocalizations.of(context).scrapeJobPause),
           ),
         if (canResume)
           FilledButton.icon(
-            onPressed: () => widget.coordinator.resume(job.id),
+            onPressed: _actionBusy
+                ? null
+                : () => _runAction(() => widget.coordinator.resume(job.id)),
             icon: const Icon(Icons.play_arrow),
             label: Text(AppLocalizations.of(context).scrapeJobResume),
           ),
         if (canCancel)
           TextButton.icon(
-            onPressed: () => widget.coordinator.cancel(job.id),
+            onPressed: _actionBusy
+                ? null
+                : () => _runAction(() => widget.coordinator.cancel(job.id)),
             icon: const Icon(Icons.cancel_outlined),
             label: Text(AppLocalizations.of(context).scrapeJobCancel),
           ),
         if (canRetry)
           OutlinedButton.icon(
-            onPressed: () => widget.coordinator.retryFailed(job.id),
+            onPressed: _actionBusy
+                ? null
+                : () =>
+                      _runAction(() => widget.coordinator.retryFailed(job.id)),
             icon: const Icon(Icons.replay),
             label: Text(AppLocalizations.of(context).scrapeJobRetryFailed),
           ),
       ],
     );
+  }
+
+  String _progressSummary(BuildContext context, ScrapeJob job) {
+    final l10n = AppLocalizations.of(context);
+    final collection = l10n.scrapeJobCollectionSummary(
+      job.rawDiscoveredCount,
+      job.discoveredCount,
+      job.duplicateCount,
+    );
+    final details = l10n.scrapeJobDetailProgress(
+      job.detailCompletedCount,
+      job.detailTotalCount,
+    );
+    final terminal = l10n.scrapeJobTerminalProgress(
+      job.processedCount,
+      job.discoveredCount,
+      job.savedCount,
+      job.excludedCount,
+      job.failedCount,
+    );
+    return switch (job.phase) {
+      ScrapeJobPhase.collectingSources => collection,
+      ScrapeJobPhase.fetchingDetails ||
+      ScrapeJobPhase.resolvingWorks => '$collection\n$details',
+      _ => '$collection\n$details\n$terminal',
+    };
+  }
+
+  String _sourceProgressLabel(
+    BuildContext context,
+    ScrapeJobSourceProgress progress,
+  ) {
+    final l10n = AppLocalizations.of(context);
+    final source = switch (progress.source) {
+      ScrapeSourceId.javbus => l10n.scrapeSourceJavBus,
+      ScrapeSourceId.avbase => l10n.scrapeSourceAvBase,
+      ScrapeSourceId.minnanoAv => l10n.scrapeSourceMinnanoAv,
+    };
+    final pages = progress.totalKnown
+        ? '${progress.current}/${progress.total}'
+        : '${progress.current}';
+    return '$source · $pages · ${progress.discovered}';
+  }
+
+  Future<void> _runAction(Future<void> Function() action) async {
+    if (_actionBusy) return;
+    setState(() => _actionBusy = true);
+    try {
+      await action();
+    } on Object catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(error.toString())));
+    } finally {
+      if (mounted) setState(() => _actionBusy = false);
+    }
   }
 
   Widget _buildSection(BuildContext context, String title, Widget child) {
@@ -376,13 +482,16 @@ class _JobDetailData {
     required this.job,
     required this.items,
     required this.events,
+    required this.sourceProgress,
   });
   const _JobDetailData.empty()
     : job = null,
       items = const [],
-      events = const [];
+      events = const [],
+      sourceProgress = const [];
 
   final ScrapeJob? job;
   final List<ScrapeJobItem> items;
   final List<ScrapeJobEvent> events;
+  final List<ScrapeJobSourceProgress> sourceProgress;
 }

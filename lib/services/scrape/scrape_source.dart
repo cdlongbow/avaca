@@ -1,6 +1,18 @@
 import '../../models/scrape_source_settings.dart';
 import 'scrape_models.dart';
 
+final class ScrapeCollectionProgress {
+  const ScrapeCollectionProgress({
+    required this.currentPage,
+    required this.totalPages,
+    required this.discovered,
+  });
+
+  final int currentPage;
+  final int totalPages;
+  final int discovered;
+}
+
 abstract interface class ScrapeSource {
   ScrapeSourceId get id;
 
@@ -12,6 +24,7 @@ abstract interface class ScrapeSource {
     ScrapeActressSearchResult actress, {
     required ScrapeActressPage firstPage,
     bool Function()? isCancelled,
+    void Function(ScrapeCollectionProgress progress)? onProgress,
   });
 
   Future<ScrapeWorkDetails> fetchWorkDetails(ScrapeWorkSummary work);

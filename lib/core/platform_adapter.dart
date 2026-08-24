@@ -58,9 +58,7 @@ class PlatformAdapter {
   ///
   /// 桌面平台會優先使用各平台慣用的資料目錄。
   /// 行動平台則使用 app documents directory 底下的 avaca_data。
-  static Future<String> resolveAppBaseDir({
-    required String appName,
-  }) async {
+  static Future<String> resolveAppBaseDir({required String appName}) async {
     if (isWindows) {
       return _resolveWindowsAppBaseDir(appName);
     }

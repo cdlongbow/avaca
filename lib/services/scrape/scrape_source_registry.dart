@@ -9,23 +9,22 @@ class ScrapeSourceRegistry {
     ScrapeSourceId.avbase,
   ];
 
-  static const List<ScrapeSourceId> worksPriority = [
+  static const List<ScrapeSourceId> worksSources = [
     ScrapeSourceId.javbus,
     ScrapeSourceId.avbase,
   ];
 
   static List<ScrapeSourceId> resolveWorksSources(
-    WorksSourceSelection selection,
+    Iterable<ScrapeSourceId> selected,
   ) {
-    return switch (selection) {
-      WorksSourceSelection.all => const [
-        ScrapeSourceId.javbus,
-        ScrapeSourceId.avbase,
-      ],
-      WorksSourceSelection.javbus => const [ScrapeSourceId.javbus],
-      WorksSourceSelection.avbase => const [ScrapeSourceId.avbase],
-      // Legacy persisted value: never route Minnano into works scraping.
-      WorksSourceSelection.minnanoAv => const [ScrapeSourceId.javbus],
-    };
+    final resolved = <ScrapeSourceId>[];
+    for (final source in selected) {
+      if (worksSources.contains(source) && !resolved.contains(source)) {
+        resolved.add(source);
+      }
+    }
+    return resolved.isEmpty
+        ? const [ScrapeSourceId.javbus]
+        : List.unmodifiable(resolved);
   }
 }

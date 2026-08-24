@@ -3,35 +3,34 @@ import 'package:avaca/services/scrape/scrape_source_registry.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('AvBase settings round-trip and all work source resolution', () {
+  test('ordered work sources round-trip and resolve in user priority', () {
     const settings = ScrapeSourceSettings(
       actressDetailsSource: ScrapeSourceId.avbase,
-      worksSource: WorksSourceSelection.all,
+      worksSources: [ScrapeSourceId.avbase, ScrapeSourceId.javbus],
     );
 
     expect(
       ScrapeSourceSettings.decode(settings.encode()).actressDetailsSource,
       ScrapeSourceId.avbase,
     );
-    expect(
-      ScrapeSourceSettings.decode(settings.encode()).worksSource,
-      WorksSourceSelection.all,
-    );
-    expect(ScrapeSourceRegistry.resolveWorksSources(WorksSourceSelection.all), [
-      ScrapeSourceId.javbus,
+    expect(ScrapeSourceSettings.decode(settings.encode()).worksSources, [
       ScrapeSourceId.avbase,
+      ScrapeSourceId.javbus,
+    ]);
+    expect(ScrapeSourceRegistry.resolveWorksSources(settings.worksSources), [
+      ScrapeSourceId.avbase,
+      ScrapeSourceId.javbus,
     ]);
   });
 
-  test(
-    'legacy Minnano works selection never routes Minnano to works scrape',
-    () {
-      expect(
-        ScrapeSourceRegistry.resolveWorksSources(
-          WorksSourceSelection.minnanoAv,
-        ),
-        [ScrapeSourceId.javbus],
-      );
-    },
-  );
+  test('non-work and duplicate sources are sanitized', () {
+    expect(
+      ScrapeSourceRegistry.resolveWorksSources(const [
+        ScrapeSourceId.minnanoAv,
+        ScrapeSourceId.avbase,
+        ScrapeSourceId.avbase,
+      ]),
+      [ScrapeSourceId.avbase],
+    );
+  });
 }

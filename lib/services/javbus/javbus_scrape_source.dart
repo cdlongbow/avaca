@@ -54,6 +54,7 @@ final class JavBusScrapeSource
     ScrapeActressSearchResult actress, {
     required ScrapeActressPage firstPage,
     bool Function()? isCancelled,
+    void Function(ScrapeCollectionProgress progress)? onProgress,
   }) async {
     final firstJavBusPage = JavBusActressPage(
       details: firstPage.details,
@@ -74,6 +75,13 @@ final class JavBusScrapeSource
       actress.uri,
       firstPage: firstJavBusPage,
       isCancelled: isCancelled,
+      onProgress: (currentPage, totalPages, discovered) => onProgress?.call(
+        ScrapeCollectionProgress(
+          currentPage: currentPage,
+          totalPages: totalPages,
+          discovered: discovered,
+        ),
+      ),
     );
     final issues = client.lastWorkCollectionIssues;
     if (issues.isNotEmpty) {

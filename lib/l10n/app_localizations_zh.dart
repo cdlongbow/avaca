@@ -66,6 +66,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get cancel => '取消';
 
   @override
+  String get reload => '重新載入';
+
+  @override
   String get confirmDelete => '確定刪除';
 
   @override
@@ -702,6 +705,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get scrapeSourceWorksTitle => '作品來源';
 
   @override
+  String get scrapeSourcePriorityHint => '勾選來源並拖曳調整優先順序';
+
+  @override
   String get scrapeSourceAliasTitle => '女優别名来源';
 
   @override
@@ -1142,8 +1148,24 @@ class AppLocalizationsZh extends AppLocalizations {
   String get scrapeJobStateExcluded => '已排除';
 
   @override
-  String scrapeJobProgress(int processed, int saved, int failed) {
-    return '已處理 $processed，成功 $saved，失敗 $failed';
+  String scrapeJobCollectionSummary(int raw, int unique, int duplicates) {
+    return '取得 $raw 筆，去重後 $unique 筆，重複 $duplicates 筆';
+  }
+
+  @override
+  String scrapeJobDetailProgress(int current, int total) {
+    return '作品詳細 $current/$total';
+  }
+
+  @override
+  String scrapeJobTerminalProgress(
+    int processed,
+    int total,
+    int saved,
+    int excluded,
+    int failed,
+  ) {
+    return '已處理 $processed/$total，保存 $saved，排除 $excluded，失敗 $failed';
   }
 
   @override
@@ -1224,6 +1246,9 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get cancel => '取消';
+
+  @override
+  String get reload => '重新加载';
 
   @override
   String get confirmDelete => '确定删除';
@@ -1862,6 +1887,9 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get scrapeSourceWorksTitle => '作品来源';
 
   @override
+  String get scrapeSourcePriorityHint => '勾选来源并拖动调整优先顺序';
+
+  @override
   String get scrapeSourceAliasTitle => '女优别名来源';
 
   @override
@@ -2302,8 +2330,24 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get scrapeJobStateExcluded => '已排除';
 
   @override
-  String scrapeJobProgress(int processed, int saved, int failed) {
-    return '已处理 $processed，成功 $saved，失败 $failed';
+  String scrapeJobCollectionSummary(int raw, int unique, int duplicates) {
+    return '取得 $raw 条，去重后 $unique 条，重复 $duplicates 条';
+  }
+
+  @override
+  String scrapeJobDetailProgress(int current, int total) {
+    return '作品详情 $current/$total';
+  }
+
+  @override
+  String scrapeJobTerminalProgress(
+    int processed,
+    int total,
+    int saved,
+    int excluded,
+    int failed,
+  ) {
+    return '已处理 $processed/$total，保存 $saved，排除 $excluded，失败 $failed';
   }
 
   @override
@@ -2384,6 +2428,9 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get cancel => '取消';
+
+  @override
+  String get reload => '重新載入';
 
   @override
   String get confirmDelete => '確定刪除';
@@ -3022,6 +3069,9 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get scrapeSourceWorksTitle => '作品來源';
 
   @override
+  String get scrapeSourcePriorityHint => '勾選來源並拖曳調整優先順序';
+
+  @override
   String get scrapeSourceAliasTitle => '女優別名來源';
 
   @override
@@ -3462,8 +3512,24 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get scrapeJobStateExcluded => '已排除';
 
   @override
-  String scrapeJobProgress(int processed, int saved, int failed) {
-    return '已處理 $processed，成功 $saved，失敗 $failed';
+  String scrapeJobCollectionSummary(int raw, int unique, int duplicates) {
+    return '取得 $raw 筆，去重後 $unique 筆，重複 $duplicates 筆';
+  }
+
+  @override
+  String scrapeJobDetailProgress(int current, int total) {
+    return '作品詳細 $current/$total';
+  }
+
+  @override
+  String scrapeJobTerminalProgress(
+    int processed,
+    int total,
+    int saved,
+    int excluded,
+    int failed,
+  ) {
+    return '已處理 $processed/$total，保存 $saved，排除 $excluded，失敗 $failed';
   }
 
   @override

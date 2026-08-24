@@ -80,9 +80,7 @@ class _ImageCropperDialogState extends State<_ImageCropperDialog> {
         horizontal: _dialogHorizontalInset,
         vertical: _dialogVerticalInset,
       ),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(_dialogPadding),
         child: _buildContent(context),
@@ -212,9 +210,7 @@ class _ImageCropperDialogState extends State<_ImageCropperDialog> {
     return const SizedBox(
       width: 260,
       height: 140,
-      child: Center(
-        child: CircularProgressIndicator(),
-      ),
+      child: Center(child: CircularProgressIndicator()),
     );
   }
 
@@ -341,16 +337,10 @@ class _ImageCropperDialogState extends State<_ImageCropperDialog> {
     required double previewMax,
   }) {
     if (imageWidth >= imageHeight) {
-      return Size(
-        previewMax,
-        previewMax * (imageHeight / imageWidth),
-      );
+      return Size(previewMax, previewMax * (imageHeight / imageWidth));
     }
 
-    return Size(
-      previewMax * (imageWidth / imageHeight),
-      previewMax,
-    );
+    return Size(previewMax * (imageWidth / imageHeight), previewMax);
   }
 
   // 顯示圖片預覽與裁切框。
@@ -385,10 +375,7 @@ class _ImageCropperDialogState extends State<_ImageCropperDialog> {
               child: Container(
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.3),
-                  border: Border.all(
-                    color: Colors.blue.shade400,
-                    width: 2,
-                  ),
+                  border: Border.all(color: Colors.blue.shade400, width: 2),
                 ),
               ),
             ),

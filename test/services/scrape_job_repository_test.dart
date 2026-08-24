@@ -169,4 +169,78 @@ void main() {
       if (await directory.exists()) await directory.delete(recursive: true);
     }
   });
+
+  test(
+    'concurrent enqueue is idempotent and FIFO selects the oldest',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'avaca-job-fifo-test-',
+      );
+      final db = AppDatabase.forTesting(
+        baseDir: directory.path,
+        databaseFactory: databaseFactoryFfi,
+      );
+      try {
+        await db.init();
+        await db.addActress(name: 'First Actress');
+        await db.addActress(name: 'Second Actress');
+        final rows = await (await db.database).query(
+          'actresses',
+          columns: const ['id', 'name'],
+        );
+        final firstId =
+            rows.singleWhere((row) => row['name'] == 'First Actress')['id']
+                as int;
+        final secondId =
+            rows.singleWhere((row) => row['name'] == 'Second Actress')['id']
+                as int;
+        final repository = ScrapeJobRepository(db: db);
+        final concurrent = await Future.wait([
+          repository.create(
+            actressId: firstId,
+            actressName: 'First Actress',
+            optionsSnapshot: '{}',
+            sourceSettingsSnapshot: '{}',
+            rulesVersionSnapshot: 'builtin-1',
+            rulesSnapshot: '{}',
+          ),
+          repository.create(
+            actressId: firstId,
+            actressName: 'First Actress',
+            optionsSnapshot: '{}',
+            sourceSettingsSnapshot: '{}',
+            rulesVersionSnapshot: 'builtin-1',
+            rulesSnapshot: '{}',
+          ),
+        ]);
+        expect(concurrent[0].id, concurrent[1].id);
+        expect(
+          (await repository.list(
+            actressId: firstId,
+          )).where((job) => job.isActive),
+          hasLength(1),
+        );
+        expect(await repository.listEvents(concurrent[0].id), hasLength(1));
+
+        await Future<void>.delayed(const Duration(milliseconds: 2));
+        final second = await repository.create(
+          actressId: secondId,
+          actressName: 'Second Actress',
+          optionsSnapshot: '{}',
+          sourceSettingsSnapshot: '{}',
+          rulesVersionSnapshot: 'builtin-1',
+          rulesSnapshot: '{}',
+        );
+        expect((await repository.nextQueued())?.id, concurrent[0].id);
+        await repository.updateJob(
+          concurrent[0].id,
+          state: ScrapeJobState.succeeded,
+        );
+        expect((await repository.nextQueued())?.id, second.id);
+      } finally {
+        await db.close();
+        if (await directory.exists()) await directory.delete(recursive: true);
+      }
+    },
+  );
 }

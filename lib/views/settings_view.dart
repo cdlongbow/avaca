@@ -263,6 +263,7 @@ class _SettingsViewState extends State<SettingsView> {
   @override
   void dispose() {
     controller.removeListener(_onControllerChanged);
+    controller.dispose();
     if (_ownsDataTransferController) dataTransferController.dispose();
     if (_ownsSoftwareUpdateController) updateController.dispose();
     super.dispose();
@@ -1287,7 +1288,7 @@ class _ScrapeSourcesSettingsBodyState
 
   Future<void> _select({
     ScrapeSourceId? actressDetailsSource,
-    WorksSourceSelection? worksSource,
+    List<ScrapeSourceId>? worksSources,
     ScrapeSourceId? aliasSource,
   }) async {
     final current = _settings;
@@ -1296,7 +1297,7 @@ class _ScrapeSourcesSettingsBodyState
     }
     final next = current.copyWith(
       actressDetailsSource: actressDetailsSource,
-      worksSource: worksSource,
+      worksSources: worksSources,
       aliasSource: aliasSource,
     );
     final version = ++_selectionVersion;
@@ -1417,19 +1418,7 @@ class _ScrapeSourcesSettingsBodyState
                   unawaited(_select(actressDetailsSource: value)),
             ),
             const SizedBox(height: 12),
-            _sourceSelector<WorksSourceSelection>(
-              key: const PageStorageKey('scrape-works-source'),
-              title: localizations.scrapeSourceWorksTitle,
-              value: settings.worksSource == WorksSourceSelection.minnanoAv
-                  ? WorksSourceSelection.javbus
-                  : settings.worksSource,
-              options: [
-                (WorksSourceSelection.all, localizations.scrapeSourceAll),
-                (WorksSourceSelection.javbus, localizations.scrapeSourceJavBus),
-                (WorksSourceSelection.avbase, localizations.scrapeSourceAvBase),
-              ],
-              onChanged: (value) => unawaited(_select(worksSource: value)),
-            ),
+            _worksSourceSelector(context, settings),
             const SizedBox(height: 12),
             _sourceSelector<ScrapeSourceId>(
               key: const PageStorageKey('scrape-alias-source'),
@@ -1544,6 +1533,85 @@ class _ScrapeSourcesSettingsBodyState
       ScrapeSourceId.javbus => localizations.scrapeSourceJavBus,
       ScrapeSourceId.avbase => localizations.scrapeSourceAvBase,
     };
+  }
+
+  Widget _worksSourceSelector(
+    BuildContext context,
+    ScrapeSourceSettings settings,
+  ) {
+    final localizations = AppLocalizations.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
+    final selected = settings.worksSources;
+    final unselected = ScrapeSourceRegistry.worksSources
+        .where((source) => !selected.contains(source))
+        .toList(growable: false);
+
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 0,
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        key: const PageStorageKey('scrape-works-source'),
+        backgroundColor: colorScheme.surfaceContainer,
+        collapsedBackgroundColor: colorScheme.surfaceContainer,
+        shape: const Border(),
+        collapsedShape: const Border(),
+        clipBehavior: Clip.antiAlias,
+        title: Text(localizations.scrapeSourceWorksTitle),
+        subtitle: Text(localizations.scrapeSourcePriorityHint),
+        children: [
+          ReorderableListView.builder(
+            key: const PageStorageKey('scrape-works-source-order'),
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            buildDefaultDragHandles: false,
+            itemCount: selected.length,
+            onReorderItem: (oldIndex, newIndex) {
+              final reordered = [...selected];
+              final source = reordered.removeAt(oldIndex);
+              reordered.insert(newIndex, source);
+              unawaited(_select(worksSources: reordered));
+            },
+            itemBuilder: (context, index) {
+              final source = selected[index];
+              return CheckboxListTile(
+                key: ValueKey('scrape-works-source-selected-${source.name}'),
+                value: true,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: Row(
+                  children: [
+                    Expanded(child: Text(_sourceLabel(localizations, source))),
+                    Text('#${index + 1}'),
+                  ],
+                ),
+                secondary: ReorderableDragStartListener(
+                  index: index,
+                  child: const Icon(Icons.drag_handle),
+                ),
+                onChanged: selected.length == 1
+                    ? null
+                    : (_) => unawaited(
+                        _select(
+                          worksSources: selected
+                              .where((item) => item != source)
+                              .toList(growable: false),
+                        ),
+                      ),
+              );
+            },
+          ),
+          for (final source in unselected)
+            CheckboxListTile(
+              key: ValueKey('scrape-works-source-available-${source.name}'),
+              value: false,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: Text(_sourceLabel(localizations, source)),
+              onChanged: (_) =>
+                  unawaited(_select(worksSources: [...selected, source])),
+            ),
+        ],
+      ),
+    );
   }
 
   Widget _sourceSelector<T>({

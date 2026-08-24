@@ -933,7 +933,7 @@ class _WorksViewState extends State<WorksView> {
 
     final requestedSourceIds = <ScrapeSourceId>{
       sourceSettings.actressDetailsSource,
-      ...ScrapeSourceRegistry.resolveWorksSources(sourceSettings.worksSource),
+      ...ScrapeSourceRegistry.resolveWorksSources(sourceSettings.worksSources),
     };
     if (options.scrapeAliases) {
       requestedSourceIds.add(sourceSettings.aliasSource);

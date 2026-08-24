@@ -8,6 +8,132 @@ import '../components/app_snackbar.dart';
 import '../components/image_cropper.dart';
 import '../core/database.dart';
 
+final class DetailActressData {
+  DetailActressData({
+    required this.name,
+    required this.imgPath,
+    required this.mainType,
+    required this.memo,
+    required this.height,
+    required this.weight,
+    required this.bwh,
+    required this.cup,
+    required this.birthDate,
+    List<String> aliases = const [],
+  }) : aliases = List.unmodifiable(aliases);
+
+  const DetailActressData.empty()
+    : name = '',
+      imgPath = '',
+      mainType = '',
+      memo = '',
+      height = '',
+      weight = '',
+      bwh = '',
+      cup = '',
+      birthDate = null,
+      aliases = const [];
+
+  factory DetailActressData.fromRow(Map<String, Object?> row) {
+    String text(String key) => row[key]?.toString() ?? '';
+    final rawAliases = row['aliases'];
+    final aliases = rawAliases is Iterable
+        ? rawAliases
+              .map((value) => value.toString().trim())
+              .where((value) => value.isNotEmpty)
+              .toList(growable: false)
+        : const <String>[];
+    return DetailActressData(
+      name: text('name'),
+      imgPath: text('img_path'),
+      mainType: text('main_type'),
+      memo: text('memo'),
+      height: text('height'),
+      weight: text('weight'),
+      bwh: text('bwh'),
+      cup: text('cup'),
+      birthDate: row['birth_date']?.toString(),
+      aliases: aliases,
+    );
+  }
+
+  final String name;
+  final String imgPath;
+  final String mainType;
+  final String memo;
+  final String height;
+  final String weight;
+  final String bwh;
+  final String cup;
+  final String? birthDate;
+  final List<String> aliases;
+
+  DetailActressData copyWith({String? imgPath, List<String>? aliases}) {
+    return DetailActressData(
+      name: name,
+      imgPath: imgPath ?? this.imgPath,
+      mainType: mainType,
+      memo: memo,
+      height: height,
+      weight: weight,
+      bwh: bwh,
+      cup: cup,
+      birthDate: birthDate,
+      aliases: aliases ?? this.aliases,
+    );
+  }
+}
+
+final class DetailFormData {
+  DetailFormData({
+    required this.name,
+    required this.imgPath,
+    required this.mainType,
+    required List<String> selectedAttrs,
+    required this.memo,
+    required this.height,
+    required this.weight,
+    required this.bwh,
+    required this.cup,
+    required this.birthDate,
+  }) : selectedAttrs = List.unmodifiable(selectedAttrs);
+
+  const DetailFormData.empty()
+    : name = '',
+      imgPath = '',
+      mainType = '',
+      selectedAttrs = const [],
+      memo = '',
+      height = '',
+      weight = '',
+      bwh = '',
+      cup = '',
+      birthDate = null;
+
+  final String name;
+  final String imgPath;
+  final String mainType;
+  final List<String> selectedAttrs;
+  final String memo;
+  final String height;
+  final String weight;
+  final String bwh;
+  final String cup;
+  final String? birthDate;
+}
+
+final class DetailEditState {
+  DetailEditState({
+    required this.isEditing,
+    required this.name,
+    required List<String> currentAttrs,
+  }) : currentAttrs = List.unmodifiable(currentAttrs);
+
+  final bool isEditing;
+  final String name;
+  final List<String> currentAttrs;
+}
+
 class DetailController extends ChangeNotifier {
   DetailController({required this.db, required this.actressId});
 
@@ -16,19 +142,20 @@ class DetailController extends ChangeNotifier {
 
   bool isEditing = false;
   int workCount = 0;
-  Map<String, Object?> actressData = _buildFallbackActressData();
+  DetailActressData actressData = const DetailActressData.empty();
   List<String> currentAttrs = [];
   List<String> actressAliases = const [];
-  Map<String, Object?>? _editActressSnapshot;
+  DetailActressData? _editActressSnapshot;
   List<String>? _editAttrsSnapshot;
+  bool _disposed = false;
 
   // 初始化頁面資料，並同步目前的分類屬性。
   Future<void> init() async {
     actressData = await _loadActressData();
-    currentAttrs = _parseAttrs(actressData['main_type']?.toString() ?? '');
+    currentAttrs = _parseAttrs(actressData.mainType);
     await refreshWorkCount(notify: false);
-    actressAliases = _parseAliases(actressData['aliases']);
-    notifyListeners();
+    actressAliases = actressData.aliases;
+    _notifyIfActive();
   }
 
   Future<void> refresh() async {
@@ -36,25 +163,15 @@ class DetailController extends ChangeNotifier {
       return;
     }
     actressData = await _loadActressData();
-    currentAttrs = _parseAttrs(actressData['main_type']?.toString() ?? '');
-    actressAliases = _parseAliases(actressData['aliases']);
+    currentAttrs = _parseAttrs(actressData.mainType);
+    actressAliases = actressData.aliases;
     await refreshWorkCount(notify: false);
-    notifyListeners();
+    _notifyIfActive();
   }
 
   List<String> getCurrentAliases() => List.unmodifiable(actressAliases);
 
   List<String> get aliases => getCurrentAliases();
-
-  List<String> _parseAliases(Object? value) {
-    if (value is! Iterable) {
-      return const [];
-    }
-    return value
-        .map((alias) => alias.toString())
-        .where((alias) => alias.isNotEmpty)
-        .toList(growable: false);
-  }
 
   Future<bool> saveAliases(Iterable<String> aliases) async {
     try {
@@ -62,7 +179,8 @@ class DetailController extends ChangeNotifier {
       actressAliases = (await db.getActressAliases(
         actressId,
       )).toList(growable: false);
-      notifyListeners();
+      actressData = actressData.copyWith(aliases: actressAliases);
+      _notifyIfActive();
       return true;
     } catch (_) {
       return false;
@@ -76,7 +194,7 @@ class DetailController extends ChangeNotifier {
       workCount = 0;
     }
     if (notify) {
-      notifyListeners();
+      _notifyIfActive();
     }
   }
 
@@ -90,16 +208,6 @@ class DetailController extends ChangeNotifier {
     ];
   }
 
-  // 開啟刪除確認視窗的狀態資料。
-  Map<String, bool> openDeleteDialog() {
-    return {'open': true};
-  }
-
-  // 關閉刪除確認視窗的狀態資料。
-  Map<String, bool> closeDeleteDialog() {
-    return {'open': false};
-  }
-
   // 刪除資料與相關圖片，成功後回到首頁。
   Future<void> executeDelete(BuildContext context) async {
     final report = await db.deleteActressWithReport(actressId);
@@ -108,10 +216,10 @@ class DetailController extends ChangeNotifier {
       for (final imagePath in report.cacheEvictionPaths) {
         await FileImage(File(imagePath)).evict();
       }
-      actressData = _buildFallbackActressData();
+      actressData = const DetailActressData.empty();
       currentAttrs = [];
       workCount = 0;
-      notifyListeners();
+      _notifyIfActive();
     }
 
     if (!context.mounted) {
@@ -196,54 +304,40 @@ class DetailController extends ChangeNotifier {
   }
 
   // 裁切完成後更新目前照片路徑。
-  Map<String, Object> onCropDone(String newImgPath) {
-    actressData['img_path'] = newImgPath;
-    notifyListeners();
-
-    return _buildImageState(newImgPath);
+  void onCropDone(String newImgPath) {
+    actressData = actressData.copyWith(imgPath: newImgPath);
+    _notifyIfActive();
   }
 
   // 移除目前照片路徑。
-  Map<String, Object> deletePhoto() {
-    actressData['img_path'] = '';
-    notifyListeners();
-
-    return _buildImageState('');
+  void deletePhoto() {
+    actressData = actressData.copyWith(imgPath: '');
+    _notifyIfActive();
   }
 
   // 切換編輯狀態；離開編輯狀態時同步表單並寫入資料庫。
-  Future<Map<String, Object?>> toggleEditMode(
+  Future<DetailEditState> toggleEditMode(
     BuildContext context,
-    Map<String, Object?> formData,
+    DetailFormData formData,
   ) async {
     if (!isEditing) {
-      _editActressSnapshot = Map<String, Object?>.from(actressData);
+      _editActressSnapshot = actressData;
       _editAttrsSnapshot = List<String>.from(currentAttrs);
-    }
-
-    isEditing = !isEditing;
-
-    if (!isEditing) {
-      final selectedAttrs = formData['selected_attrs'];
-
-      if (selectedAttrs is List) {
-        currentAttrs = selectedAttrs.map((value) => value.toString()).toList();
-      } else {
-        currentAttrs = [];
-      }
-
+      isEditing = true;
+    } else if (await saveToDb(context, formData)) {
+      currentAttrs = List<String>.from(formData.selectedAttrs);
       _syncActressData(formData);
-      await saveToDb(context, formData);
+      isEditing = false;
       _clearEditSnapshot();
     }
 
-    notifyListeners();
+    _notifyIfActive();
 
-    return {
-      'is_editing': isEditing,
-      'name': formData['name']?.toString() ?? '',
-      'current_attrs': currentAttrs,
-    };
+    return DetailEditState(
+      isEditing: isEditing,
+      name: formData.name,
+      currentAttrs: currentAttrs,
+    );
   }
 
   // 放棄尚未儲存的編輯，只恢復檢視狀態。
@@ -253,14 +347,14 @@ class DetailController extends ChangeNotifier {
     final actressSnapshot = _editActressSnapshot;
     final attrsSnapshot = _editAttrsSnapshot;
     if (actressSnapshot != null) {
-      actressData = Map<String, Object?>.from(actressSnapshot);
+      actressData = actressSnapshot;
     }
     if (attrsSnapshot != null) {
       currentAttrs = List<String>.from(attrsSnapshot);
     }
     isEditing = false;
     _clearEditSnapshot();
-    notifyListeners();
+    _notifyIfActive();
   }
 
   void _clearEditSnapshot() {
@@ -268,23 +362,35 @@ class DetailController extends ChangeNotifier {
     _editAttrsSnapshot = null;
   }
 
+  void _notifyIfActive() {
+    if (!_disposed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
   // 將表單資料寫入資料庫，並依結果顯示提示訊息。
-  Future<bool> saveToDb(
-    BuildContext context,
-    Map<String, Object?> formData,
-  ) async {
-    final success = await db.updateActress(
-      actressId: actressId,
-      name: formData['name']?.toString() ?? '',
-      imgPath: actressData['img_path']?.toString() ?? '',
-      mainType: formData['main_type']?.toString() ?? '',
-      memo: formData['memo']?.toString() ?? '',
-      height: formData['height']?.toString() ?? '',
-      weight: formData['weight']?.toString() ?? '',
-      bwh: formData['bwh']?.toString() ?? '',
-      cup: formData['cup']?.toString() ?? '',
-      birthDate: formData['birth_date']?.toString(),
-    );
+  Future<bool> saveToDb(BuildContext context, DetailFormData formData) async {
+    bool success;
+    try {
+      success = await db.updateActress(
+        actressId: actressId,
+        name: formData.name,
+        imgPath: actressData.imgPath,
+        mainType: formData.mainType,
+        memo: formData.memo,
+        height: formData.height,
+        weight: formData.weight,
+        bwh: formData.bwh,
+        cup: formData.cup,
+        birthDate: formData.birthDate,
+      );
+    } on Object {
+      success = false;
+    }
 
     if (!context.mounted) {
       return success;
@@ -306,14 +412,14 @@ class DetailController extends ChangeNotifier {
   }
 
   // 從資料庫讀取詳細資料，找不到資料時使用預設資料。
-  Future<Map<String, Object?>> _loadActressData() async {
+  Future<DetailActressData> _loadActressData() async {
     final dbData = await db.getActressById(actressId);
 
     if (dbData != null) {
-      return Map<String, Object?>.from(dbData);
+      return DetailActressData.fromRow(dbData);
     }
 
-    return _buildFallbackActressData();
+    return const DetailActressData.empty();
   }
 
   // 將逗號分隔的分類文字轉成清單。
@@ -325,36 +431,19 @@ class DetailController extends ChangeNotifier {
         .toList();
   }
 
-  // 產生圖片狀態資料。
-  Map<String, Object> _buildImageState(String imgPath) {
-    return {'img_path': imgPath, 'has_image': imgPath.isNotEmpty};
-  }
-
   // 將表單資料同步回本地狀態。
-  void _syncActressData(Map<String, Object?> formData) {
-    actressData['name'] = formData['name']?.toString() ?? '';
-    actressData['img_path'] = formData['img_path']?.toString() ?? '';
-    actressData['main_type'] = formData['main_type']?.toString() ?? '';
-    actressData['memo'] = formData['memo']?.toString() ?? '';
-    actressData['height'] = formData['height']?.toString() ?? '';
-    actressData['weight'] = formData['weight']?.toString() ?? '';
-    actressData['bwh'] = formData['bwh']?.toString() ?? '';
-    actressData['cup'] = formData['cup']?.toString() ?? '';
-    actressData['birth_date'] = formData['birth_date']?.toString();
-  }
-
-  // 建立找不到資料時使用的預設詳細資料。
-  static Map<String, Object?> _buildFallbackActressData() {
-    return {
-      'name': '',
-      'img_path': null,
-      'main_type': '',
-      'memo': '',
-      'height': '',
-      'weight': '',
-      'bwh': '',
-      'cup': '',
-      'birth_date': null,
-    };
+  void _syncActressData(DetailFormData formData) {
+    actressData = DetailActressData(
+      name: formData.name,
+      imgPath: formData.imgPath,
+      mainType: formData.mainType,
+      memo: formData.memo,
+      height: formData.height,
+      weight: formData.weight,
+      bwh: formData.bwh,
+      cup: formData.cup,
+      birthDate: formData.birthDate,
+      aliases: actressAliases,
+    );
   }
 }

@@ -48,18 +48,18 @@ class _HomeViewState extends State<HomeView> {
   Future<void> toggleSearch() async {
     final state = controller.toggleSearch();
 
-    searchTextController.text = state['search_value']?.toString() ?? '';
+    searchTextController.text = state.searchValue;
 
     setState(() {});
 
-    if (state['is_open'] == true) {
+    if (state.isOpen) {
       await Future<void>.delayed(const Duration(milliseconds: 50));
       if (mounted) {
         searchFocusNode.requestFocus();
       }
     }
 
-    if (state['refresh_gallery'] == true) {
+    if (state.refreshGallery) {
       refreshGallery();
     }
   }
@@ -70,9 +70,6 @@ class _HomeViewState extends State<HomeView> {
   }
 
   Future<void> openFilterSheet() async {
-    final state = controller.openFilterSheet();
-    if (state['open'] != true) return;
-
     _dismissKeyboard();
     await showModalBottomSheet<void>(
       context: context,

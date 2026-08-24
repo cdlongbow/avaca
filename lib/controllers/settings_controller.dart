@@ -19,6 +19,7 @@ class SettingsController extends ChangeNotifier {
   ThemeMode themeMode = ThemeMode.system;
   bool isPureBlack = false;
   WorksPageSize _worksPageSize = WorksPageSize.small;
+  bool _disposed = false;
 
   String _themeModeString = 'system';
   String _localeString = 'system';
@@ -63,7 +64,7 @@ class SettingsController extends ChangeNotifier {
     _localeString = locale;
     _worksPageSize = _worksPageSizeFromString(worksPageSize);
 
-    notifyListeners();
+    _notifyIfActive();
   }
 
   // 更新主題模式，並將選擇結果寫入裝置儲存。
@@ -75,7 +76,7 @@ class SettingsController extends ChangeNotifier {
     _themeModeString = mode;
     themeMode = _themeModeFromString(mode);
 
-    notifyListeners();
+    _notifyIfActive();
   }
 
   // 更新語言，並將選擇結果寫入裝置儲存。
@@ -86,7 +87,7 @@ class SettingsController extends ChangeNotifier {
 
     _localeString = locale;
 
-    notifyListeners();
+    _notifyIfActive();
   }
 
   // 更新純黑模式，並將選擇結果寫入裝置儲存。
@@ -97,7 +98,7 @@ class SettingsController extends ChangeNotifier {
 
     isPureBlack = value;
 
-    notifyListeners();
+    _notifyIfActive();
   }
 
   // 更新作品頁大小，並將選擇結果寫入裝置儲存。
@@ -108,7 +109,7 @@ class SettingsController extends ChangeNotifier {
 
     _worksPageSize = value;
 
-    notifyListeners();
+    _notifyIfActive();
   }
 
   // 從資料庫讀取自訂主題色，並合併到預設色表。
@@ -141,7 +142,7 @@ class SettingsController extends ChangeNotifier {
 
     customColors = merged;
 
-    notifyListeners();
+    _notifyIfActive();
   }
 
   // 將目前的自訂主題色寫入資料庫。
@@ -152,7 +153,17 @@ class SettingsController extends ChangeNotifier {
 
     await db.setSetting(_customThemeKey, encoded);
 
-    notifyListeners();
+    _notifyIfActive();
+  }
+
+  void _notifyIfActive() {
+    if (!_disposed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 
   // 將儲存用字串轉成 Flutter 使用的主題模式。

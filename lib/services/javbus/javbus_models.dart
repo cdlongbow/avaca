@@ -101,14 +101,7 @@ final class JavBusPageIssue {
   final Object error;
 
   @override
-  String toString() =>
-      'JavBus ' +
-      kind.name +
-      ': ' +
-      uri.toString() +
-      ' (' +
-      error.toString() +
-      ')';
+  String toString() => 'JavBus ${kind.name}: $uri ($error)';
 }
 
 final class JavBusWorkCollectionResult {

@@ -70,8 +70,12 @@ class _AvacaAppState extends State<AvacaApp> {
         widget.softwareUpdateController ??
         SoftwareUpdateController.forApp(db: widget.db);
     _scrapeJobCoordinator = ScrapeJobCoordinator(db: widget.db);
-    unawaited(_scrapeJobCoordinator.initialize());
-    _restoreThemeState();
+    unawaited(
+      _scrapeJobCoordinator.initialize().catchError((Object error) {
+        debugPrint('Scrape job coordinator initialization failed: $error');
+      }),
+    );
+    unawaited(_restoreThemeState());
   }
 
   @override
@@ -84,12 +88,19 @@ class _AvacaAppState extends State<AvacaApp> {
 
   // 啟動時讀取上次儲存的主題與語言設定。
   Future<void> _restoreThemeState() async {
-    final prefs = await SharedPreferences.getInstance();
-    final modeString = prefs.getString('theme_mode') ?? 'system';
-    final pureBlack = prefs.getBool('pure_black') ?? false;
-    final localeString = prefs.getString('app_locale') ?? 'system';
-
-    final rawCustom = await widget.db.getSetting('custom_theme');
+    var modeString = 'system';
+    var pureBlack = false;
+    var localeString = 'system';
+    String? rawCustom;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      modeString = prefs.getString('theme_mode') ?? 'system';
+      pureBlack = prefs.getBool('pure_black') ?? false;
+      localeString = prefs.getString('app_locale') ?? 'system';
+      rawCustom = await widget.db.getSetting('custom_theme');
+    } on Object catch (error) {
+      debugPrint('Theme state restore failed: $error');
+    }
 
     Map<String, Color>? customColors;
 
@@ -109,6 +120,7 @@ class _AvacaAppState extends State<AvacaApp> {
       }
     }
 
+    if (!mounted) return;
     setState(() {
       _themeMode = _themeModeFromString(modeString);
       _isPureBlack = pureBlack;

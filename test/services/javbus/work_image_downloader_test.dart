@@ -64,7 +64,7 @@ void main() {
         final urls = policy.urlsFor(code: entry.key, studio: studio);
         final path = urls.card.pathSegments;
         expect(path[path.length - 2], entry.value);
-        expect(path.last, entry.value + 'ps.jpg');
+        expect(path.last, '${entry.value}ps.jpg');
         expect(isApprovedWorkImageUri(urls.card), isTrue);
         expect(isApprovedWorkImageUri(urls.detail), isTrue);
       }
@@ -121,21 +121,6 @@ void main() {
     test('refuses to guess when maker and publisher metadata are missing', () {
       expect(
         () => policy.urlsFor(code: 'ABF-183'),
-        throwsA(isA<WorkImageRouteException>()),
-      );
-    });
-
-    test('does not infer a route from image evidence', () {
-      expect(
-        () => policy.urlsFor(
-          code: 'SNOS-320',
-          evidenceUris: [
-            Uri.parse(
-              'https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/'
-              'snos00320/snos00320ps.jpg',
-            ),
-          ],
-        ),
         throwsA(isA<WorkImageRouteException>()),
       );
     });
@@ -501,11 +486,7 @@ void main() {
     addTearDown(() => directory.delete(recursive: true));
     final bytes = image.encodePng(image.Image(width: 300, height: 450));
     final target =
-        directory.path +
-        Platform.pathSeparator +
-        'nested' +
-        Platform.pathSeparator +
-        'card.png';
+        '${directory.path}${Platform.pathSeparator}nested${Platform.pathSeparator}card.png';
 
     await WorkImageDownloader(
       transport: _FakeBinaryTransport([

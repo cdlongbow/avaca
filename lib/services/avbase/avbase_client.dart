@@ -85,6 +85,7 @@ final class AvBaseClient {
     Uri actressUri, {
     required AvBaseActressPage firstPage,
     bool Function()? isCancelled,
+    void Function(int currentPage, int totalPages, int discovered)? onProgress,
   }) async {
     _lastWorkCollectionIssues = const [];
     _validateNavigationUri(actressUri);
@@ -108,6 +109,7 @@ final class AvBaseClient {
     }
 
     append(firstPage.works);
+    onProgress?.call(1, firstPage.pageCount, result.length);
     for (var page = 1; page < firstPage.pageCount; page++) {
       if (isCancelled?.call() ?? false) {
         break;
@@ -124,6 +126,7 @@ final class AvBaseClient {
           ),
         );
       }
+      onProgress?.call(page + 1, firstPage.pageCount, result.length);
     }
     final collection = AvBaseWorkCollectionResult(
       works: List.unmodifiable(result),

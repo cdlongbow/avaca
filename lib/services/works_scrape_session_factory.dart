@@ -38,7 +38,7 @@ class WorksScrapeSessionFactory {
     );
     final requestedSourceIds = <ScrapeSourceId>{
       sourceSettings.actressDetailsSource,
-      ...ScrapeSourceRegistry.resolveWorksSources(sourceSettings.worksSource),
+      ...ScrapeSourceRegistry.resolveWorksSources(sourceSettings.worksSources),
     };
     if (WorkScrapeOptions.decode(job.optionsSnapshot).scrapeAliases) {
       requestedSourceIds.add(sourceSettings.aliasSource);

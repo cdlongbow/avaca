@@ -20,7 +20,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
   group(
-    'legacy multi-source scraper behavior',
+    'superseded streaming multi-source scraper behavior',
     () {
       sqfliteFfiInit();
 
@@ -164,7 +164,7 @@ void main() {
             options: const WorkScrapeOptions(),
             sourceSettings: const ScrapeSourceSettings(
               actressDetailsSource: ScrapeSourceId.minnanoAv,
-              worksSource: WorksSourceSelection.javbus,
+              worksSources: [ScrapeSourceId.javbus],
             ),
           );
           expect(minnano.detailRequests, isEmpty);
@@ -333,7 +333,7 @@ void main() {
             options: const WorkScrapeOptions(syncDetails: false),
             sourceSettings: const ScrapeSourceSettings(
               actressDetailsSource: ScrapeSourceId.minnanoAv,
-              worksSource: WorksSourceSelection.minnanoAv,
+              worksSources: [ScrapeSourceId.javbus],
             ),
             onProgress: progress.add,
           );
@@ -431,7 +431,7 @@ void main() {
             options: const WorkScrapeOptions(syncDetails: false),
             sourceSettings: const ScrapeSourceSettings(
               actressDetailsSource: ScrapeSourceId.minnanoAv,
-              worksSource: WorksSourceSelection.minnanoAv,
+              worksSources: [ScrapeSourceId.javbus],
             ),
             onProgress: progress.add,
           );
@@ -506,7 +506,7 @@ void main() {
             options: const WorkScrapeOptions(syncDetails: false),
             sourceSettings: const ScrapeSourceSettings(
               actressDetailsSource: ScrapeSourceId.minnanoAv,
-              worksSource: WorksSourceSelection.minnanoAv,
+              worksSources: [ScrapeSourceId.javbus],
             ),
             onProgress: progress.add,
           );
@@ -577,7 +577,7 @@ void main() {
             options: const WorkScrapeOptions(syncDetails: false),
             sourceSettings: const ScrapeSourceSettings(
               actressDetailsSource: ScrapeSourceId.minnanoAv,
-              worksSource: WorksSourceSelection.minnanoAv,
+              worksSources: [ScrapeSourceId.javbus],
             ),
           );
 
@@ -780,7 +780,7 @@ void main() {
           options: const WorkScrapeOptions(),
           sourceSettings: const ScrapeSourceSettings(
             actressDetailsSource: ScrapeSourceId.minnanoAv,
-            worksSource: WorksSourceSelection.minnanoAv,
+            worksSources: [ScrapeSourceId.javbus],
           ),
         );
 
@@ -1162,7 +1162,7 @@ void main() {
           options: const WorkScrapeOptions(syncDetails: false),
           sourceSettings: const ScrapeSourceSettings(
             actressDetailsSource: ScrapeSourceId.minnanoAv,
-            worksSource: WorksSourceSelection.minnanoAv,
+            worksSources: [ScrapeSourceId.javbus],
           ),
         );
 
@@ -1632,7 +1632,7 @@ void main() {
             options: const WorkScrapeOptions(syncDetails: false),
             sourceSettings: const ScrapeSourceSettings(
               actressDetailsSource: ScrapeSourceId.minnanoAv,
-              worksSource: WorksSourceSelection.minnanoAv,
+              worksSources: [ScrapeSourceId.javbus],
             ),
             cancellationToken: token,
           );
@@ -1701,7 +1701,7 @@ void main() {
             options: const WorkScrapeOptions(replaceActressImage: true),
             sourceSettings: const ScrapeSourceSettings(
               actressDetailsSource: ScrapeSourceId.minnanoAv,
-              worksSource: WorksSourceSelection.minnanoAv,
+              worksSources: [ScrapeSourceId.javbus],
             ),
             cancellationToken: token,
           );
@@ -1765,7 +1765,7 @@ void main() {
             options: const WorkScrapeOptions(),
             sourceSettings: const ScrapeSourceSettings(
               actressDetailsSource: ScrapeSourceId.minnanoAv,
-              worksSource: WorksSourceSelection.javbus,
+              worksSources: [ScrapeSourceId.javbus],
             ),
           ),
           throwsA(isA<WorksScrapeException>()),
@@ -1910,8 +1910,7 @@ void main() {
         },
       );
     },
-    skip:
-        'Superseded by JavBus-only works scraping and exact code/URI identity.',
+    skip: 'Superseded by ordered list-first whole-record source selection.',
   );
 
   test(
@@ -1983,7 +1982,7 @@ void main() {
         options: const WorkScrapeOptions(syncDetails: false),
         sourceSettings: const ScrapeSourceSettings(
           actressDetailsSource: ScrapeSourceId.javbus,
-          worksSource: WorksSourceSelection.javbus,
+          worksSources: [ScrapeSourceId.javbus],
         ),
       );
 
@@ -2065,6 +2064,7 @@ final class _FakeScrapeSource implements ScrapeSource {
     ScrapeActressSearchResult actress, {
     required ScrapeActressPage firstPage,
     bool Function()? isCancelled,
+    void Function(ScrapeCollectionProgress progress)? onProgress,
   }) async {
     if (failWorks) {
       throw StateError('simulated works traversal failure');

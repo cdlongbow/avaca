@@ -178,6 +178,34 @@ void main() {
       find.byKey(const ValueKey('scrape-jobs-delete-selected')),
       findsOneWidget,
     );
+    final card = tester.widget<Card>(
+      find.ancestor(of: find.text('可刪除女優'), matching: find.byType(Card)),
+    );
+    final shape = card.shape! as RoundedRectangleBorder;
+    expect(card.clipBehavior, Clip.antiAlias);
+    expect(shape.borderRadius, BorderRadius.circular(12));
+    expect(shape.side.width, 2);
+    expect(
+      shape.side.color,
+      Theme.of(tester.element(find.byType(Card))).colorScheme.primary,
+    );
+    final tile = tester.widget<ListTile>(
+      find.ancestor(of: find.text('可刪除女優'), matching: find.byType(ListTile)),
+    );
+    expect(tile.selected, isFalse);
+    expect(tile.selectedTileColor, isNull);
+
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+    expect(find.text('可刪除女優'), findsOneWidget);
+    expect(find.text('已選取 1 項'), findsNothing);
+
+    await tester.longPress(find.text('可刪除女優'));
+    await tester.pump();
+    await tester.tap(find.byIcon(Icons.arrow_back));
+    await tester.pump();
+    expect(find.text('可刪除女優'), findsOneWidget);
+    expect(find.text('已選取 1 項'), findsNothing);
   });
 }
 
@@ -250,4 +278,9 @@ class _FakeScrapeJobRepository extends ScrapeJobRepository {
     String jobId, {
     int limit = 200,
   }) async => const [];
+
+  @override
+  Future<List<ScrapeJobSourceProgress>> listSourceProgress(
+    String jobId,
+  ) async => const [];
 }

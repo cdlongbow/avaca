@@ -66,6 +66,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get cancel => 'キャンセル';
 
   @override
+  String get reload => '再読み込み';
+
+  @override
   String get confirmDelete => '削除';
 
   @override
@@ -704,6 +707,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get scrapeSourceWorksTitle => '作品の取得元';
 
   @override
+  String get scrapeSourcePriorityHint => '取得元を選択し、ドラッグして優先順位を変更';
+
+  @override
   String get scrapeSourceAliasTitle => '女優別名の取得元';
 
   @override
@@ -1153,8 +1159,24 @@ class AppLocalizationsJa extends AppLocalizations {
   String get scrapeJobStateExcluded => '除外';
 
   @override
-  String scrapeJobProgress(int processed, int saved, int failed) {
-    return '処理 $processed、成功 $saved、失敗 $failed';
+  String scrapeJobCollectionSummary(int raw, int unique, int duplicates) {
+    return '取得 $raw、重複除外後 $unique、重複 $duplicates';
+  }
+
+  @override
+  String scrapeJobDetailProgress(int current, int total) {
+    return '詳細 $current/$total';
+  }
+
+  @override
+  String scrapeJobTerminalProgress(
+    int processed,
+    int total,
+    int saved,
+    int excluded,
+    int failed,
+  ) {
+    return '処理 $processed/$total、保存 $saved、除外 $excluded、失敗 $failed';
   }
 
   @override
@@ -1235,6 +1257,9 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
 
   @override
   String get cancel => 'キャンセル';
+
+  @override
+  String get reload => '再読み込み';
 
   @override
   String get confirmDelete => '削除';
@@ -1875,6 +1900,9 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
   String get scrapeSourceWorksTitle => '作品の取得元';
 
   @override
+  String get scrapeSourcePriorityHint => '取得元を選択し、ドラッグして優先順位を変更';
+
+  @override
   String get scrapeSourceAliasTitle => '女優別名の取得元';
 
   @override
@@ -2324,8 +2352,24 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
   String get scrapeJobStateExcluded => '除外';
 
   @override
-  String scrapeJobProgress(int processed, int saved, int failed) {
-    return '処理 $processed、成功 $saved、失敗 $failed';
+  String scrapeJobCollectionSummary(int raw, int unique, int duplicates) {
+    return '取得 $raw、重複除外後 $unique、重複 $duplicates';
+  }
+
+  @override
+  String scrapeJobDetailProgress(int current, int total) {
+    return '詳細 $current/$total';
+  }
+
+  @override
+  String scrapeJobTerminalProgress(
+    int processed,
+    int total,
+    int saved,
+    int excluded,
+    int failed,
+  ) {
+    return '処理 $processed/$total、保存 $saved、除外 $excluded、失敗 $failed';
   }
 
   @override

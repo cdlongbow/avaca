@@ -47,6 +47,18 @@ class ScrapeJobRepository {
     return rows.map(ScrapeJob.fromRow).toList(growable: false);
   }
 
+  Future<ScrapeJob?> nextQueued() async {
+    final database = await db.database;
+    final rows = await database.query(
+      'scrape_jobs',
+      where: 'state = ?',
+      whereArgs: [ScrapeJobState.queued.storageValue],
+      orderBy: 'created_at ASC, id ASC',
+      limit: 1,
+    );
+    return rows.isEmpty ? null : ScrapeJob.fromRow(rows.first);
+  }
+
   Future<void> deleteTerminalJobs(Iterable<String> ids) async {
     final jobIds = ids
         .map((id) => id.trim())
@@ -104,8 +116,6 @@ class ScrapeJobRepository {
     required String rulesSnapshot,
     List<String> retryTargetCodes = const [],
   }) async {
-    final existing = await findActiveForActress(actressId);
-    if (existing != null) return existing;
     final now = DateTime.now().toUtc();
     final job = ScrapeJob(
       id: _newId(actressId),
@@ -122,15 +132,45 @@ class ScrapeJobRepository {
       updatedAt: now,
     );
     final database = await db.database;
-    await database.insert('scrape_jobs', job.toRow());
-    await appendEvent(
-      job.id,
-      severity: ScrapeJobEventSeverity.info,
-      stage: ScrapeJobPhase.queued,
-      message: '刮削工作已排入佇列',
-    );
+    final created = await database.transaction((transaction) async {
+      final rows = await transaction.rawQuery(
+        '''
+        SELECT * FROM scrape_jobs
+        WHERE actress_id = ? AND state IN (?, ?, ?, ?)
+        ORDER BY updated_at DESC, created_at DESC
+        LIMIT 1
+        ''',
+        [actressId, ...activeStates.map((state) => state.storageValue)],
+      );
+      if (rows.isNotEmpty) return ScrapeJob.fromRow(rows.first);
+      try {
+        await transaction.insert('scrape_jobs', job.toRow());
+      } on DatabaseException catch (error) {
+        if (!error.isUniqueConstraintError()) rethrow;
+        final concurrent = await transaction.rawQuery(
+          '''
+          SELECT * FROM scrape_jobs
+          WHERE actress_id = ? AND state IN (?, ?, ?, ?)
+          ORDER BY updated_at DESC, created_at DESC
+          LIMIT 1
+          ''',
+          [actressId, ...activeStates.map((state) => state.storageValue)],
+        );
+        if (concurrent.isNotEmpty) return ScrapeJob.fromRow(concurrent.first);
+        rethrow;
+      }
+      await transaction.insert('scrape_job_events', {
+        'job_id': job.id,
+        'severity': ScrapeJobEventSeverity.info.storageValue,
+        'stage': ScrapeJobPhase.queued.storageValue,
+        'message': '刮削工作已排入佇列',
+        'metadata_json': '{}',
+        'created_at': now.toIso8601String(),
+      });
+      return job;
+    });
     await retainRecent();
-    return job;
+    return created;
   }
 
   Future<void> updateJob(
@@ -138,6 +178,10 @@ class ScrapeJobRepository {
     ScrapeJobState? state,
     ScrapeJobPhase? phase,
     int? discoveredCount,
+    int? rawDiscoveredCount,
+    int? duplicateCount,
+    int? detailCompletedCount,
+    int? detailTotalCount,
     int? processedCount,
     int? savedCount,
     int? excludedCount,
@@ -155,13 +199,17 @@ class ScrapeJobRepository {
     final values = <String, Object?>{
       if (state != null) 'state': state.storageValue,
       if (phase != null) 'phase': phase.storageValue,
-      if (discoveredCount != null) 'discovered_count': discoveredCount,
-      if (processedCount != null) 'processed_count': processedCount,
-      if (savedCount != null) 'saved_count': savedCount,
-      if (excludedCount != null) 'excluded_count': excludedCount,
-      if (failedCount != null) 'failed_count': failedCount,
-      if (imageFailureCount != null) 'image_failure_count': imageFailureCount,
-      if (attemptCount != null) 'attempt_count': attemptCount,
+      'discovered_count': ?discoveredCount,
+      'raw_discovered_count': ?rawDiscoveredCount,
+      'duplicate_count': ?duplicateCount,
+      'detail_completed_count': ?detailCompletedCount,
+      'detail_total_count': ?detailTotalCount,
+      'processed_count': ?processedCount,
+      'saved_count': ?savedCount,
+      'excluded_count': ?excludedCount,
+      'failed_count': ?failedCount,
+      'image_failure_count': ?imageFailureCount,
+      'attempt_count': ?attemptCount,
       if (retryTargetCodes != null)
         'retry_target_codes': jsonEncode(retryTargetCodes),
       if (startedAt != null) 'started_at': startedAt.toUtc().toIso8601String(),
@@ -169,7 +217,7 @@ class ScrapeJobRepository {
         'finished_at': finishedAt.toUtc().toIso8601String(),
       if (clearFinishedAt) 'finished_at': null,
       if (clearError) 'last_error': null,
-      if (lastError != null) 'last_error': lastError,
+      'last_error': ?lastError,
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     };
     if (values.length == 1) return;
@@ -200,17 +248,6 @@ class ScrapeJobRepository {
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
     return id;
-  }
-
-  Future<ScrapeJobItem?> findItem(String jobId, String canonicalCode) async {
-    final database = await db.database;
-    final rows = await database.query(
-      'scrape_job_items',
-      where: 'job_id = ? AND canonical_code = ?',
-      whereArgs: [jobId, canonicalCode],
-      limit: 1,
-    );
-    return rows.isEmpty ? null : ScrapeJobItem.fromRow(rows.first);
   }
 
   Future<List<ScrapeJobItem>> listItems(String jobId) async {

@@ -657,6 +657,10 @@ class AppDatabase {
         rules_snapshot TEXT NOT NULL,
         retry_target_codes TEXT NOT NULL DEFAULT '[]',
         discovered_count INTEGER NOT NULL DEFAULT 0,
+        raw_discovered_count INTEGER NOT NULL DEFAULT 0,
+        duplicate_count INTEGER NOT NULL DEFAULT 0,
+        detail_completed_count INTEGER NOT NULL DEFAULT 0,
+        detail_total_count INTEGER NOT NULL DEFAULT 0,
         processed_count INTEGER NOT NULL DEFAULT 0,
         saved_count INTEGER NOT NULL DEFAULT 0,
         excluded_count INTEGER NOT NULL DEFAULT 0,
@@ -675,6 +679,19 @@ class AppDatabase {
       'CREATE INDEX IF NOT EXISTS idx_scrape_jobs_actress_state '
       'ON scrape_jobs(actress_id, state, updated_at DESC)',
     );
+    final scrapeJobColumns = await _getTableColumns(db, 'scrape_jobs');
+    for (final column in const {
+      'raw_discovered_count': 'INTEGER NOT NULL DEFAULT 0',
+      'duplicate_count': 'INTEGER NOT NULL DEFAULT 0',
+      'detail_completed_count': 'INTEGER NOT NULL DEFAULT 0',
+      'detail_total_count': 'INTEGER NOT NULL DEFAULT 0',
+    }.entries) {
+      if (!scrapeJobColumns.contains(column.key)) {
+        await db.execute(
+          'ALTER TABLE scrape_jobs ADD COLUMN ${column.key} ${column.value}',
+        );
+      }
+    }
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_scrape_jobs_state_updated '
       'ON scrape_jobs(state, updated_at DESC)',
@@ -713,6 +730,7 @@ class AppDatabase {
         total_value INTEGER NOT NULL DEFAULT 0,
         total_known INTEGER NOT NULL DEFAULT 0,
         work_code TEXT,
+        discovered_count INTEGER NOT NULL DEFAULT 0,
         state TEXT,
         last_error TEXT,
         updated_at TEXT NOT NULL,
@@ -736,6 +754,16 @@ class AppDatabase {
         FOREIGN KEY (item_id) REFERENCES scrape_job_items(id) ON DELETE SET NULL
       )
     ''');
+    final sourceProgressColumns = await _getTableColumns(
+      db,
+      'scrape_job_source_progress',
+    );
+    if (!sourceProgressColumns.contains('discovered_count')) {
+      await db.execute(
+        'ALTER TABLE scrape_job_source_progress '
+        'ADD COLUMN discovered_count INTEGER NOT NULL DEFAULT 0',
+      );
+    }
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_scrape_job_events_job_time '
       'ON scrape_job_events(job_id, created_at DESC, id DESC)',
@@ -1037,39 +1065,47 @@ class AppDatabase {
         }
       }
     }
+    final performerNames = rows
+        .map((row) => row['name']?.toString().trim() ?? '')
+        .where((name) => name.isNotEmpty)
+        .map((name) => name.toLowerCase())
+        .where((name) => !currentActressNames.contains(name))
+        .toSet();
+    final canonicalIds = <String, Set<int>>{};
+    final aliasIds = <String, Set<int>>{};
+    if (performerNames.isNotEmpty) {
+      final placeholders = List.filled(performerNames.length, '?').join(', ');
+      final arguments = performerNames.toList(growable: false);
+      final canonicalRows = await executor.rawQuery(
+        'SELECT id, name FROM actresses '
+        'WHERE lower(name) IN ($placeholders)',
+        arguments,
+      );
+      for (final row in canonicalRows) {
+        final key = row['name']!.toString().trim().toLowerCase();
+        canonicalIds.putIfAbsent(key, () => <int>{}).add(row['id'] as int);
+      }
+      final aliasRows = await executor.rawQuery(
+        'SELECT DISTINCT aa.alias, a.id FROM actress_aliases aa '
+        'INNER JOIN actresses a ON a.id = aa.actress_id '
+        'WHERE lower(aa.alias) IN ($placeholders)',
+        arguments,
+      );
+      for (final row in aliasRows) {
+        final key = row['alias']!.toString().trim().toLowerCase();
+        aliasIds.putIfAbsent(key, () => <int>{}).add(row['id'] as int);
+      }
+    }
+
     final result = <Map<String, Object?>>[];
     for (final row in rows) {
       final name = row['name']?.toString().trim() ?? '';
-      if (name.isEmpty) {
-        continue;
-      }
-      if (currentActressNames.contains(name.toLowerCase())) {
-        continue;
-      }
-      final canonicalRows = await executor.query(
-        'actresses',
-        columns: ['id'],
-        where: 'name = ? COLLATE NOCASE',
-        whereArgs: [name],
-      );
-      int? actressId;
-      if (canonicalRows.length == 1) {
-        actressId = canonicalRows.single['id'] as int;
-      } else if (canonicalRows.isEmpty) {
-        final aliasRows = await executor.rawQuery(
-          '''
-          SELECT DISTINCT a.id
-          FROM actresses a
-          INNER JOIN actress_aliases aa ON aa.actress_id = a.id
-          WHERE aa.alias = ? COLLATE NOCASE
-          ORDER BY a.id ASC
-          ''',
-          [name],
-        );
-        if (aliasRows.length == 1) {
-          actressId = aliasRows.single['id'] as int;
-        }
-      }
+      final key = name.toLowerCase();
+      if (name.isEmpty || currentActressNames.contains(key)) continue;
+      final canonical = canonicalIds[key] ?? const <int>{};
+      final aliases = aliasIds[key] ?? const <int>{};
+      final matches = canonical.isNotEmpty ? canonical : aliases;
+      final actressId = matches.length == 1 ? matches.single : null;
       result.add({
         'name': name,
         'source': row['source'],

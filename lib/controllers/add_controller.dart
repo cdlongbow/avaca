@@ -8,26 +8,27 @@ import '../components/app_snackbar.dart';
 import '../components/image_cropper.dart';
 import '../core/database.dart';
 
+final class AddImageState {
+  const AddImageState({required this.previewSrc, required this.hasImage});
+
+  const AddImageState.empty() : previewSrc = '', hasImage = false;
+
+  final String previewSrc;
+  final bool hasImage;
+}
+
 class AddController extends ChangeNotifier {
-  AddController({
-    required this.db,
-  }) {
-    tempImgPath = path.join(
-      db.imgDir,
-      'temp_crop.jpg',
-    );
+  AddController({required this.db}) {
+    tempImgPath = path.join(db.imgDir, 'temp_crop.jpg');
   }
 
   final AppDatabase db;
   String? selectedImagePath;
   late final String tempImgPath;
 
-  Map<String, Object> _imageState = _buildImageState(
-    previewSrc: '',
-    hasImage: false,
-  );
+  AddImageState _imageState = const AddImageState.empty();
 
-  Map<String, Object> get imageState => Map.unmodifiable(_imageState);
+  AddImageState get imageState => _imageState;
 
   // 選擇圖片，成功後開啟裁切流程。
   Future<void> pickImage(BuildContext context) async {
@@ -75,15 +76,12 @@ class AddController extends ChangeNotifier {
   }
 
   // 裁切成功後，更新目前圖片路徑與預覽狀態。
-  Map<String, Object> onCropSuccess(String croppedPath) {
+  AddImageState onCropSuccess(String croppedPath) {
     selectedImagePath = croppedPath;
 
     final previewSrc = _buildBase64ImageSrc(croppedPath);
 
-    _imageState = _buildImageState(
-      previewSrc: previewSrc,
-      hasImage: true,
-    );
+    _imageState = AddImageState(previewSrc: previewSrc, hasImage: true);
 
     notifyListeners();
 
@@ -91,14 +89,11 @@ class AddController extends ChangeNotifier {
   }
 
   // 移除目前選擇的圖片與暫存檔案。
-  Map<String, Object> removeImage() {
+  AddImageState removeImage() {
     selectedImagePath = null;
     _removeTempImage();
 
-    _imageState = _buildImageState(
-      previewSrc: '',
-      hasImage: false,
-    );
+    _imageState = const AddImageState.empty();
 
     notifyListeners();
 
@@ -106,26 +101,17 @@ class AddController extends ChangeNotifier {
   }
 
   // 儲存新增資料，成功後回到首頁。
-  Future<void> saveActress(
-    BuildContext context,
-    String nameValue,
-  ) async {
+  Future<void> saveActress(BuildContext context, String nameValue) async {
     final name = nameValue.trim();
 
     if (name.isEmpty) {
-      AppSnackBar.showError(
-        context,
-        AppLocalizations.of(context).enterName,
-      );
+      AppSnackBar.showError(context, AppLocalizations.of(context).enterName);
       return;
     }
 
     final finalImgPath = _buildFinalImagePath(name);
 
-    final success = await db.addActress(
-      name: name,
-      imgPath: finalImgPath,
-    );
+    final success = await db.addActress(name: name, imgPath: finalImgPath);
 
     if (!context.mounted) {
       return;
@@ -139,10 +125,7 @@ class AddController extends ChangeNotifier {
         AppLocalizations.of(context).collectionAdded,
       );
 
-      Navigator.of(context).pushNamedAndRemoveUntil(
-        '/',
-        (route) => false,
-      );
+      Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
       return;
     }
 
@@ -160,19 +143,13 @@ class AddController extends ChangeNotifier {
       return;
     }
 
-    Navigator.of(context).pushNamedAndRemoveUntil(
-      '/',
-      (route) => false,
-    );
+    Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
   }
 
   String _buildSafeName(String name) {
     const invalidChars = '<>:"/\\?*';
 
-    return name
-        .split('')
-        .where((char) => !invalidChars.contains(char))
-        .join();
+    return name.split('').where((char) => !invalidChars.contains(char)).join();
   }
 
   String? _buildFinalImagePath(String name) {
@@ -182,10 +159,7 @@ class AddController extends ChangeNotifier {
 
     final safeName = _buildSafeName(name);
 
-    return path.join(
-      db.imgDir,
-      '$safeName.jpg',
-    );
+    return path.join(db.imgDir, '$safeName.jpg');
   }
 
   void _moveSelectedImageToFinalPath(String? finalImgPath) {
@@ -231,17 +205,5 @@ class AddController extends ChangeNotifier {
     final encodedImg = base64Encode(imageBytes);
 
     return 'data:image/jpeg;base64,$encodedImg';
-  }
-
-  static Map<String, Object> _buildImageState({
-    required String previewSrc,
-    required bool hasImage,
-  }) {
-    return {
-      'preview_src': previewSrc,
-      'preview_visible': hasImage,
-      'placeholder_visible': !hasImage,
-      'delete_button_visible': hasImage,
-    };
   }
 }

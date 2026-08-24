@@ -114,8 +114,8 @@ ScrapeWorkCodeIdentity _parseScrapeWorkCodeIdentitySurface(String surface) {
     final digits = separated.group(2)!;
     return ScrapeWorkCodeIdentity(
       surface: surface,
-      key: prefix.toLowerCase() + digits,
-      displayCode: prefix + '-' + digits,
+      key: '${prefix.toLowerCase()}$digits',
+      displayCode: '$prefix-$digits',
       isStructured: true,
     );
   }
@@ -132,22 +132,22 @@ ScrapeWorkCodeIdentity _parseScrapeWorkCodeIdentitySurface(String surface) {
       final startDigits = digits.substring(2);
       return ScrapeWorkCodeIdentity(
         surface: surface,
-        key: 'start' + startDigits,
-        displayCode: 'START-' + startDigits,
+        key: 'start$startDigits',
+        displayCode: 'START-$startDigits',
         isStructured: true,
       );
     }
     return ScrapeWorkCodeIdentity(
       surface: surface,
-      key: prefix.toLowerCase() + digits,
-      displayCode: prefix + '-' + digits,
+      key: '${prefix.toLowerCase()}$digits',
+      displayCode: '$prefix-$digits',
       isStructured: true,
     );
   }
 
   return ScrapeWorkCodeIdentity(
     surface: surface,
-    key: 'opaque:' + surface.toLowerCase(),
+    key: 'opaque:${surface.toLowerCase()}',
     displayCode: surface,
     isStructured: false,
   );
@@ -191,6 +191,15 @@ String? preferredScrapeWorkCode(Iterable<String?> rawCodes) {
     return structured.first.displayCode;
   }
   return identities.first.displayCode;
+}
+
+/// Storage spelling for one chosen source record. Unlike
+/// [preferredScrapeWorkCode], this preserves a real V/T/VT edition suffix
+/// when no ordinary candidate was selected for that identity.
+String? scrapeWorkStorageCode(String? rawCode) {
+  final identity = parseScrapeWorkCodeIdentity(rawCode);
+  if (identity == null) return null;
+  return identity.isSpecialEdition ? identity.surface : identity.displayCode;
 }
 
 /// Compares metadata only when one side lacks a code. The actress is already
