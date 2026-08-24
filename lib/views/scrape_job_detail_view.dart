@@ -408,6 +408,7 @@ class _ScrapeJobDetailViewState extends State<ScrapeJobDetailView> {
       contentPadding: EdgeInsets.zero,
       leading: Icon(switch (item.state) {
         ScrapeJobItemState.succeeded => Icons.check,
+        ScrapeJobItemState.review => Icons.rate_review_outlined,
         ScrapeJobItemState.failed => Icons.error_outline,
         ScrapeJobItemState.excluded => Icons.remove_circle_outline,
         _ => Icons.sync,
@@ -455,7 +456,8 @@ class _ScrapeJobDetailViewState extends State<ScrapeJobDetailView> {
     return switch (state) {
       ScrapeJobItemState.queued => l10n.scrapeJobStateQueued,
       ScrapeJobItemState.running => l10n.scrapeJobStateRunning,
-      ScrapeJobItemState.succeeded => l10n.scrapeJobStateSucceeded,
+        ScrapeJobItemState.succeeded => l10n.scrapeJobStateSucceeded,
+        ScrapeJobItemState.review => '待檢視',
       ScrapeJobItemState.excluded => l10n.scrapeJobStateExcluded,
       ScrapeJobItemState.failed => l10n.scrapeJobStateFailed,
       ScrapeJobItemState.cancelled => l10n.scrapeJobStateCancelled,

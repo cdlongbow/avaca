@@ -865,24 +865,6 @@ abstract class AppLocalizations {
   /// **'更換女優頭像'**
   String get replaceActressImage;
 
-  /// No description provided for @maxActressCountLabel.
-  ///
-  /// In zh_TW, this message translates to:
-  /// **'多於此數量的女優不刮削'**
-  String get maxActressCountLabel;
-
-  /// No description provided for @maxActressCountHint.
-  ///
-  /// In zh_TW, this message translates to:
-  /// **'0 表示不限制'**
-  String get maxActressCountHint;
-
-  /// No description provided for @maxActressCountInvalid.
-  ///
-  /// In zh_TW, this message translates to:
-  /// **'請輸入大於等於 0 的整數'**
-  String get maxActressCountInvalid;
-
   /// No description provided for @scrapeAvatarUnavailable.
   ///
   /// In zh_TW, this message translates to:

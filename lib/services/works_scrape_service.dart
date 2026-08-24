@@ -6,12 +6,13 @@ import 'package:path/path.dart' as path;
 
 import '../core/database.dart';
 import '../models/scrape_source_settings.dart';
+import '../models/scrape_exclusion_policy.dart';
+import '../models/scrape_rules.dart';
 import '../models/scraped_actress_details.dart';
 import '../models/work_scrape_options.dart';
 import 'avbase/avbase_models.dart';
 import 'javbus/javbus_client.dart';
 import 'javbus/javbus_scrape_source.dart';
-import 'javbus/prefix_exclusion.dart';
 import 'javbus/javbus_verification.dart';
 import 'javbus/prefix_route_repository.dart';
 import 'javbus/work_image_downloader.dart';
@@ -23,6 +24,7 @@ import 'scrape_run_observer.dart';
 import 'scrape/scrape_source.dart';
 import 'scrape/scrape_source_registry.dart';
 import 'scrape/work_identity.dart';
+import 'scrape_exclusion_policy_evaluator.dart';
 
 abstract interface class ActressImageDownloader {
   Future<String> download(Uri uri, String targetPath);
@@ -121,7 +123,6 @@ enum WorksScrapeFailureReason {
   detailsUnavailable,
   detailCodeMismatch,
   invalidCode,
-  performerCountUnavailable,
   databaseSaveFailed,
 }
 
@@ -330,6 +331,7 @@ class WorksScrapeService {
     WorksScrapeCancellationToken? cancellationToken,
     void Function(WorksScrapeProgress progress)? onProgress,
     ScrapeRunObserver? observer,
+    ScrapePolicySnapshot? policySnapshot,
   }) async {
     _observer = observer;
     _sourceProgress.clear();
@@ -354,6 +356,15 @@ class WorksScrapeService {
       phase: WorksScrapePhase.collectingSources,
     );
     final settings = sourceSettings ?? const ScrapeSourceSettings();
+    final effectivePolicy =
+        policySnapshot ??
+        ScrapePolicySnapshot.v2(
+          rules: ScrapeRules.builtin,
+          excludedPrefixes: options.excludedPrefixes,
+          managedFamilyModes: options.managedFamilyModes,
+          exactAllows: options.exactAllows,
+        );
+    final policyEvaluator = ScrapeExclusionPolicyEvaluator(effectivePolicy);
     final queries = _queries(name, aliases);
     final requestedWorkIds = ScrapeSourceRegistry.resolveWorksSources(
       settings.worksSources,
@@ -441,7 +452,6 @@ class WorksScrapeService {
       }
     }
 
-    final exclusions = PrefixExclusion(options.excludedPrefixes);
     // The work-list barrier is intentional: no detail request starts until
     // every selected works source has finished traversing its actress pages.
     final workCollectionOutcomes = await Future.wait([
@@ -454,8 +464,8 @@ class WorksScrapeService {
     final globalSelection = _selectGlobalWorkCandidates(
       requestedWorkIds: requestedWorkIds,
       collectedById: collectedById,
-      exclusions: exclusions,
       retryWorkCodes: options.retryWorkCodes,
+      policyEvaluator: policyEvaluator,
     );
     _rawDiscovered = globalSelection.rawDiscovered;
     _duplicateCount = globalSelection.duplicateCount;
@@ -685,6 +695,8 @@ class WorksScrapeService {
       required _CanonicalWorkStatus status,
       WorksScrapeFailure? failure,
       Set<WorkImageVariant> imageFailures = const <WorkImageVariant>{},
+      String? reason,
+      bool review = false,
     }) {
       final existing = outcomes[identityKey];
       if (existing == null) {
@@ -693,6 +705,8 @@ class WorksScrapeService {
           status: status,
           failure: failure,
           imageFailures: imageFailures,
+          reason: reason,
+          review: review,
         );
         return;
       }
@@ -701,6 +715,8 @@ class WorksScrapeService {
           existing.status == _CanonicalWorkStatus.excluded) {
         existing.status = status;
         existing.failure = failure;
+        existing.reason = reason;
+        existing.review = review;
       }
     }
 
@@ -795,35 +811,18 @@ class WorksScrapeService {
             error: resolved.failureError,
           ),
         );
-      } else if (exclusions.matches(code)) {
-        recordOutcome(
-          identityKey: resolved.identityKey,
-          code: code,
-          status: _CanonicalWorkStatus.excluded,
-        );
       } else {
         final selectedDetails = resolved.details.first;
-        final maxActressCount = options.maxActressCount;
-        final performerCount = selectedDetails.performerCount;
-        if (maxActressCount != null &&
-            (performerCount == null || performerCount <= 0)) {
-          recordOutcome(
-            identityKey: resolved.identityKey,
-            code: code,
-            status: _CanonicalWorkStatus.failed,
-            failure: WorksScrapeFailure(
-              code: code,
-              stage: WorksScrapeFailureStage.resolvingWorks,
-              reason: WorksScrapeFailureReason.performerCountUnavailable,
-              source: resolved.sourceId,
-            ),
-          );
-        } else if (maxActressCount != null &&
-            performerCount! > maxActressCount) {
+        final decision = policyEvaluator.evaluate(
+          code: code,
+          details: resolved.details,
+        );
+        if (decision.finalAction == ScrapeFinalAction.exclude) {
           recordOutcome(
             identityKey: resolved.identityKey,
             code: code,
             status: _CanonicalWorkStatus.excluded,
+            reason: decision.reason,
           );
         } else {
           try {
@@ -853,6 +852,8 @@ class WorksScrapeService {
               code: code,
               status: _CanonicalWorkStatus.saved,
               imageFailures: savedWork.failedVariants,
+              reason: decision.reason,
+              review: decision.reviewRequired,
             );
           } on _ScrapeCancelled {
             break;
@@ -881,7 +882,9 @@ class WorksScrapeService {
           source: resolved.sourceId,
           status: recordedOutcome.status,
           failure: recordedOutcome.failure,
+          reason: recordedOutcome.reason,
           imageFailures: recordedOutcome.imageFailures,
+          review: recordedOutcome.review,
         );
       }
       _notify(
@@ -1148,8 +1151,8 @@ class WorksScrapeService {
   _GlobalCandidateSelection _selectGlobalWorkCandidates({
     required List<ScrapeSourceId> requestedWorkIds,
     required Map<ScrapeSourceId, _CollectedSource> collectedById,
-    required PrefixExclusion exclusions,
     required List<String> retryWorkCodes,
+    required ScrapeExclusionPolicyEvaluator policyEvaluator,
   }) {
     final grouped = <String, List<_WorkCandidate>>{};
     var rawDiscovered = 0;
@@ -1217,7 +1220,8 @@ class WorksScrapeService {
           source: first.source.id,
         );
       }
-      if (storageCode.isNotEmpty && exclusions.matches(storageCode)) {
+      if (storageCode.isNotEmpty &&
+          policyEvaluator.canPreExcludeCode(storageCode)) {
         preExcluded++;
         _notifyWorkOutcome(
           code: storageCode,
@@ -2035,12 +2039,15 @@ class WorksScrapeService {
     String? reason,
     Set<WorkImageVariant> imageFailures = const <WorkImageVariant>{},
     bool cancelled = false,
+    bool review = false,
   }) {
     _observer?.onWorkOutcome(
       code: code,
       source: source,
       outcome: cancelled
           ? ScrapeWorkOutcomeState.cancelled
+          : review && status == _CanonicalWorkStatus.saved
+          ? ScrapeWorkOutcomeState.review
           : switch (status) {
               _CanonicalWorkStatus.saved => ScrapeWorkOutcomeState.saved,
               _CanonicalWorkStatus.excluded => ScrapeWorkOutcomeState.excluded,
@@ -2183,11 +2190,15 @@ final class _CanonicalWorkOutcome {
     required this.status,
     this.failure,
     Set<WorkImageVariant> imageFailures = const <WorkImageVariant>{},
+    this.reason,
+    this.review = false,
   }) : imageFailures = {...imageFailures};
 
   final String code;
   _CanonicalWorkStatus status;
   WorksScrapeFailure? failure;
+  String? reason;
+  bool review;
   final Set<WorkImageVariant> imageFailures;
 }
 

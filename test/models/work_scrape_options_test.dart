@@ -1,21 +1,24 @@
+import 'package:avaca/models/scrape_exclusion_policy.dart';
 import 'package:avaca/models/work_scrape_options.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('round-trips settings while preserving complex uppercase prefixes', () {
+  test('round-trips exclusion settings and exact allows', () {
     const options = WorkScrapeOptions(
       syncDetails: false,
       replaceActressImage: true,
       fillMissingOnly: false,
-      maxActressCount: 3,
       excludedPrefixes: ['FC2-PPV_123', '1PON'],
       scrapeAliases: true,
+      managedFamilyModes: {'OFJE': ManagedFamilyMode.reviewPrior},
+      exactAllows: [ScrapeExactAllowRule(code: 'OFJE-605')],
     );
 
     final decoded = WorkScrapeOptions.decode(options.encode());
-    expect(decoded.maxActressCount, 3);
     expect(decoded.excludedPrefixes, ['FC2-PPV_123', '1PON']);
     expect(decoded.scrapeAliases, isTrue);
+    expect(decoded.managedFamilyModes['OFJE'], ManagedFamilyMode.reviewPrior);
+    expect(decoded.exactAllows.single.normalizedCode, 'OFJE-605');
   });
 
   test('normalizes persisted prefixes without limiting their characters', () {
@@ -32,22 +35,17 @@ void main() {
     expect(options.syncDetails, isTrue);
     expect(options.replaceActressImage, isFalse);
     expect(options.fillMissingOnly, isTrue);
-    expect(options.maxActressCount, isNull);
     expect(options.excludedPrefixes, isEmpty);
+    expect(options.managedFamilyModes, isEmpty);
+    expect(options.exactAllows, isEmpty);
   });
 
-  test('accepts only positive persisted actress-count limits', () {
-    expect(
-      WorkScrapeOptions.decode('{"maxActressCount":2}').maxActressCount,
-      2,
+  test('ignores the removed actress-count setting', () {
+    final options = WorkScrapeOptions.decode(
+      '{"maxActressCount":2,"excludedPrefixes":["ABC"]}',
     );
-    expect(
-      WorkScrapeOptions.decode('{"maxActressCount":0}').maxActressCount,
-      isNull,
-    );
-    expect(
-      WorkScrapeOptions.decode('{"maxActressCount":"2"}').maxActressCount,
-      isNull,
-    );
+
+    expect(options.excludedPrefixes, ['ABC']);
+    expect(options.encode(), isNot(contains('maxActressCount')));
   });
 }

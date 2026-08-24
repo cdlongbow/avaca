@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import '../core/database.dart';
 import '../models/scrape_job.dart';
+import '../models/scrape_exclusion_policy.dart';
 import '../models/scrape_source_settings.dart';
 import '../models/work_scrape_options.dart';
 import 'javbus/javbus_client.dart';
@@ -63,6 +64,7 @@ class ScrapeJobProgressAccumulator {
     for (final item in items) {
       final outcome = switch (item.state) {
         ScrapeJobItemState.succeeded => ScrapeWorkOutcomeState.saved,
+        ScrapeJobItemState.review => ScrapeWorkOutcomeState.review,
         ScrapeJobItemState.excluded => ScrapeWorkOutcomeState.excluded,
         ScrapeJobItemState.failed => ScrapeWorkOutcomeState.failed,
         _ => null,
@@ -129,7 +131,9 @@ class ScrapeJobProgressAccumulator {
       _outcomes.values.where((outcome) => outcome == state).length;
 
   void _recountOutcomes() {
-    savedCount = _count(ScrapeWorkOutcomeState.saved);
+    savedCount =
+        _count(ScrapeWorkOutcomeState.saved) +
+        _count(ScrapeWorkOutcomeState.review);
     excludedCount = _excludedBaseline + _count(ScrapeWorkOutcomeState.excluded);
     failedCount = _count(ScrapeWorkOutcomeState.failed);
     processedCount = math.max(
@@ -308,13 +312,19 @@ class ScrapeJobCoordinator extends ChangeNotifier {
     required ScrapeSourceSettings sourceSettings,
   }) async {
     await initialize();
+    final policySnapshot = ScrapePolicySnapshot.v2(
+      rules: rulesRepository.current,
+      excludedPrefixes: options.excludedPrefixes,
+      managedFamilyModes: options.managedFamilyModes,
+      exactAllows: options.exactAllows,
+    );
     final job = await repository.create(
       actressId: actressId,
       actressName: actressName,
       optionsSnapshot: options.encode(),
       sourceSettingsSnapshot: sourceSettings.encode(),
-      rulesVersionSnapshot: rulesRepository.current.rulesVersion,
-      rulesSnapshot: rulesRepository.current.encode(),
+      rulesVersionSnapshot: policySnapshot.rulesVersion,
+      rulesSnapshot: policySnapshot.encode(),
     );
     _emitChanged();
     unawaited(_pump());
@@ -523,6 +533,7 @@ class ScrapeJobCoordinator extends ChangeNotifier {
           sourceSettings: ScrapeSourceSettings.decode(
             queued.sourceSettingsSnapshot,
           ),
+          policySnapshot: session.policySnapshot,
           cancellationToken: token,
           observer: observer,
         );
@@ -766,7 +777,8 @@ class _JobObserver extends ScrapeRunObserver {
               '${entry.value.discovered}:${entry.value.workCode ?? ''}',
         )
         .join('|');
-    final progressKey = '${progress.phase.name}:${progress.current}:'
+    final progressKey =
+        '${progress.phase.name}:${progress.current}:'
         '${progress.total}:${progress.saved}:${progress.excluded}:'
         '${progress.failed}:${progress.rawDiscovered}:'
         '${progress.duplicateCount}:${progress.detailCompleted}:'
@@ -886,6 +898,7 @@ class _JobObserver extends ScrapeRunObserver {
         : ScrapeEventSanitizer.message(error);
     final itemState = switch (outcome) {
       ScrapeWorkOutcomeState.saved => ScrapeJobItemState.succeeded,
+      ScrapeWorkOutcomeState.review => ScrapeJobItemState.review,
       ScrapeWorkOutcomeState.excluded => ScrapeJobItemState.excluded,
       ScrapeWorkOutcomeState.failed => ScrapeJobItemState.failed,
       ScrapeWorkOutcomeState.cancelled => ScrapeJobItemState.cancelled,
@@ -943,7 +956,8 @@ class _JobObserver extends ScrapeRunObserver {
     for (final item in items) {
       if (item.state == ScrapeJobItemState.failed ||
           item.state == ScrapeJobItemState.excluded ||
-          item.state == ScrapeJobItemState.succeeded) {
+          item.state == ScrapeJobItemState.succeeded ||
+          item.state == ScrapeJobItemState.review) {
         continue;
       }
       await _setItem(

@@ -1,35 +1,42 @@
 import 'dart:convert';
 
+import 'scrape_exclusion_policy.dart';
+
 class WorkScrapeOptions {
   const WorkScrapeOptions({
     this.syncDetails = true,
     this.replaceActressImage = false,
     this.fillMissingOnly = true,
-    this.maxActressCount,
     this.excludedPrefixes = const [],
     this.retryWorkCodes = const [],
     this.scrapeAliases = false,
-  }) : assert(maxActressCount == null || maxActressCount > 0);
+    this.managedFamilyModes = const {},
+    this.exactAllows = const [],
+  });
 
   final bool syncDetails;
   final bool replaceActressImage;
   final bool fillMissingOnly;
-  final int? maxActressCount;
   final List<String> excludedPrefixes;
   final List<String> retryWorkCodes;
   final bool scrapeAliases;
+  final Map<String, ManagedFamilyMode> managedFamilyModes;
+  final List<ScrapeExactAllowRule> exactAllows;
 
   WorkScrapeOptions copyWith({
     List<String>? retryWorkCodes,
     bool? scrapeAliases,
+    Map<String, ManagedFamilyMode>? managedFamilyModes,
+    List<ScrapeExactAllowRule>? exactAllows,
   }) => WorkScrapeOptions(
     syncDetails: syncDetails,
     replaceActressImage: replaceActressImage,
     fillMissingOnly: fillMissingOnly,
-    maxActressCount: maxActressCount,
     excludedPrefixes: excludedPrefixes,
     retryWorkCodes: retryWorkCodes ?? this.retryWorkCodes,
     scrapeAliases: scrapeAliases ?? this.scrapeAliases,
+    managedFamilyModes: managedFamilyModes ?? this.managedFamilyModes,
+    exactAllows: exactAllows ?? this.exactAllows,
   );
 
   String encode() {
@@ -37,10 +44,14 @@ class WorkScrapeOptions {
       'syncDetails': syncDetails,
       'replaceActressImage': replaceActressImage,
       'fillMissingOnly': fillMissingOnly,
-      'maxActressCount': maxActressCount,
       'excludedPrefixes': excludedPrefixes,
       'retryWorkCodes': retryWorkCodes,
       'scrapeAliases': scrapeAliases,
+      'managedFamilyModes': {
+        for (final entry in managedFamilyModes.entries)
+          entry.key: entry.value.storageValue,
+      },
+      'exactAllows': exactAllows.map((item) => item.toJson()).toList(),
     });
   }
 
@@ -55,8 +66,26 @@ class WorkScrapeOptions {
         return const WorkScrapeOptions();
       }
       final prefixes = json['excludedPrefixes'];
-      final rawMaxActressCount = json['maxActressCount'];
       final retryCodes = json['retryWorkCodes'];
+      final managedModes = <String, ManagedFamilyMode>{};
+      if (json['managedFamilyModes'] is Map) {
+        for (final entry in (json['managedFamilyModes'] as Map).entries) {
+          final family = entry.key.toString().trim().toUpperCase();
+          if (family.isNotEmpty) {
+            managedModes[family] = ManagedFamilyModeCodec.parse(entry.value);
+          }
+        }
+      }
+      final exactAllows = <ScrapeExactAllowRule>[];
+      if (json['exactAllows'] is List) {
+        for (final item in json['exactAllows'] as List) {
+          try {
+            exactAllows.add(ScrapeExactAllowRule.fromJson(item));
+          } on FormatException {
+            // Ignore malformed optional entries while preserving old settings.
+          }
+        }
+      }
       return WorkScrapeOptions(
         syncDetails: json['syncDetails'] is bool
             ? json['syncDetails'] as bool
@@ -67,9 +96,6 @@ class WorkScrapeOptions {
         fillMissingOnly: json['fillMissingOnly'] is bool
             ? json['fillMissingOnly'] as bool
             : true,
-        maxActressCount: rawMaxActressCount is int && rawMaxActressCount > 0
-            ? rawMaxActressCount
-            : null,
         excludedPrefixes: prefixes is List
             ? prefixes
                   .whereType<String>()
@@ -89,6 +115,8 @@ class WorkScrapeOptions {
         scrapeAliases: json['scrapeAliases'] is bool
             ? json['scrapeAliases'] as bool
             : false,
+        managedFamilyModes: Map.unmodifiable(managedModes),
+        exactAllows: List.unmodifiable(exactAllows),
       );
     } on FormatException {
       return const WorkScrapeOptions();

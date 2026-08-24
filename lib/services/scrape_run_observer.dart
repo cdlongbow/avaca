@@ -3,7 +3,7 @@ import '../models/scrape_job.dart';
 import 'scrape/scrape_models.dart';
 import 'works_scrape_service.dart';
 
-enum ScrapeWorkOutcomeState { saved, excluded, failed, cancelled }
+enum ScrapeWorkOutcomeState { saved, review, excluded, failed, cancelled }
 
 /// A persistence-facing observer for a single scrape session. Implementations
 /// must be cheap and must not make the scrape dependent on journal storage.

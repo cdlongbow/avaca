@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:avaca/core/database.dart';
 import 'package:avaca/l10n/app_localizations.dart';
+import 'package:avaca/models/scrape_exclusion_policy.dart';
 import 'package:avaca/models/work_scrape_options.dart';
 import 'package:avaca/models/scrape_source_settings.dart';
 import 'package:avaca/services/scrape/scrape_models.dart';
@@ -10,7 +11,6 @@ import 'package:avaca/services/javbus/work_image_policy.dart';
 import 'package:avaca/views/detail_view.dart';
 import 'package:avaca/views/works_view.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -547,58 +547,18 @@ void main() {
 
       expect(find.text('二次刮削只補齊缺少的資訊'), findsOneWidget);
 
-      expect(find.text('多於此數量的女優不刮削'), findsOneWidget);
-
+      expect(find.text('多於此數量的女優不刮削'), findsNothing);
       expect(
-        find.byKey(const Key('scrape-max-actress-count-row')),
-
+        find.byKey(const Key('scrape-managed-family-section')),
         findsOneWidget,
       );
-
       expect(
-        find.byKey(const Key('scrape-max-actress-count-input')),
-
+        find.byKey(const Key('scrape-ofje-policy-dropdown')),
         findsOneWidget,
       );
-
-      final maxCountFinder = find.byKey(
-        const Key('scrape-max-actress-count-input'),
-      );
-
-      final maxCountEditable = tester.widget<EditableText>(
-        find.descendant(
-          of: maxCountFinder,
-
-          matching: find.byType(EditableText),
-        ),
-      );
-
-      expect(maxCountEditable.textAlign, TextAlign.center);
-      expect(maxCountEditable.controller.text, '0');
-
-      final inputDecorator = tester.widget<InputDecorator>(
-        find.descendant(
-          of: maxCountFinder,
-          matching: find.byType(InputDecorator),
-        ),
-      );
-      expect(inputDecorator.decoration.border, isA<UnderlineInputBorder>());
-      expect(tester.getRect(maxCountFinder).width, closeTo(48, 0.01));
-
-      final rowTextStyle = Theme.of(
-        tester.element(find.text('多於此數量的女優不刮削')),
-      ).textTheme.bodyMedium;
-      expect(maxCountEditable.style.fontSize, rowTextStyle?.fontSize);
-
-      final maxLabelRenderObject = tester.renderObject<RenderParagraph>(
-        find.text('多於此數量的女優不刮削'),
-      );
-      final syncLabelRenderObject = tester.renderObject<RenderParagraph>(
-        find.text('同步詳細資料'),
-      );
       expect(
-        maxLabelRenderObject.text.style?.fontSize,
-        syncLabelRenderObject.text.style?.fontSize,
+        find.byKey(const Key('scrape-exact-allow-section')),
+        findsOneWidget,
       );
 
       final spacingKeys = <String>[
@@ -610,7 +570,7 @@ void main() {
 
         'scrape-settings-gap-fill',
 
-        'scrape-settings-gap-max',
+        'scrape-settings-gap-exact',
       ];
 
       for (final key in spacingKeys) {
@@ -631,10 +591,6 @@ void main() {
         'scrape-replace-actress-image-switch',
 
         'scrape-fill-missing-only-switch',
-
-        'scrape-max-actress-count-row',
-
-        'scrape-prefix-section',
       ];
 
       final settingsRows = settingsRowKeys
@@ -674,7 +630,10 @@ void main() {
           matching: find.byType(EditableText),
         ),
       );
-      expect(prefixEditable.style.fontSize, rowTextStyle?.fontSize);
+      final prefixTextStyle = Theme.of(
+        tester.element(prefixInputFinder),
+      ).textTheme.bodyMedium;
+      expect(prefixEditable.style.fontSize, prefixTextStyle?.fontSize);
 
       final prefixInputDecorator = tester.widget<InputDecorator>(
         find.descendant(
@@ -837,14 +796,9 @@ void main() {
       '1pon-HD',
     );
 
-    await tester.enterText(
-      find.byKey(const Key('scrape-max-actress-count-input')),
-
-      '3',
-    );
-
     await tester.tap(find.byKey(const Key('scrape-prefix-add')));
 
+    await tester.ensureVisible(find.text('開始刮削'));
     await tester.tap(find.text('開始刮削'));
 
     await tester.pumpAndSettle();
@@ -856,8 +810,8 @@ void main() {
     expect(received!.syncDetails, isTrue);
 
     expect(received!.fillMissingOnly, isTrue);
-
-    expect(received!.maxActressCount, 3);
+    expect(received!.managedFamilyModes, isEmpty);
+    expect(received!.exactAllows, isEmpty);
 
     expect(find.byType(CircularProgressIndicator), findsNothing);
 
@@ -874,7 +828,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('actress-count limit accepts zero as unlimited', (tester) async {
+  testWidgets('exact allow and OFJE policy persist from the settings UI', (
+    tester,
+  ) async {
     WorkScrapeOptions? received;
 
     await _pumpWorks(
@@ -892,41 +848,28 @@ void main() {
 
     await _openWorksScrapeSettings(tester);
 
+    await tester.tap(find.byKey(const Key('scrape-exact-allow-section')));
+    await tester.pumpAndSettle();
     await tester.enterText(
-      find.byKey(const Key('scrape-max-actress-count-input')),
-
-      '0',
+      find.byKey(const Key('scrape-exact-allow-input')),
+      'ofje-605',
     );
+    await tester.tap(find.byKey(const Key('scrape-exact-allow-add')));
 
+    await tester.tap(find.byKey(const Key('scrape-ofje-policy-dropdown')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('整個系列排除').last);
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('開始刮削'));
     await tester.tap(find.text('開始刮削'));
 
     await tester.pumpAndSettle();
 
     expect(received, isNotNull);
-    expect(received!.maxActressCount, isNull);
+    expect(received!.exactAllows.single.normalizedCode, 'OFJE-605');
+    expect(received!.managedFamilyModes['OFJE'], ManagedFamilyMode.excludeAll);
     expect(find.text('刮削設定'), findsNothing);
-
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('actress-count limit rejects decimal input', (tester) async {
-    await _pumpWorks(tester);
-
-    await _openWorksScrapeSettings(tester);
-
-    await tester.enterText(
-      find.byKey(const Key('scrape-max-actress-count-input')),
-
-      '1.5',
-    );
-
-    await tester.tap(find.text('開始刮削'));
-
-    await tester.pumpAndSettle();
-
-    expect(find.text('請輸入大於等於 0 的整數'), findsOneWidget);
-
-    expect(find.text('刮削設定'), findsOneWidget);
 
     expect(tester.takeException(), isNull);
   });

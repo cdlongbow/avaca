@@ -95,29 +95,29 @@ void main() {
 
     // Reversing priority chooses AvBase as one complete record. Lower
     // priority JavBus data does not fill or override it.
-    final maxFilteredResult = await service.scrape(
+    final repeatedResult = await service.scrape(
       actressId: actressId,
       actressName: '測試女優',
-      options: const WorkScrapeOptions(syncDetails: false, maxActressCount: 2),
+      options: const WorkScrapeOptions(syncDetails: false),
       sourceSettings: const ScrapeSourceSettings(
         actressDetailsSource: ScrapeSourceId.javbus,
         worksSources: [ScrapeSourceId.avbase, ScrapeSourceId.javbus],
       ),
     );
-    expect(maxFilteredResult.saved, 0);
-    expect(maxFilteredResult.excluded, 1);
+    expect(repeatedResult.saved, 1);
+    expect(repeatedResult.excluded, 0);
 
-    final atLimitResult = await service.scrape(
+    final anotherRepeatedResult = await service.scrape(
       actressId: actressId,
       actressName: '測試女優',
-      options: const WorkScrapeOptions(syncDetails: false, maxActressCount: 3),
+      options: const WorkScrapeOptions(syncDetails: false),
       sourceSettings: const ScrapeSourceSettings(
         actressDetailsSource: ScrapeSourceId.javbus,
         worksSources: [ScrapeSourceId.avbase, ScrapeSourceId.javbus],
       ),
     );
-    expect(atLimitResult.saved, 1);
-    expect(atLimitResult.excluded, 0);
+    expect(anotherRepeatedResult.saved, 1);
+    expect(anotherRepeatedResult.excluded, 0);
 
     await database.replaceActressAliases(
       actressId: actressId,

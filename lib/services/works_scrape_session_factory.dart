@@ -1,5 +1,6 @@
 import '../core/database.dart';
 import '../models/scrape_job.dart';
+import '../models/scrape_exclusion_policy.dart';
 import '../models/scrape_source_settings.dart';
 import '../models/work_scrape_options.dart';
 import 'avbase/avbase_client.dart';
@@ -18,10 +19,15 @@ import 'scrape/scrape_source_registry.dart';
 import 'works_scrape_service.dart';
 
 class WorksScrapeSession {
-  WorksScrapeSession({required this.service, required this.javBusTransport});
+  WorksScrapeSession({
+    required this.service,
+    required this.javBusTransport,
+    required this.policySnapshot,
+  });
 
   final WorksScrapeService service;
   final HttpJavBusTransport? javBusTransport;
+  final ScrapePolicySnapshot policySnapshot;
 }
 
 class WorksScrapeSessionFactory {
@@ -36,11 +42,18 @@ class WorksScrapeSessionFactory {
     final sourceSettings = ScrapeSourceSettings.decode(
       job.sourceSettingsSnapshot,
     );
+    final options = WorkScrapeOptions.decode(job.optionsSnapshot);
+    final policySnapshot = ScrapePolicySnapshot.fromEncoded(
+      encoded: job.rulesSnapshot,
+      excludedPrefixes: options.excludedPrefixes,
+      managedFamilyModes: options.managedFamilyModes,
+      exactAllows: options.exactAllows,
+    );
     final requestedSourceIds = <ScrapeSourceId>{
       sourceSettings.actressDetailsSource,
       ...ScrapeSourceRegistry.resolveWorksSources(sourceSettings.worksSources),
     };
-    if (WorkScrapeOptions.decode(job.optionsSnapshot).scrapeAliases) {
+    if (options.scrapeAliases) {
       requestedSourceIds.add(sourceSettings.aliasSource);
     }
     final configuredSources = <ScrapeSourceId, ScrapeSource>{};
@@ -113,6 +126,7 @@ class WorksScrapeSessionFactory {
     return WorksScrapeSession(
       service: service,
       javBusTransport: javBusTransport,
+      policySnapshot: policySnapshot,
     );
   }
 

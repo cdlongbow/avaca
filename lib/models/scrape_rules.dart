@@ -8,6 +8,7 @@ class ScrapeRules {
     this.aliases = const {},
     this.imageFamilyPrefixHints = const {},
     this.excludedSuffixes = const [],
+    this.managedFamilyRecommendations = const {'OFJE': 'reviewPrior'},
   });
 
   static const builtin = ScrapeRules(
@@ -22,6 +23,7 @@ class ScrapeRules {
   final Map<String, String> aliases;
   final Map<String, List<String>> imageFamilyPrefixHints;
   final List<String> excludedSuffixes;
+  final Map<String, String> managedFamilyRecommendations;
 
   Map<String, Object?> toJson() => {
     'schemaVersion': schemaVersion,
@@ -30,6 +32,7 @@ class ScrapeRules {
     'aliases': aliases,
     'imageFamilyPrefixHints': imageFamilyPrefixHints,
     'excludedSuffixes': excludedSuffixes,
+    'managedFamilyRecommendations': managedFamilyRecommendations,
   };
 
   String encode() => jsonEncode(toJson());
@@ -81,6 +84,20 @@ class ScrapeRules {
               .take(64)
               .toList(growable: false)
         : const <String>[];
+    final managedFamilies = <String, String>{};
+    final rawManagedFamilies = map['managedFamilyRecommendations'];
+    if (rawManagedFamilies is Map) {
+      for (final entry in rawManagedFamilies.entries) {
+        final family = entry.key.toString().trim().toUpperCase();
+        final mode = entry.value?.toString().trim() ?? '';
+        if (family.isNotEmpty && mode.isNotEmpty && family.length <= 32) {
+          managedFamilies[family] = mode;
+        }
+      }
+    }
+    if (managedFamilies.isEmpty) {
+      managedFamilies['OFJE'] = 'reviewPrior';
+    }
     return ScrapeRules(
       schemaVersion: schema,
       rulesVersion: version,
@@ -88,6 +105,7 @@ class ScrapeRules {
       aliases: Map.unmodifiable(aliases),
       imageFamilyPrefixHints: Map.unmodifiable(hints),
       excludedSuffixes: List.unmodifiable(suffixes),
+      managedFamilyRecommendations: Map.unmodifiable(managedFamilies),
     );
   }
 }

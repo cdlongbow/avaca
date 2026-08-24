@@ -311,7 +311,7 @@ void main() {
   );
 
   test(
-    'merges exact-name pages, deduplicates works, and enforces actress limit',
+    'merges exact-name pages and does not filter by performer count',
     () async {
       final directory = await Directory.systemTemp.createTemp(
         'avaca_scrape_merge_test_',
@@ -341,10 +341,7 @@ void main() {
       final result = await service.scrape(
         actressId: actressId,
         actressName: '小湊よつ葉',
-        options: const WorkScrapeOptions(
-          replaceActressImage: true,
-          maxActressCount: 2,
-        ),
+        options: const WorkScrapeOptions(replaceActressImage: true),
         sourceSettings: const ScrapeSourceSettings(
           actressDetailsSource: ScrapeSourceId.javbus,
         ),
@@ -364,18 +361,16 @@ void main() {
         (await database.getWorksForActress(
           actressId,
         )).map((row) => row['code']),
-        unorderedEquals(['ONE-001', 'TWO-002']),
+        unorderedEquals(['ONE-001', 'TWO-002', 'MANY-003', 'UNKNOWN-001']),
       );
       expect(
         actressImages.requested.single.toString(),
         'https://www.javbus.com/pics/actress/zh5_a.jpg',
       );
-      expect(result.saved, 2);
-      expect(result.excluded, 1);
-      expect(result.failed, 1);
-      expect(result.failedWorks, hasLength(1));
-      expect(result.failedWorks.single.code, 'UNKNOWN-001');
-      expect(result.failedWorks.single.code, isNot('MANY-003'));
+      expect(result.saved, 4);
+      expect(result.excluded, 0);
+      expect(result.failed, 0);
+      expect(result.failedWorks, isEmpty);
       expect(result.actressImageStatus, ActressImageSyncStatus.replaced);
     },
   );

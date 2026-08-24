@@ -28,6 +28,7 @@ enum ScrapeJobItemState {
   queued,
   running,
   succeeded,
+  review,
   excluded,
   failed,
   cancelled,
@@ -92,6 +93,7 @@ extension ScrapeJobItemStateCodec on ScrapeJobItemState {
     ScrapeJobItemState.queued => 'queued',
     ScrapeJobItemState.running => 'running',
     ScrapeJobItemState.succeeded => 'succeeded',
+    ScrapeJobItemState.review => 'review',
     ScrapeJobItemState.excluded => 'excluded',
     ScrapeJobItemState.failed => 'failed',
     ScrapeJobItemState.cancelled => 'cancelled',
@@ -101,6 +103,7 @@ extension ScrapeJobItemStateCodec on ScrapeJobItemState {
     return switch (value?.toString()) {
       'running' => ScrapeJobItemState.running,
       'succeeded' => ScrapeJobItemState.succeeded,
+      'review' => ScrapeJobItemState.review,
       'excluded' => ScrapeJobItemState.excluded,
       'failed' => ScrapeJobItemState.failed,
       'cancelled' => ScrapeJobItemState.cancelled,

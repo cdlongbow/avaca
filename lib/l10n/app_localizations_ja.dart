@@ -401,15 +401,6 @@ class AppLocalizationsJa extends AppLocalizations {
   String get replaceActressImage => '女優画像を差し替える';
 
   @override
-  String get maxActressCountLabel => 'この人数を超える女優の作品は取得しない';
-
-  @override
-  String get maxActressCountHint => '0 は制限なし';
-
-  @override
-  String get maxActressCountInvalid => '0以上の整数を入力してください';
-
-  @override
   String get scrapeAvatarUnavailable => '利用可能な女優画像が見つかりませんでした。';
 
   @override
@@ -1592,15 +1583,6 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
 
   @override
   String get replaceActressImage => '女優画像を差し替える';
-
-  @override
-  String get maxActressCountLabel => 'この人数を超える女優の作品は取得しない';
-
-  @override
-  String get maxActressCountHint => '0 は制限なし';
-
-  @override
-  String get maxActressCountInvalid => '0以上の整数を入力してください';
 
   @override
   String get scrapeAvatarUnavailable => '利用可能な女優画像が見つかりませんでした。';

@@ -12,6 +12,7 @@ import '../controllers/works_controller.dart';
 import '../core/database.dart';
 import '../core/layout.dart';
 import '../l10n/app_localizations.dart';
+import '../models/scrape_exclusion_policy.dart';
 import '../models/scrape_source_settings.dart';
 import '../models/work_scrape_options.dart';
 import '../models/work_storage.dart';
@@ -1205,13 +1206,17 @@ class _ScrapeSettingsDialog extends StatefulWidget {
 class _ScrapeSettingsDialogState extends State<_ScrapeSettingsDialog> {
   final formKey = GlobalKey<FormState>();
   final prefixController = TextEditingController();
-  final maxActressCountController = TextEditingController();
+  final exactAllowController = TextEditingController();
   final prefixes = <String>[];
+  final exactAllows = <ScrapeExactAllowRule>[];
   late bool syncDetails;
   late bool scrapeAliases;
   late bool replaceImage;
   late bool fillMissingOnly;
   bool prefixesExpanded = false;
+  bool exactAllowsExpanded = false;
+  bool ofjeModeChanged = false;
+  late ManagedFamilyMode ofjeMode;
   Future<void> pendingSave = Future<void>.value();
 
   @override
@@ -1221,15 +1226,17 @@ class _ScrapeSettingsDialogState extends State<_ScrapeSettingsDialog> {
     scrapeAliases = widget.initial.scrapeAliases;
     replaceImage = widget.initial.replaceActressImage;
     fillMissingOnly = widget.initial.fillMissingOnly;
-    maxActressCountController.text =
-        widget.initial.maxActressCount?.toString() ?? '0';
     prefixes.addAll(widget.initial.excludedPrefixes);
+    exactAllows.addAll(widget.initial.exactAllows);
+    ofjeMode =
+        widget.initial.managedFamilyModes['OFJE'] ??
+        ManagedFamilyMode.reviewPrior;
   }
 
   @override
   void dispose() {
     prefixController.dispose();
-    maxActressCountController.dispose();
+    exactAllowController.dispose();
     super.dispose();
   }
 
@@ -1247,6 +1254,19 @@ class _ScrapeSettingsDialogState extends State<_ScrapeSettingsDialog> {
     _scheduleSave();
   }
 
+  void _addExactAllow() {
+    final value = exactAllowController.text.trim().toUpperCase();
+    if (value.isEmpty ||
+        exactAllows.any((rule) => rule.normalizedCode == value)) {
+      return;
+    }
+    setState(() {
+      exactAllows.add(ScrapeExactAllowRule(code: value));
+      exactAllowController.clear();
+    });
+    _scheduleSave();
+  }
+
   void _scheduleSave() {
     pendingSave = _saveCurrentOptions();
   }
@@ -1261,16 +1281,19 @@ class _ScrapeSettingsDialogState extends State<_ScrapeSettingsDialog> {
   }
 
   WorkScrapeOptions _currentOptions() {
-    final maxActressCount = int.tryParse(maxActressCountController.text.trim());
+    final managedFamilyModes = <String, ManagedFamilyMode>{
+      if (widget.initial.managedFamilyModes.containsKey('OFJE') ||
+          ofjeModeChanged)
+        'OFJE': ofjeMode,
+    };
     return WorkScrapeOptions(
       syncDetails: syncDetails,
       scrapeAliases: scrapeAliases,
       replaceActressImage: replaceImage,
       fillMissingOnly: fillMissingOnly,
-      maxActressCount: maxActressCount == null || maxActressCount <= 0
-          ? null
-          : maxActressCount,
       excludedPrefixes: List.unmodifiable(prefixes),
+      managedFamilyModes: managedFamilyModes,
+      exactAllows: List.unmodifiable(exactAllows),
     );
   }
 
@@ -1367,41 +1390,125 @@ class _ScrapeSettingsDialogState extends State<_ScrapeSettingsDialog> {
                 ),
                 const SizedBox(key: Key('scrape-settings-gap-fill'), height: 8),
                 ListTile(
-                  key: const Key('scrape-max-actress-count-row'),
+                  key: const Key('scrape-managed-family-section'),
                   contentPadding: EdgeInsets.zero,
                   dense: true,
-                  title: Text(l10n.maxActressCountLabel),
-                  trailing: SizedBox(
-                    width: 48,
-                    child: TextFormField(
-                      key: const Key('scrape-max-actress-count-input'),
-                      controller: maxActressCountController,
-                      keyboardType: TextInputType.number,
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                      decoration: InputDecoration(
-                        hintText: l10n.maxActressCountHint,
-                        isDense: true,
-                        contentPadding: const EdgeInsets.only(bottom: 2),
-                        border: const UnderlineInputBorder(),
-                        enabledBorder: const UnderlineInputBorder(),
-                        focusedBorder: const UnderlineInputBorder(),
-                      ),
-                      autovalidateMode: AutovalidateMode.onUserInteraction,
-                      validator: (value) {
-                        final cleaned = value?.trim() ?? '';
-                        if (cleaned.isEmpty) {
-                          return null;
-                        }
-                        final parsed = int.tryParse(cleaned);
-                        return parsed != null && parsed >= 0
-                            ? null
-                            : l10n.maxActressCountInvalid;
-                      },
-                    ),
-                  ),
+                  title: const Text('受管理系列策略 · OFJE'),
+                  subtitle: const Text('系列名稱本身不代表合輯；只在你明確選擇時整族排除。'),
                 ),
-                const SizedBox(key: Key('scrape-settings-gap-max'), height: 8),
+                DropdownButtonFormField<ManagedFamilyMode>(
+                  key: const Key('scrape-ofje-policy-dropdown'),
+                  initialValue: ofjeMode,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'OFJE 處理方式',
+                    isDense: true,
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                      value: ManagedFamilyMode.reviewPrior,
+                      child: Text('保留・待檢視（建議）'),
+                    ),
+                    DropdownMenuItem(
+                      value: ManagedFamilyMode.evidenceOnly,
+                      child: Text('只依作品語義判定'),
+                    ),
+                    DropdownMenuItem(
+                      value: ManagedFamilyMode.excludeAll,
+                      child: Text('整個系列排除'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setState(() {
+                      ofjeMode = value;
+                      ofjeModeChanged = true;
+                    });
+                    _scheduleSave();
+                  },
+                ),
+                const SizedBox(
+                  key: Key('scrape-settings-gap-policy'),
+                  height: 8,
+                ),
+                ListTile(
+                  key: const Key('scrape-exact-allow-section'),
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: const Text('精確允許例外'),
+                  subtitle: const Text('只允許輸入的番號 surface，不會自動擴到相關版本。'),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '${exactAllows.length}',
+                        key: const Key('scrape-exact-allow-count'),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(
+                        exactAllowsExpanded
+                            ? Icons.expand_less
+                            : Icons.expand_more,
+                        key: const Key('scrape-exact-allow-chevron'),
+                      ),
+                    ],
+                  ),
+                  onTap: () {
+                    setState(() => exactAllowsExpanded = !exactAllowsExpanded);
+                  },
+                ),
+                if (exactAllowsExpanded) ...[
+                  Column(
+                    key: const Key('scrape-exact-allow-section-content'),
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              key: const Key('scrape-exact-allow-input'),
+                              controller: exactAllowController,
+                              textCapitalization: TextCapitalization.characters,
+                              decoration: const InputDecoration(
+                                hintText: '例如 OFJE-605',
+                                isDense: true,
+                              ),
+                              onSubmitted: (_) => _addExactAllow(),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton(
+                            key: const Key('scrape-exact-allow-add'),
+                            tooltip: '新增精確允許',
+                            onPressed: _addExactAllow,
+                            icon: const Icon(Icons.add),
+                          ),
+                        ],
+                      ),
+                      if (exactAllows.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final rule in exactAllows)
+                              InputChip(
+                                label: Text(rule.code),
+                                onDeleted: () {
+                                  setState(() => exactAllows.remove(rule));
+                                  _scheduleSave();
+                                },
+                              ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+                const SizedBox(
+                  key: Key('scrape-settings-gap-exact'),
+                  height: 8,
+                ),
                 ListTile(
                   key: const Key('scrape-prefix-section'),
                   contentPadding: EdgeInsets.zero,
@@ -2488,8 +2595,6 @@ String _scrapeFailureReasonLabel(
     WorksScrapeFailureReason.detailCodeMismatch =>
       l10n.scrapeFailureDetailCodeMismatch,
     WorksScrapeFailureReason.invalidCode => l10n.scrapeFailureInvalidCode,
-    WorksScrapeFailureReason.performerCountUnavailable =>
-      l10n.scrapeFailurePerformerCountUnavailable,
     WorksScrapeFailureReason.databaseSaveFailed =>
       l10n.scrapeFailureDatabaseSave,
   };

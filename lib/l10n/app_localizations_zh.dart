@@ -400,15 +400,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get replaceActressImage => '更換女優頭像';
 
   @override
-  String get maxActressCountLabel => '多於此數量的女優不刮削';
-
-  @override
-  String get maxActressCountHint => '0 表示不限制';
-
-  @override
-  String get maxActressCountInvalid => '請輸入大於等於 0 的整數';
-
-  @override
   String get scrapeAvatarUnavailable => '找不到可用的女優頭像。';
 
   @override
@@ -1582,15 +1573,6 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get replaceActressImage => '更换女优头像';
 
   @override
-  String get maxActressCountLabel => '多于此数量的女优不刮削';
-
-  @override
-  String get maxActressCountHint => '0 表示不限制';
-
-  @override
-  String get maxActressCountInvalid => '请输入大于等于 0 的整数';
-
-  @override
   String get scrapeAvatarUnavailable => '找不到可用的女优头像。';
 
   @override
@@ -2762,15 +2744,6 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get replaceActressImage => '更換女優頭像';
-
-  @override
-  String get maxActressCountLabel => '多於此數量的女優不刮削';
-
-  @override
-  String get maxActressCountHint => '0 表示不限制';
-
-  @override
-  String get maxActressCountInvalid => '請輸入大於等於 0 的整數';
 
   @override
   String get scrapeAvatarUnavailable => '找不到可用的女優頭像。';

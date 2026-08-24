@@ -404,16 +404,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get replaceActressImage => 'Replace actress image';
 
   @override
-  String get maxActressCountLabel =>
-      'Do not scrape works with more actresses than this';
-
-  @override
-  String get maxActressCountHint => '0 means no limit';
-
-  @override
-  String get maxActressCountInvalid => 'Enter an integer of 0 or greater';
-
-  @override
   String get scrapeAvatarUnavailable => 'No usable actress image was found.';
 
   @override
