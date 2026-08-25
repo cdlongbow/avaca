@@ -178,6 +178,12 @@ void main() {
       '特典映像は全編撮り下ろし',
       '完全新撮ボーナス映像',
       '全編撮り下ろし特典',
+      '全編撮り下ろしの特典映像',
+      '完全新撮による特典映像',
+      '全編新撮で収録した特典映像',
+      '完全撮り下ろしのボーナス映像',
+      '特典として全編撮り下ろし',
+      'ボーナス映像は完全新撮',
     ]) {
       expect(
         parse(title).provenanceFacts.explicitOriginalProduction,
@@ -185,7 +191,12 @@ void main() {
         reason: title,
       );
     }
-    for (final title in const ['全編新撮の大型共演', '完全撮り下ろし作品', '全編撮り下ろし新作']) {
+    for (final title in const [
+      '全編新撮の大型共演',
+      '完全新撮作品',
+      '完全撮り下ろし作品',
+      '全編撮り下ろし新作',
+    ]) {
       expect(
         parse(title).provenanceFacts.explicitOriginalProduction,
         isTrue,

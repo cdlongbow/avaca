@@ -266,6 +266,12 @@ void main() {
         '特典映像は全編撮り下ろし',
         '完全新撮ボーナス映像',
         '全編撮り下ろし特典',
+        '全編撮り下ろしの特典映像',
+        '完全新撮による特典映像',
+        '全編新撮で収録した特典映像',
+        '完全撮り下ろしのボーナス映像',
+        '特典として全編撮り下ろし',
+        'ボーナス映像は完全新撮',
       ]) {
         expect(
           ScrapeProvenanceSemantics.newMaterialScope(title),
@@ -294,6 +300,7 @@ void main() {
         '全編撮り下ろし',
         '全編新撮',
         '全編新撮の大型共演',
+        '完全新撮作品',
         '完全撮り下ろし新作',
         '完全新撮の大型共演',
         '全編撮り下ろし大共演',
@@ -321,6 +328,10 @@ void main() {
         '総集編・特典映像は全編撮り下ろし',
         '過去作品収録＋完全新撮ボーナス映像',
         'COMPLETE BEST＋全編撮り下ろし特典',
+        'BEST11人・全編撮り下ろしの特典映像',
+        'BEST・完全新撮による特典映像',
+        '総集編・全編新撮で収録した特典映像',
+        '過去作品収録＋完全撮り下ろしのボーナス映像',
       ]) {
         final mixed = _evaluator().evaluate(
           code: 'MIXED-BONUS-${title.hashCode}',
@@ -552,19 +563,29 @@ void main() {
           .finalAction,
       ScrapeFinalAction.exclude,
     );
-    expect(
-      _evaluator()
-          .evaluate(
-            code: 'TARGET-AIKA-RUNTIME',
-            details: [_details('TARGET-AIKA-RUNTIME', 'AIKA 12時間BEST')],
-            classificationContext: const ScrapeClassificationContext(
-              targetActressName: 'AIKA',
-            ),
-          )
-          .finalAction,
-      ScrapeFinalAction.exclude,
-    );
-    for (final title in const ['MAIKA BEST', 'XAIKA BEST', 'SAIKA BEST']) {
+    for (final title in const [
+      'AIKA BEST',
+      'AIKABEST',
+      'AIKA-BEST',
+      'AIKA・BEST',
+      'AIKA：BEST',
+      'AIKA 12時間BEST',
+    ]) {
+      final decision = _evaluator().evaluate(
+        code: 'TARGET-AIKA-EXACT-${title.hashCode}',
+        details: [_details('TARGET-AIKA-EXACT-${title.hashCode}', title)],
+        classificationContext: const ScrapeClassificationContext(
+          targetActressName: 'AIKA',
+        ),
+      );
+      expect(decision.finalAction, ScrapeFinalAction.exclude, reason: title);
+    }
+    for (final title in const [
+      'MAIKA BEST',
+      'XAIKA BEST',
+      'SAIKA BEST',
+      'AIKANA BEST',
+    ]) {
       final decision = _evaluator().evaluate(
         code: 'TARGET-AIKA-BOUNDARY-${title.hashCode}',
         details: [_details('TARGET-AIKA-BOUNDARY-${title.hashCode}', title)],
@@ -584,6 +605,39 @@ void main() {
         isEmpty,
         reason: title,
       );
+    }
+    for (final title in const [
+      'AIKA BEST FRIEND',
+      'AIKA BEST PARTNER',
+      'AIKA BEST CONDITION',
+    ]) {
+      final decision = _evaluator().evaluate(
+        code: 'TARGET-AIKA-SAFE-${title.hashCode}',
+        details: [_details('TARGET-AIKA-SAFE-${title.hashCode}', title)],
+        classificationContext: const ScrapeClassificationContext(
+          targetActressName: 'AIKA',
+        ),
+      );
+      expect(
+        decision.finalAction,
+        isNot(ScrapeFinalAction.exclude),
+        reason: title,
+      );
+      expect(
+        decision.evidence.where(
+          (item) => item.ruleId == 'semantic_target_actress_best',
+        ),
+        isEmpty,
+        reason: title,
+      );
+    }
+    for (final title in const ['永野いち夏BEST', '永野いち夏・BEST', '永野いち夏-BEST']) {
+      final decision = _evaluator().evaluate(
+        code: 'TARGET-NAGANO-SEPARATOR-${title.hashCode}',
+        details: [_details('TARGET-NAGANO-SEPARATOR-${title.hashCode}', title)],
+        classificationContext: naganoContext,
+      );
+      expect(decision.finalAction, ScrapeFinalAction.exclude, reason: title);
     }
     final prefixedNagano = _evaluator().evaluate(
       code: 'TARGET-NAGANO-BOUNDARY',

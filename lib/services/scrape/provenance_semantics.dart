@@ -15,7 +15,7 @@ final class ScrapeProvenanceSemantics {
   );
 
   static final RegExp _bonusScopedNewMaterialPattern = RegExp(
-    r'(?:全編|完全)\s*(?:ノーカット\s*)?(?:新撮|撮り下ろし)(?:\s*(?:新作|作品|映像))?\s*(?:特典|ボーナス|bonus)(?:\s*(?:映像|作品|カット|footage|video))?|(?:特典|ボーナス)(?:\s*(?:映像|作品|カット))?[^\n。！？]{0,16}(?:全編|完全)\s*(?:ノーカット\s*)?(?:新撮|撮り下ろし)',
+    r'(?:全編|完全)\s*(?:ノーカット\s*)?(?:新撮|撮り下ろし)(?:\s*(?:の|による|で\s*収録した|として(?:\s*収録(?:した)?)?))?\s*(?:特典|ボーナス|bonus)(?:\s*(?:映像|作品|カット|footage|video))?|(?:特典|ボーナス|bonus)(?:\s*(?:映像|作品|カット|footage|video))?\s*(?:は|として(?:\s*収録(?:した)?)?)?\s*(?:全編|完全)\s*(?:ノーカット\s*)?(?:新撮|撮り下ろし)',
     caseSensitive: false,
   );
 
@@ -45,7 +45,7 @@ final class ScrapeProvenanceSemantics {
   );
 
   static final RegExp _targetBestSuffixPattern = RegExp(
-    r'^\s*(?:\d+\s*(?:時間|分|hours?|minutes?|h|min)\s*)?(?:best(?!\s*(?:friend|partner|condition)\b)(?![a-z0-9])|ベスト(?![\s・･]*(?:フレンド|パートナー|コンディション))(?![ぁ-んァ-ン一-龯a-z0-9]))',
+    r'^\s*(?:[・･\-–—:：/／]\s*)?(?:\d+\s*(?:時間|分|hours?|minutes?|h|min)\s*)?(?:best(?!\s*(?:friend|partner|condition)\b)(?![a-z0-9])|ベスト(?![\s・･]*(?:フレンド|パートナー|コンディション))(?![ぁ-んァ-ン一-龯a-z0-9]))',
     caseSensitive: false,
   );
 
@@ -166,8 +166,7 @@ final class ScrapeProvenanceSemantics {
             ? null
             : text.substring(0, nameIndex).runes.last;
         final suffix = text.substring(nameEnd);
-        final after = suffix.isEmpty ? null : suffix.runes.first;
-        if (!_isNameAdjacentRune(before) && !_isNameAdjacentRune(after)) {
+        if (!_isNameAdjacentRune(before)) {
           final match = _targetBestSuffixPattern.firstMatch(suffix);
           if (match != null) {
             return ScrapeSemanticProposition(
