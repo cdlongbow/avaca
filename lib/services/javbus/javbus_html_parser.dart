@@ -3,6 +3,7 @@ import 'package:html/parser.dart' as html;
 
 import '../../models/scraped_actress_details.dart';
 import '../../models/work.dart';
+import '../scrape/scrape_models.dart';
 import 'javbus_models.dart';
 import 'work_code.dart';
 
@@ -71,6 +72,7 @@ class JavBusHtmlParser {
       publisher: _field(fields, const ['發行商', '发行商', 'レーベル']),
       series: _field(fields, const ['系列', 'シリーズ']),
       performers: performers,
+      provenanceFacts: _provenanceFacts(document, fields, rawTitle),
       actressUris: _actressUris(document, pageUri),
       originalImageEvidenceUris: _originalImageEvidenceUris(
         document,
@@ -78,6 +80,106 @@ class JavBusHtmlParser {
         code,
       ),
     );
+  }
+
+  ScrapeWorkProvenanceFacts _provenanceFacts(
+    Document document,
+    Map<String, String> fields,
+    String title,
+  ) {
+    final description = _clean(
+      document
+              .querySelector('meta[name="description"]')
+              ?.attributes['content'] ??
+          _field(fields, const ['説明', '概要', '內容']),
+    );
+    final includedWorks = _fieldValues(fields, const [
+      '収録作品',
+      '収録タイトル',
+      '収録内容',
+      '収録作品名',
+    ]);
+    final parentWorks = _fieldValues(fields, const [
+      '元作品',
+      '親作品',
+      '収録元',
+      '原作品',
+    ]);
+    final genres = _fieldValues(fields, const ['ジャンル', '類別', '類型']);
+    final text = [
+      title,
+      description ?? '',
+      ...fields.values,
+      ...genres,
+    ].join(' ');
+    final hasPriorMarker =
+        includedWorks.isNotEmpty ||
+        parentWorks.isNotEmpty ||
+        RegExp(
+          r'収録作品|収録タイトル|過去作品|既存作品|再収録|全\s*\d+\s*(?:作品|タイトル)|\d+\s*タイトル全部入り',
+          caseSensitive: false,
+        ).hasMatch(text);
+    final isSplit = RegExp(
+      r'分割|個別版|単独版|split',
+      caseSensitive: false,
+    ).hasMatch(text);
+    final isExtract = RegExp(
+      r'抜粋|切り出し|extract',
+      caseSensitive: false,
+    ).hasMatch(text);
+    final isPackage = RegExp(
+      r'オムニバス|アンソロジー|作品集|bundle|package',
+      caseSensitive: false,
+    ).hasMatch(text);
+    final isOldWithBonus =
+        RegExp(r'未公開|bonus', caseSensitive: false).hasMatch(text) &&
+        RegExp(r'過去|既存|再収録|収録|old', caseSensitive: false).hasMatch(text);
+    final shared = RegExp(
+      r'共演|同時出演|同じ.*作品|同一.*作品|ストーリー|コラボ',
+      caseSensitive: false,
+    ).hasMatch(text);
+    final independent = RegExp(
+      r'個別|各作品|別作品|それぞれ|独立.*(?:セグメント|作品)',
+      caseSensitive: false,
+    ).hasMatch(text);
+    return ScrapeWorkProvenanceFacts(
+      includedWorks: includedWorks,
+      parentWorks: parentWorks,
+      genres: genres,
+      description: description,
+      containsPriorWorks: hasPriorMarker ? true : null,
+      extractedFromPriorWork: isExtract ? true : null,
+      splitFromPriorWork: isSplit ? true : null,
+      packageOfIndependentWorks: isPackage ? true : null,
+      oldMaterialWithNewBonus: isOldWithBonus ? true : null,
+      reissue: RegExp(r'再発売|復刻', caseSensitive: false).hasMatch(text)
+          ? true
+          : null,
+      remaster: RegExp(r'リマスター|remaster', caseSensitive: false).hasMatch(text)
+          ? true
+          : null,
+      reedited: RegExp(r'再編集|re-?edit', caseSensitive: false).hasMatch(text)
+          ? true
+          : null,
+      explicitOriginalProduction:
+          RegExp(r'新撮|撮り下ろし|新作', caseSensitive: false).hasMatch(text)
+          ? true
+          : null,
+      coPerformance: independent
+          ? ScrapeCoPerformance.independentSegments
+          : shared
+          ? ScrapeCoPerformance.sharedProduction
+          : ScrapeCoPerformance.unknown,
+    );
+  }
+
+  List<String> _fieldValues(Map<String, String> fields, List<String> labels) {
+    final values = <String>[];
+    for (final label in labels) {
+      final value = _clean(fields[label]);
+      if (value != null && !values.contains(value)) values.add(value);
+    }
+    return List.unmodifiable(values);
   }
 
   List<Uri> _actressUris(Document document, Uri pageUri) {

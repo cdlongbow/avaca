@@ -317,6 +317,8 @@ class ScrapeJobCoordinator extends ChangeNotifier {
       excludedPrefixes: options.excludedPrefixes,
       managedFamilyModes: options.managedFamilyModes,
       exactAllows: options.exactAllows,
+      autoExcludeDerivedWorks: options.autoExcludeDerivedWorks,
+      exactDenies: options.exactDenies,
     );
     final job = await repository.create(
       actressId: actressId,

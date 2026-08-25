@@ -16,7 +16,9 @@ import '../controllers/software_update_controller.dart';
 import '../core/database.dart';
 import '../core/layout.dart';
 import '../models/data_transfer_models.dart';
+import '../models/scrape_exclusion_policy.dart';
 import '../models/scrape_source_settings.dart';
+import '../models/work_scrape_options.dart';
 import '../services/data_transfer_service.dart';
 import '../services/scrape_job_coordinator.dart';
 import '../services/avbase/avbase_client.dart';
@@ -343,6 +345,18 @@ class _SettingsViewState extends State<SettingsView> {
             const SizedBox(height: 8),
             _categoryCard(
               tokens: tokens,
+              feedbackId: 'category-scrape',
+              icon: Icons.manage_search_outlined,
+              title: AppLocalizations.of(context).scrapeSettings,
+              onTap: () => _openCategory(
+                titleBuilder: (context) =>
+                    AppLocalizations.of(context).scrapeSettings,
+                bodyBuilder: _buildScrapeSettings,
+              ),
+            ),
+            const SizedBox(height: 8),
+            _categoryCard(
+              tokens: tokens,
               feedbackId: 'category-data-transfer',
               icon: Icons.import_export,
               title: AppLocalizations.of(context).settingsDataTransferTitle,
@@ -524,15 +538,6 @@ class _SettingsViewState extends State<SettingsView> {
         const SizedBox(height: 8),
         _settingsExpansionCard(
           context: context,
-          feedbackId: 'other-scrape-sources',
-          icon: Icons.source_outlined,
-          title: localizations.scrapeSources,
-          subtitle: null,
-          child: _buildScrapeSourcesSettings(context, shrinkWrap: true),
-        ),
-        const SizedBox(height: 8),
-        _settingsExpansionCard(
-          context: context,
           feedbackId: 'other-scrape-jobs',
           icon: Icons.queue_play_next_outlined,
           title: localizations.settingsScrapeJobsTitle,
@@ -570,6 +575,25 @@ class _SettingsViewState extends State<SettingsView> {
           subtitle: null,
           child: _buildAboutSettingsEmbedded(context),
         ),
+      ],
+    );
+  }
+
+  Widget _buildScrapeSettings(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+    return ListView(
+      padding: EdgeInsets.zero,
+      children: [
+        _settingsExpansionCard(
+          context: context,
+          feedbackId: 'scrape-sources',
+          icon: Icons.source_outlined,
+          title: localizations.scrapeSources,
+          subtitle: null,
+          child: _buildScrapeSourcesSettings(context, shrinkWrap: true),
+        ),
+        const SizedBox(height: 12),
+        _ScrapePreferencesSettingsBody(database: widget.db),
       ],
     );
   }
@@ -1652,6 +1676,383 @@ class _ScrapeSourcesSettingsBodyState
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ScrapePreferencesSettingsBody extends StatefulWidget {
+  const _ScrapePreferencesSettingsBody({required this.database});
+
+  final AppDatabase database;
+
+  @override
+  State<_ScrapePreferencesSettingsBody> createState() =>
+      _ScrapePreferencesSettingsBodyState();
+}
+
+class _ScrapePreferencesSettingsBodyState
+    extends State<_ScrapePreferencesSettingsBody> {
+  late final Future<WorkScrapeOptions> _optionsFuture;
+  final exactAllowController = TextEditingController();
+  final exactDenyController = TextEditingController();
+  final prefixController = TextEditingController();
+  WorkScrapeOptions? options;
+  bool advancedExpanded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _optionsFuture = _loadOptions();
+  }
+
+  @override
+  void dispose() {
+    exactAllowController.dispose();
+    exactDenyController.dispose();
+    prefixController.dispose();
+    super.dispose();
+  }
+
+  Future<WorkScrapeOptions> _loadOptions() async {
+    try {
+      final loaded = WorkScrapeOptions.decode(
+        await widget.database.getSetting('works_scrape_options'),
+      );
+      if (mounted) setState(() => options = loaded);
+      return loaded;
+    } catch (_) {
+      const fallback = WorkScrapeOptions();
+      if (mounted) setState(() => options = fallback);
+      return fallback;
+    }
+  }
+
+  Future<void> _update(WorkScrapeOptions next) async {
+    if (!mounted) return;
+    setState(() => options = next);
+    try {
+      await widget.database.setSetting('works_scrape_options', next.encode());
+    } catch (_) {
+      // Keep the in-memory preference usable when the settings store is busy.
+    }
+  }
+
+  void _addExactAllow(WorkScrapeOptions current) {
+    final value = exactAllowController.text.trim().toUpperCase();
+    if (value.isEmpty ||
+        current.exactAllows.any((rule) => rule.normalizedCode == value)) {
+      return;
+    }
+    exactAllowController.clear();
+    unawaited(
+      _update(
+        current.copyWith(
+          exactAllows: [
+            ...current.exactAllows,
+            ScrapeExactAllowRule(code: value),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _addExactDeny(WorkScrapeOptions current) {
+    final value = exactDenyController.text.trim().toUpperCase();
+    if (value.isEmpty ||
+        current.exactDenies.any((rule) => rule.normalizedCode == value)) {
+      return;
+    }
+    exactDenyController.clear();
+    unawaited(
+      _update(
+        current.copyWith(
+          exactDenies: [
+            ...current.exactDenies,
+            ScrapeExactDenyRule(code: value),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _addPrefix(WorkScrapeOptions current) {
+    final value = prefixController.text.trim().toUpperCase();
+    if (value.isEmpty || current.excludedPrefixes.contains(value)) return;
+    prefixController.clear();
+    unawaited(
+      _update(
+        current.copyWith(
+          excludedPrefixes: [...current.excludedPrefixes, value],
+        ),
+      ),
+    );
+  }
+
+  Widget _ruleEditor({
+    required String title,
+    required String hint,
+    required TextEditingController controller,
+    required List<String> values,
+    required VoidCallback onAdd,
+    required ValueChanged<String> onDelete,
+    required Key inputKey,
+    required Key addKey,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                key: inputKey,
+                controller: controller,
+                textCapitalization: TextCapitalization.characters,
+                textInputAction: TextInputAction.done,
+                decoration: InputDecoration(
+                  hintText: hint,
+                  isDense: true,
+                  border: const OutlineInputBorder(),
+                ),
+                onSubmitted: (_) => onAdd(),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              key: addKey,
+              tooltip: title,
+              onPressed: onAdd,
+              icon: const Icon(Icons.add),
+            ),
+          ],
+        ),
+        if (values.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              AppLocalizations.of(context).scrapeNoRules,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          )
+        else
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final value in values)
+                  InputChip(
+                    label: Text(value),
+                    onDeleted: () => onDelete(value),
+                  ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+    return FutureBuilder<WorkScrapeOptions>(
+      future: _optionsFuture,
+      builder: (context, snapshot) {
+        final current = options ?? snapshot.data;
+        if (current == null) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final ofjeMode =
+            current.managedFamilyModes['OFJE'] ?? ManagedFamilyMode.reviewPrior;
+        return Card(
+          key: const Key('settings-scrape-preferences'),
+          margin: EdgeInsets.zero,
+          elevation: 0,
+          clipBehavior: Clip.antiAlias,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                DropdownButtonFormField<bool>(
+                  key: const Key('scrape-existing-data-policy'),
+                  initialValue: current.fillMissingOnly,
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    labelText: localizations.scrapeExistingData,
+                    border: const OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  items: [
+                    DropdownMenuItem(
+                      value: true,
+                      child: Text(localizations.fillMissingOnly),
+                    ),
+                    DropdownMenuItem(
+                      value: false,
+                      child: Text(localizations.scrapeUpdateAll),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      unawaited(
+                        _update(current.copyWith(fillMissingOnly: value)),
+                      );
+                    }
+                  },
+                ),
+                const SizedBox(height: 4),
+                SwitchListTile(
+                  key: const Key('scrape-aliases-switch'),
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: Text(localizations.scrapeAliases),
+                  value: current.scrapeAliases,
+                  onChanged: (value) => unawaited(
+                    _update(current.copyWith(scrapeAliases: value)),
+                  ),
+                ),
+                SwitchListTile(
+                  key: const Key('scrape-replace-actress-image-switch'),
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: Text(localizations.replaceActressImage),
+                  value: current.replaceActressImage,
+                  onChanged: (value) => unawaited(
+                    _update(current.copyWith(replaceActressImage: value)),
+                  ),
+                ),
+                SwitchListTile(
+                  key: const Key('scrape-auto-exclude-derived-switch'),
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: Text(localizations.scrapeAutomaticDerivedFilter),
+                  subtitle: Text(
+                    localizations.scrapeAutomaticDerivedFilterDescription,
+                  ),
+                  value: current.autoExcludeDerivedWorks,
+                  onChanged: (value) => unawaited(
+                    _update(current.copyWith(autoExcludeDerivedWorks: value)),
+                  ),
+                ),
+                ExpansionTile(
+                  key: const Key('scrape-advanced-rules'),
+                  tilePadding: EdgeInsets.zero,
+                  childrenPadding: const EdgeInsets.only(bottom: 8),
+                  title: Text(localizations.scrapeAdvancedRules),
+                  subtitle: Text(localizations.scrapeAdvancedRulesDescription),
+                  initiallyExpanded: advancedExpanded,
+                  onExpansionChanged: (value) =>
+                      setState(() => advancedExpanded = value),
+                  children: [
+                    _ruleEditor(
+                      title: localizations.scrapeExactAllows,
+                      hint: localizations.scrapeRuleHint,
+                      controller: exactAllowController,
+                      values: [
+                        for (final rule in current.exactAllows) rule.code,
+                      ],
+                      onAdd: () => _addExactAllow(current),
+                      onDelete: (value) => unawaited(
+                        _update(
+                          current.copyWith(
+                            exactAllows: [
+                              for (final rule in current.exactAllows)
+                                if (rule.code != value) rule,
+                            ],
+                          ),
+                        ),
+                      ),
+                      inputKey: const Key('scrape-exact-allow-input'),
+                      addKey: const Key('scrape-exact-allow-add'),
+                    ),
+                    const SizedBox(height: 16),
+                    _ruleEditor(
+                      title: localizations.scrapeExactDenies,
+                      hint: localizations.scrapeRuleHint,
+                      controller: exactDenyController,
+                      values: [
+                        for (final rule in current.exactDenies) rule.code,
+                      ],
+                      onAdd: () => _addExactDeny(current),
+                      onDelete: (value) => unawaited(
+                        _update(
+                          current.copyWith(
+                            exactDenies: [
+                              for (final rule in current.exactDenies)
+                                if (rule.code != value) rule,
+                            ],
+                          ),
+                        ),
+                      ),
+                      inputKey: const Key('scrape-exact-deny-input'),
+                      addKey: const Key('scrape-exact-deny-add'),
+                    ),
+                    const SizedBox(height: 16),
+                    _ruleEditor(
+                      title: localizations.scrapeLegacyPrefixes,
+                      hint: localizations.codePrefixHint,
+                      controller: prefixController,
+                      values: current.excludedPrefixes,
+                      onAdd: () => _addPrefix(current),
+                      onDelete: (value) => unawaited(
+                        _update(
+                          current.copyWith(
+                            excludedPrefixes: [
+                              for (final prefix in current.excludedPrefixes)
+                                if (prefix != value) prefix,
+                            ],
+                          ),
+                        ),
+                      ),
+                      inputKey: const Key('scrape-prefix-input'),
+                      addKey: const Key('scrape-prefix-add'),
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<ManagedFamilyMode>(
+                      key: const Key('scrape-ofje-policy-dropdown'),
+                      initialValue: ofjeMode,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'OFJE',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: ManagedFamilyMode.reviewPrior,
+                          child: Text('保留・待檢視（建議）'),
+                        ),
+                        DropdownMenuItem(
+                          value: ManagedFamilyMode.evidenceOnly,
+                          child: Text('只依作品語義判定'),
+                        ),
+                        DropdownMenuItem(
+                          value: ManagedFamilyMode.excludeAll,
+                          child: Text('整個系列排除'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        if (value == null) return;
+                        final modes = <String, ManagedFamilyMode>{
+                          ...current.managedFamilyModes,
+                          'OFJE': value,
+                        };
+                        unawaited(
+                          _update(current.copyWith(managedFamilyModes: modes)),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

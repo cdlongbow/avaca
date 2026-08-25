@@ -103,6 +103,8 @@ final class AvBaseScrapeSource
       series: details.series,
       performerCount: details.performerCount,
       performers: details.performers,
+      provenanceFacts: details.provenanceFacts,
+      coPerformance: details.provenanceFacts.coPerformance,
       imageUris: const [],
       originalImageEvidenceUris: details.originalImageEvidenceUris,
     );

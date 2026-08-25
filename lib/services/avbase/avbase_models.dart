@@ -1,5 +1,6 @@
 import '../../models/scraped_actress_details.dart';
 import '../../models/work.dart';
+import '../scrape/scrape_models.dart';
 
 final class AvBaseActressPage {
   const AvBaseActressPage({
@@ -40,6 +41,7 @@ final class AvBaseWorkDetails {
     this.series,
     this.performerCount,
     this.performers,
+    this.provenanceFacts = const ScrapeWorkProvenanceFacts(),
     this.originalImageEvidenceUris = const [],
   });
 
@@ -52,6 +54,7 @@ final class AvBaseWorkDetails {
   final String? series;
   final int? performerCount;
   final List<WorkPerformer>? performers;
+  final ScrapeWorkProvenanceFacts provenanceFacts;
   final List<Uri> originalImageEvidenceUris;
 }
 

@@ -81,6 +81,15 @@ void main() {
     expect(details.originalImageEvidenceUris.single.host, 'pics.dmm.co.jp');
   });
 
+  test('does not treat standalone collection wording as lineage evidence', () {
+    final details = parser.parseWorkPage(
+      '<html><body><h1>4K コレクション</h1></body></html>',
+      pageUri: Uri.parse('https://www.avbase.net/works/test:COLL-001'),
+    );
+
+    expect(details.provenanceFacts.packageOfIndependentWorks, isNull);
+  });
+
   test('parses direct talent route as a single AvBase search result', () {
     final result = parser.parseActressSearchResult(
       '<html><body><h1>石川澪</h1></body></html>',

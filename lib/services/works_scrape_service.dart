@@ -363,6 +363,8 @@ class WorksScrapeService {
           excludedPrefixes: options.excludedPrefixes,
           managedFamilyModes: options.managedFamilyModes,
           exactAllows: options.exactAllows,
+          autoExcludeDerivedWorks: options.autoExcludeDerivedWorks,
+          exactDenies: options.exactDenies,
         );
     final policyEvaluator = ScrapeExclusionPolicyEvaluator(effectivePolicy);
     final queries = _queries(name, aliases);
@@ -376,20 +378,29 @@ class WorksScrapeService {
     final collectedById = <ScrapeSourceId, _CollectedSource>{};
     final collectionFutures =
         <ScrapeSourceId, Future<_SourceCollectionOutcome>>{};
-    final sourceIdsToCollect = <ScrapeSourceId>[
-      ...requestedWorkIds,
-      if (!requestedWorkIds.contains(settings.actressDetailsSource))
-        settings.actressDetailsSource,
-      if (aliasSourceId != null &&
-          !requestedWorkIds.contains(aliasSourceId) &&
-          aliasSourceId != settings.actressDetailsSource)
-        aliasSourceId,
-    ];
+    final auxiliaryCollectionFutures =
+        <ScrapeSourceId, Future<_SourceCollectionOutcome>>{};
 
-    // Start every source collection immediately.  Each works source then
-    // chains its own detail queue from this future, so one site's details can
-    // start while another site is still traversing its works pages.
-    for (final sourceId in sourceIdsToCollect) {
+    void recordCollectionOutcome(
+      ScrapeSourceId sourceId,
+      _SourceCollectionOutcome outcome,
+    ) {
+      final collected = outcome.collected;
+      if (collected != null) {
+        collectedById[sourceId] = collected;
+      }
+      if (requestedWorkIds.contains(sourceId) ||
+          sourceId == settings.actressDetailsSource ||
+          sourceId == aliasSourceId) {
+        sourceResults[sourceId] = outcome.result;
+        _observer?.onSourceResult(outcome.result);
+      }
+    }
+
+    Future<_SourceCollectionOutcome> startCollection(
+      ScrapeSourceId sourceId, {
+      required bool includeWorks,
+    }) {
       _notify(
         onProgress,
         0,
@@ -401,7 +412,7 @@ class WorksScrapeService {
         source: sourceId,
       );
       final source = sources[sourceId];
-      collectionFutures[sourceId] = source == null
+      return source == null
           ? Future.value(
               _SourceCollectionOutcome(
                 result: ScrapeSourceRunResult(
@@ -415,7 +426,7 @@ class WorksScrapeService {
               source: source,
               queries: queries,
               cancellationToken: cancellationToken,
-              includeWorks: requestedWorkIds.contains(sourceId),
+              includeWorks: includeWorks,
               onCollectionProgress: (progress) {
                 _notify(
                   onProgress,
@@ -436,53 +447,51 @@ class WorksScrapeService {
             );
     }
 
-    void recordCollectionOutcome(
+    Future<_SourceCollectionOutcome> ensureCollection(
       ScrapeSourceId sourceId,
-      _SourceCollectionOutcome outcome,
-    ) {
-      final collected = outcome.collected;
-      if (collected != null) {
-        collectedById[sourceId] = collected;
-      }
-      if (requestedWorkIds.contains(sourceId) ||
-          sourceId == settings.actressDetailsSource ||
-          sourceId == aliasSourceId) {
-        sourceResults[sourceId] = outcome.result;
-        _observer?.onSourceResult(outcome.result);
-      }
+    ) async {
+      final future = collectionFutures[sourceId] ??= startCollection(
+        sourceId,
+        includeWorks: true,
+      );
+      final outcome = await future;
+      recordCollectionOutcome(sourceId, outcome);
+      return outcome;
     }
 
-    // The work-list barrier is intentional: no detail request starts until
-    // every selected works source has finished traversing its actress pages.
-    final workCollectionOutcomes = await Future.wait([
-      for (final sourceId in requestedWorkIds)
-        collectionFutures[sourceId]!.then((outcome) => (sourceId, outcome)),
-    ]);
-    for (final (sourceId, outcome) in workCollectionOutcomes) {
-      recordCollectionOutcome(sourceId, outcome);
+    // The first configured works source is the primary.  Actress details and
+    // aliases may run in parallel, but later works sources are started only
+    // when primary coverage or provenance evidence is insufficient.
+    collectionFutures[requestedWorkIds.first] = startCollection(
+      requestedWorkIds.first,
+      includeWorks: true,
+    );
+    for (final sourceId in <ScrapeSourceId>{
+      settings.actressDetailsSource,
+      ?aliasSourceId,
+    }) {
+      if (sourceId == requestedWorkIds.first) continue;
+      auxiliaryCollectionFutures[sourceId] = startCollection(
+        sourceId,
+        includeWorks: false,
+      );
     }
-    final globalSelection = _selectGlobalWorkCandidates(
+
+    final sourcePipelines = _runConditionalWorkPipelines(
       requestedWorkIds: requestedWorkIds,
       collectedById: collectedById,
       retryWorkCodes: options.retryWorkCodes,
       policyEvaluator: policyEvaluator,
-    );
-    _rawDiscovered = globalSelection.rawDiscovered;
-    _duplicateCount = globalSelection.duplicateCount;
-    _detailTotal = globalSelection.groups.length;
-    _uniqueTotal = globalSelection.uniqueCount;
-    final sourcePipelines = _runGlobalDetailPipelines(
-      requestedWorkIds: requestedWorkIds,
-      collectedById: collectedById,
-      groups: globalSelection.groups,
-      preExcluded: globalSelection.preExcluded,
+      ensureCollection: ensureCollection,
       cancellationToken: cancellationToken,
       onProgress: onProgress,
     );
 
     final detailsSourceId = settings.actressDetailsSource;
     final detailsSource = sources[detailsSourceId];
-    final detailsCollectionFuture = collectionFutures[detailsSourceId];
+    final detailsCollectionFuture =
+        collectionFutures[detailsSourceId] ??
+        auxiliaryCollectionFutures[detailsSourceId];
     final detailsOutcome = detailsCollectionFuture == null
         ? null
         : await detailsCollectionFuture;
@@ -547,7 +556,8 @@ class WorksScrapeService {
         ? null
         : aliasSourceId == detailsSourceId
         ? detailsOutcome
-        : await collectionFutures[aliasSourceId];
+        : await (collectionFutures[aliasSourceId] ??
+              auxiliaryCollectionFutures[aliasSourceId]);
     final aliasId = aliasSourceId;
     if (aliasOutcome != null && aliasId != null && aliasId != detailsSourceId) {
       recordCollectionOutcome(aliasId, aliasOutcome);
@@ -1262,6 +1272,208 @@ class WorksScrapeService {
     );
   }
 
+  Future<List<_SourcePipelineOutcome>> _runConditionalWorkPipelines({
+    required List<ScrapeSourceId> requestedWorkIds,
+    required Map<ScrapeSourceId, _CollectedSource> collectedById,
+    required List<String> retryWorkCodes,
+    required ScrapeExclusionPolicyEvaluator policyEvaluator,
+    required Future<_SourceCollectionOutcome> Function(ScrapeSourceId)
+    ensureCollection,
+    required WorksScrapeCancellationToken? cancellationToken,
+    void Function(WorksScrapeProgress progress)? onProgress,
+  }) async {
+    if (requestedWorkIds.isEmpty) return const [];
+
+    final attemptedSourceIds = <ScrapeSourceId>[];
+    final resultsBySource = <ScrapeSourceId, ScrapeSourceRunResult>{};
+    _GlobalCandidateSelection? selection;
+
+    // First obtain coverage from the primary source.  If it cannot produce
+    // any usable candidate, move to the next source one at a time.
+    for (final sourceId in requestedWorkIds) {
+      if (_isCancelled(cancellationToken)) break;
+      final outcome = await ensureCollection(sourceId);
+      attemptedSourceIds.add(sourceId);
+      resultsBySource[sourceId] = outcome.result;
+      final collected = outcome.collected;
+      if (collected != null) collectedById[sourceId] = collected;
+      if (!outcome.result.succeeded) continue;
+
+      final candidateSelection = _selectGlobalWorkCandidates(
+        requestedWorkIds: requestedWorkIds,
+        collectedById: collectedById,
+        retryWorkCodes: retryWorkCodes,
+        policyEvaluator: policyEvaluator,
+      );
+      if (candidateSelection.groups.isNotEmpty) {
+        selection = candidateSelection;
+        break;
+      }
+    }
+
+    if (selection == null) {
+      return [
+        for (final sourceId in attemptedSourceIds)
+          _SourcePipelineOutcome(
+            sourceId: sourceId,
+            collected: collectedById[sourceId],
+            result:
+                resultsBySource[sourceId] ??
+                ScrapeSourceRunResult(
+                  source: sourceId,
+                  state: ScrapeSourceRunState.unavailable,
+                ),
+          ),
+      ];
+    }
+
+    final selected = selection;
+    _rawDiscovered = selected.rawDiscovered;
+    _duplicateCount = selected.duplicateCount;
+    _detailTotal = selected.groups.length;
+    _uniqueTotal = selected.uniqueCount;
+
+    final fetched = <_FetchedWorkDetail>[];
+    final failedCandidates = <_FailedWorkCandidate>[];
+    final pipelineResults = <_SourcePipelineOutcome>[];
+    var unresolved = selected.groups.toList(growable: false);
+
+    bool needsSecondaryEvidence(
+      _GlobalWorkGroup group,
+      List<ScrapeWorkDetails> groupDetails,
+    ) {
+      if (groupDetails.isEmpty) return true;
+      final decision = policyEvaluator.evaluate(
+        code: group.storageCode,
+        details: groupDetails,
+      );
+      if (!decision.reviewRequired) return false;
+      // A disabled automatic filter is an intentional user choice, not a
+      // missing fact that should trigger another site's request.
+      if (decision.reasonCodes.contains('derived_work_filter_disabled') ||
+          decision.reasonCodes.contains('manual_rule_scope_uncertain') ||
+          decision.reasonCodes.contains('manual_override_conflict')) {
+        return false;
+      }
+      return true;
+    }
+
+    final selectedSourceIndex = requestedWorkIds.indexOf(
+      unresolved.first.candidates.first.source.id,
+    );
+    final firstStageIndex = selectedSourceIndex < 0 ? 0 : selectedSourceIndex;
+    for (
+      var sourceIndex = firstStageIndex;
+      sourceIndex < requestedWorkIds.length && unresolved.isNotEmpty;
+      sourceIndex++
+    ) {
+      if (_isCancelled(cancellationToken)) break;
+      final sourceId = requestedWorkIds[sourceIndex];
+      var stageGroups = unresolved;
+
+      if (sourceIndex > firstStageIndex) {
+        final outcome = await ensureCollection(sourceId);
+        if (!attemptedSourceIds.contains(sourceId)) {
+          attemptedSourceIds.add(sourceId);
+        }
+        resultsBySource[sourceId] = outcome.result;
+        final collected = outcome.collected;
+        if (collected != null) collectedById[sourceId] = collected;
+        if (!outcome.result.succeeded || collected == null) continue;
+
+        final candidatesByIdentity = <String, List<_WorkCandidate>>{};
+        for (final summary in collected.summaries) {
+          final key = _summaryIdentityKey(sourceId, summary);
+          candidatesByIdentity
+              .putIfAbsent(key, () => <_WorkCandidate>[])
+              .add(_WorkCandidate(source: collected.source, summary: summary));
+        }
+        final stagedGroups = <_GlobalWorkGroup>[];
+        for (final group in unresolved) {
+          final candidates = candidatesByIdentity[group.identityKey];
+          if (candidates == null || candidates.isEmpty) continue;
+          stagedGroups.add(
+            _GlobalWorkGroup(
+              identityKey: group.identityKey,
+              identityCodeKey: group.identityCodeKey,
+              storageCode: group.storageCode,
+              candidates: List.unmodifiable(candidates),
+              ordinal: group.ordinal,
+            ),
+          );
+        }
+        if (stagedGroups.isEmpty) continue;
+        stageGroups = stagedGroups;
+      }
+
+      if (sourceIndex > firstStageIndex) {
+        _detailTotal += stageGroups.length;
+      }
+
+      final stageResult = await _runGlobalDetailPipelines(
+        requestedWorkIds: [sourceId],
+        collectedById: {
+          if (collectedById[sourceId] != null)
+            sourceId: collectedById[sourceId]!,
+        },
+        groups: stageGroups,
+        preExcluded: sourceIndex == firstStageIndex ? selected.preExcluded : 0,
+        cancellationToken: cancellationToken,
+        onProgress: onProgress,
+      );
+      pipelineResults.addAll(stageResult);
+      for (final pipeline in stageResult) {
+        fetched.addAll(pipeline.fetched);
+        failedCandidates.addAll(pipeline.failedCandidates);
+      }
+
+      final nextUnresolved = <_GlobalWorkGroup>[];
+      for (final group in unresolved) {
+        final groupDetails = fetched
+            .where((item) => item.identityKey == group.identityKey)
+            .map((item) => item.details)
+            .toList(growable: false);
+        if (needsSecondaryEvidence(group, groupDetails)) {
+          nextUnresolved.add(group);
+        }
+      }
+      unresolved = nextUnresolved;
+    }
+
+    // A source may have been used for coverage but not for detail fetching
+    // (for example when cancellation arrived between stages). Keep its
+    // collection result visible without inventing a failure.
+    final known = pipelineResults.map((item) => item.sourceId).toSet();
+    for (final sourceId in attemptedSourceIds) {
+      if (known.contains(sourceId)) continue;
+      pipelineResults.add(
+        _SourcePipelineOutcome(
+          sourceId: sourceId,
+          collected: collectedById[sourceId],
+          result:
+              resultsBySource[sourceId] ??
+              ScrapeSourceRunResult(
+                source: sourceId,
+                state: ScrapeSourceRunState.unavailable,
+              ),
+        ),
+      );
+    }
+    return List.unmodifiable(pipelineResults);
+  }
+
+  String _summaryIdentityKey(
+    ScrapeSourceId sourceId,
+    ScrapeWorkSummary summary,
+  ) {
+    final identity = parseScrapeWorkCodeIdentity(
+      summary.rawCode ?? summary.code,
+    );
+    return identity == null
+        ? 'uri:${sourceId.storageValue}:${summary.detailUri}'
+        : 'code:${identity.key}';
+  }
+
   Future<List<_SourcePipelineOutcome>> _runGlobalDetailPipelines({
     required List<ScrapeSourceId> requestedWorkIds,
     required Map<ScrapeSourceId, _CollectedSource> collectedById,
@@ -1291,7 +1503,7 @@ class WorksScrapeService {
     _notify(
       onProgress,
       0,
-      groups.length,
+      _detailTotal > 0 ? _detailTotal : groups.length,
       0,
       preExcluded,
       0,
@@ -1319,6 +1531,7 @@ class WorksScrapeService {
                   detailIdentity.key != group.identityCodeKey)) {
             lastFailure = _FailedWorkCandidate(
               candidate: candidate,
+              identityKey: group.identityKey,
               reason: WorksScrapeFailureReason.detailCodeMismatch,
             );
             failedBySource.putIfAbsent(sourceId, () => []).add(lastFailure);
@@ -1335,6 +1548,7 @@ class WorksScrapeService {
           if (storageCode.isEmpty) {
             lastFailure = _FailedWorkCandidate(
               candidate: candidate,
+              identityKey: group.identityKey,
               reason: WorksScrapeFailureReason.invalidCode,
             );
             failedBySource.putIfAbsent(sourceId, () => []).add(lastFailure);
@@ -1350,6 +1564,7 @@ class WorksScrapeService {
           );
           fetched = _FetchedWorkDetail(
             candidate: candidate,
+            identityKey: group.identityKey,
             sourceId: sourceId,
             details: _withScrapeCode(
               evidenced,
@@ -1367,6 +1582,7 @@ class WorksScrapeService {
         } on Object catch (error) {
           lastFailure = _FailedWorkCandidate(
             candidate: candidate,
+            identityKey: group.identityKey,
             reason: WorksScrapeFailureReason.detailsUnavailable,
             error: error,
           );
@@ -1394,7 +1610,7 @@ class WorksScrapeService {
       _notify(
         onProgress,
         _detailCompleted,
-        groups.length,
+        _detailTotal > 0 ? _detailTotal : groups.length,
         0,
         preExcluded,
         0,
@@ -1947,6 +2163,12 @@ class WorksScrapeService {
       originalImageEvidenceUris: details.originalImageEvidenceUris,
       fieldSources: details.fieldSources,
       sourceUri: details.sourceUri,
+      description: details.description,
+      includedWorks: details.includedWorks,
+      parentWorks: details.parentWorks,
+      genres: details.genres,
+      coPerformance: details.coPerformance,
+      provenanceFacts: details.provenanceFacts,
     );
   }
 
@@ -2141,11 +2363,13 @@ final class _SourcePipelineOutcome {
 final class _FetchedWorkDetail {
   const _FetchedWorkDetail({
     required this.candidate,
+    required this.identityKey,
     required this.sourceId,
     required this.details,
   });
 
   final _WorkCandidate candidate;
+  final String identityKey;
   final ScrapeSourceId sourceId;
   final ScrapeWorkDetails details;
 }
@@ -2153,11 +2377,13 @@ final class _FetchedWorkDetail {
 final class _FailedWorkCandidate {
   const _FailedWorkCandidate({
     required this.candidate,
+    required this.identityKey,
     required this.reason,
     this.error,
   });
 
   final _WorkCandidate candidate;
+  final String identityKey;
   final WorksScrapeFailureReason reason;
   final Object? error;
 }

@@ -1,6 +1,7 @@
 import 'package:avaca/models/scrape_exclusion_policy.dart';
 import 'package:avaca/models/scrape_rules.dart';
 import 'package:avaca/models/scrape_source_settings.dart';
+import 'package:avaca/models/work.dart';
 import 'package:avaca/services/scrape/scrape_models.dart';
 import 'package:avaca/services/scrape_exclusion_policy_evaluator.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -108,7 +109,27 @@ void main() {
       details: [_details('MIX-001', '単体作品', performerCount: 30)],
     );
 
-    expect(decision.finalAction, ScrapeFinalAction.keep);
+    expect(decision.finalAction, ScrapeFinalAction.keepReview);
+    expect(decision.verdict, ScrapeProvenanceVerdict.keepUncertain);
+  });
+
+  test('does not infer shared production from cast count', () {
+    final decision = _evaluator().evaluate(
+      code: 'MIX-CAST-001',
+      details: [
+        _details(
+          'MIX-CAST-001',
+          '多人作品',
+          performers: const [
+            WorkPerformer(name: '女優一'),
+            WorkPerformer(name: '女優二'),
+          ],
+        ),
+      ],
+    );
+
+    expect(decision.finalAction, ScrapeFinalAction.keepReview);
+    expect(decision.provenanceClass, ScrapeProvenanceClass.unknown);
   });
 
   test('uses review when source surfaces conflict', () {
@@ -122,7 +143,7 @@ void main() {
     expect(decision.reasonCodes, ['source_evidence_conflict']);
   });
 
-  test('prefix exclusion is explicit but exact allow can override it', () {
+  test('prefixes are only hints and exact allow can still override them', () {
     final excluded = _evaluator(
       excludedPrefixes: const ['FC2'],
     ).evaluate(code: 'FC2-001', details: [_details('FC2-001', '普通作品')]);
@@ -131,7 +152,7 @@ void main() {
       exactAllows: const [ScrapeExactAllowRule(code: 'FC2-001')],
     ).evaluate(code: 'FC2-001', details: [_details('FC2-001', '普通作品')]);
 
-    expect(excluded.finalAction, ScrapeFinalAction.exclude);
+    expect(excluded.finalAction, ScrapeFinalAction.keepReview);
     expect(allowed.finalAction, ScrapeFinalAction.keep);
   });
 
@@ -175,12 +196,81 @@ void main() {
       expect(decision.finalAction, ScrapeFinalAction.keep);
     },
   );
+
+  test('classifies concrete lineage as a derived work', () {
+    final decision = _evaluator().evaluate(
+      code: 'COLL-001',
+      details: [
+        _details(
+          'COLL-001',
+          '作品集',
+          provenanceFacts: const ScrapeWorkProvenanceFacts(
+            includedWorks: ['OLD-001', 'OLD-002'],
+          ),
+        ),
+      ],
+    );
+
+    expect(decision.finalAction, ScrapeFinalAction.exclude);
+    expect(decision.provenanceClass, ScrapeProvenanceClass.derivedOmnibus);
+    expect(decision.verdict, ScrapeProvenanceVerdict.exclude);
+  });
+
+  test('keeps a concrete shared co-performance', () {
+    final decision = _evaluator().evaluate(
+      code: 'COSTAR-001',
+      details: [
+        _details(
+          'COSTAR-001',
+          '共演新作',
+          provenanceFacts: const ScrapeWorkProvenanceFacts(
+            coPerformance: ScrapeCoPerformance.sharedProduction,
+          ),
+        ),
+      ],
+    );
+
+    expect(decision.finalAction, ScrapeFinalAction.keep);
+    expect(decision.provenanceClass, ScrapeProvenanceClass.originalCostar);
+  });
+
+  test(
+    'disabling the automatic filter never turns strong lineage into exclude',
+    () {
+      final decision = _evaluator(autoExcludeDerivedWorks: false).evaluate(
+        code: 'COLL-002',
+        details: [
+          _details(
+            'COLL-002',
+            '作品集',
+            provenanceFacts: const ScrapeWorkProvenanceFacts(
+              includedWorks: ['OLD-003'],
+            ),
+          ),
+        ],
+      );
+
+      expect(decision.finalAction, ScrapeFinalAction.keepReview);
+      expect(decision.reasonCodes, contains('derived_work_filter_disabled'));
+    },
+  );
+
+  test('supports an exact manual deny rule', () {
+    final decision = _evaluator(
+      exactDenies: const [ScrapeExactDenyRule(code: 'MANUAL-001')],
+    ).evaluate(code: 'MANUAL-001', details: [_details('MANUAL-001', '普通作品')]);
+
+    expect(decision.finalAction, ScrapeFinalAction.exclude);
+    expect(decision.reasonCodes, ['exact_deny']);
+  });
 }
 
 ScrapeExclusionPolicyEvaluator _evaluator({
   List<String> excludedPrefixes = const [],
   Map<String, ManagedFamilyMode> managedFamilyModes = const {},
   List<ScrapeExactAllowRule> exactAllows = const [],
+  List<ScrapeExactDenyRule> exactDenies = const [],
+  bool autoExcludeDerivedWorks = true,
 }) {
   return ScrapeExclusionPolicyEvaluator(
     ScrapePolicySnapshot.v2(
@@ -188,6 +278,8 @@ ScrapeExclusionPolicyEvaluator _evaluator({
       excludedPrefixes: excludedPrefixes,
       managedFamilyModes: managedFamilyModes,
       exactAllows: exactAllows,
+      exactDenies: exactDenies,
+      autoExcludeDerivedWorks: autoExcludeDerivedWorks,
     ),
   );
 }
@@ -197,11 +289,15 @@ ScrapeWorkDetails _details(
   String title, {
   int? performerCount,
   ScrapeSourceId source = ScrapeSourceId.javbus,
+  ScrapeWorkProvenanceFacts provenanceFacts = const ScrapeWorkProvenanceFacts(),
+  List<WorkPerformer>? performers,
 }) {
   return ScrapeWorkDetails(
     source: source,
     code: code,
     title: title,
     performerCount: performerCount,
+    performers: performers,
+    provenanceFacts: provenanceFacts,
   );
 }

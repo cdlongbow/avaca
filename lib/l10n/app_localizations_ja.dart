@@ -395,6 +395,40 @@ class AppLocalizationsJa extends AppLocalizations {
   String get scrapeSettings => '取得設定';
 
   @override
+  String get scrapeExistingData => '既存データの処理';
+
+  @override
+  String get scrapeUpdateAll => '既存データも更新';
+
+  @override
+  String get scrapeAutomaticDerivedFilter => '再編集・合集作品を自動除外';
+
+  @override
+  String get scrapeAutomaticDerivedFilterDescription =>
+      '出典の系譜と作品語義だけで判定し、不明な作品は保持します。';
+
+  @override
+  String get scrapeAdvancedRules => '詳細ルール';
+
+  @override
+  String get scrapeAdvancedRulesDescription => '番号単位の許可・除外と互換プレフィックス。';
+
+  @override
+  String get scrapeExactAllows => '番号単位で許可';
+
+  @override
+  String get scrapeExactDenies => '番号単位で除外';
+
+  @override
+  String get scrapeLegacyPrefixes => '互換プレフィックス';
+
+  @override
+  String get scrapeRuleHint => '品番を入力';
+
+  @override
+  String get scrapeNoRules => 'ルールは未設定です';
+
+  @override
   String get syncActressDetails => 'プロフィール詳細を同期';
 
   @override
@@ -1577,6 +1611,40 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
 
   @override
   String get scrapeSettings => '取得設定';
+
+  @override
+  String get scrapeExistingData => '既存データの処理';
+
+  @override
+  String get scrapeUpdateAll => '既存データも更新';
+
+  @override
+  String get scrapeAutomaticDerivedFilter => '再編集・合集作品を自動除外';
+
+  @override
+  String get scrapeAutomaticDerivedFilterDescription =>
+      '出典の系譜と作品語義だけで判定し、不明な作品は保持します。';
+
+  @override
+  String get scrapeAdvancedRules => '詳細ルール';
+
+  @override
+  String get scrapeAdvancedRulesDescription => '番号単位の許可・除外と互換プレフィックス。';
+
+  @override
+  String get scrapeExactAllows => '番号単位で許可';
+
+  @override
+  String get scrapeExactDenies => '番号単位で除外';
+
+  @override
+  String get scrapeLegacyPrefixes => '互換プレフィックス';
+
+  @override
+  String get scrapeRuleHint => '品番を入力';
+
+  @override
+  String get scrapeNoRules => 'ルールは未設定です';
 
   @override
   String get syncActressDetails => 'プロフィール詳細を同期';

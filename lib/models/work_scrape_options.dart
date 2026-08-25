@@ -10,8 +10,10 @@ class WorkScrapeOptions {
     this.excludedPrefixes = const [],
     this.retryWorkCodes = const [],
     this.scrapeAliases = false,
+    this.autoExcludeDerivedWorks = true,
     this.managedFamilyModes = const {},
     this.exactAllows = const [],
+    this.exactDenies = const [],
   });
 
   final bool syncDetails;
@@ -20,23 +22,34 @@ class WorkScrapeOptions {
   final List<String> excludedPrefixes;
   final List<String> retryWorkCodes;
   final bool scrapeAliases;
+  final bool autoExcludeDerivedWorks;
   final Map<String, ManagedFamilyMode> managedFamilyModes;
   final List<ScrapeExactAllowRule> exactAllows;
+  final List<ScrapeExactDenyRule> exactDenies;
 
   WorkScrapeOptions copyWith({
+    bool? syncDetails,
+    bool? replaceActressImage,
+    bool? fillMissingOnly,
+    List<String>? excludedPrefixes,
     List<String>? retryWorkCodes,
     bool? scrapeAliases,
+    bool? autoExcludeDerivedWorks,
     Map<String, ManagedFamilyMode>? managedFamilyModes,
     List<ScrapeExactAllowRule>? exactAllows,
+    List<ScrapeExactDenyRule>? exactDenies,
   }) => WorkScrapeOptions(
-    syncDetails: syncDetails,
-    replaceActressImage: replaceActressImage,
-    fillMissingOnly: fillMissingOnly,
-    excludedPrefixes: excludedPrefixes,
+    syncDetails: syncDetails ?? this.syncDetails,
+    replaceActressImage: replaceActressImage ?? this.replaceActressImage,
+    fillMissingOnly: fillMissingOnly ?? this.fillMissingOnly,
+    excludedPrefixes: excludedPrefixes ?? this.excludedPrefixes,
     retryWorkCodes: retryWorkCodes ?? this.retryWorkCodes,
     scrapeAliases: scrapeAliases ?? this.scrapeAliases,
+    autoExcludeDerivedWorks:
+        autoExcludeDerivedWorks ?? this.autoExcludeDerivedWorks,
     managedFamilyModes: managedFamilyModes ?? this.managedFamilyModes,
     exactAllows: exactAllows ?? this.exactAllows,
+    exactDenies: exactDenies ?? this.exactDenies,
   );
 
   String encode() {
@@ -47,11 +60,13 @@ class WorkScrapeOptions {
       'excludedPrefixes': excludedPrefixes,
       'retryWorkCodes': retryWorkCodes,
       'scrapeAliases': scrapeAliases,
+      'autoExcludeDerivedWorks': autoExcludeDerivedWorks,
       'managedFamilyModes': {
         for (final entry in managedFamilyModes.entries)
           entry.key: entry.value.storageValue,
       },
       'exactAllows': exactAllows.map((item) => item.toJson()).toList(),
+      'exactDenies': exactDenies.map((item) => item.toJson()).toList(),
     });
   }
 
@@ -86,6 +101,16 @@ class WorkScrapeOptions {
           }
         }
       }
+      final exactDenies = <ScrapeExactDenyRule>[];
+      if (json['exactDenies'] is List) {
+        for (final item in json['exactDenies'] as List) {
+          try {
+            exactDenies.add(ScrapeExactDenyRule.fromJson(item));
+          } on FormatException {
+            // Ignore malformed optional entries while preserving old settings.
+          }
+        }
+      }
       return WorkScrapeOptions(
         syncDetails: json['syncDetails'] is bool
             ? json['syncDetails'] as bool
@@ -115,8 +140,12 @@ class WorkScrapeOptions {
         scrapeAliases: json['scrapeAliases'] is bool
             ? json['scrapeAliases'] as bool
             : false,
+        autoExcludeDerivedWorks: json['autoExcludeDerivedWorks'] is bool
+            ? json['autoExcludeDerivedWorks'] as bool
+            : true,
         managedFamilyModes: Map.unmodifiable(managedModes),
         exactAllows: List.unmodifiable(exactAllows),
+        exactDenies: List.unmodifiable(exactDenies),
       );
     } on FormatException {
       return const WorkScrapeOptions();

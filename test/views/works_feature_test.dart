@@ -109,25 +109,6 @@ class _WorksFeatureDatabase extends AppDatabase {
   Future<void> setSetting(String key, String value) async {}
 }
 
-class _PersistedWorksFeatureDatabase extends _WorksFeatureDatabase {
-  String? scrapeOptions;
-
-  @override
-  Future<String?> getSetting(String key) async {
-    if (key == 'works_scrape_options') {
-      return scrapeOptions;
-    }
-    return null;
-  }
-
-  @override
-  Future<void> setSetting(String key, String value) async {
-    if (key == 'works_scrape_options') {
-      scrapeOptions = value;
-    }
-  }
-}
-
 class _WideWorksFeatureDatabase extends _WorksFeatureDatabase {
   @override
   Future<List<Map<String, Object?>>> getWorksForActress(int actressId) async {
@@ -147,6 +128,18 @@ class _WideWorksFeatureDatabase extends _WorksFeatureDatabase {
       });
     }
     return works;
+  }
+}
+
+class _ConfiguredWorksFeatureDatabase extends _WorksFeatureDatabase {
+  _ConfiguredWorksFeatureDatabase(this.options);
+
+  final WorkScrapeOptions options;
+
+  @override
+  Future<String?> getSetting(String key) async {
+    if (key == 'works_scrape_options') return options.encode();
+    return super.getSetting(key);
   }
 }
 
@@ -521,359 +514,44 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets(
-    'scrape settings use compact switch rows and collapsible prefixes',
-
-    (tester) async {
-      await _pumpWorks(tester);
-
-      await _openWorksScrapeSettings(tester);
-
-      final switchTiles = tester
-          .widgetList<SwitchListTile>(find.byType(SwitchListTile))
-          .toList(growable: false);
-
-      expect(switchTiles, hasLength(4));
-
-      for (final tile in switchTiles) {
-        expect(tile.controlAffinity, ListTileControlAffinity.trailing);
-      }
-
-      expect(find.text('同步詳細資料'), findsOneWidget);
-
-      expect(find.text('刮削別名'), findsOneWidget);
-
-      expect(find.text('更換女優頭像'), findsOneWidget);
-
-      expect(find.text('二次刮削只補齊缺少的資訊'), findsOneWidget);
-
-      expect(find.text('多於此數量的女優不刮削'), findsNothing);
-      expect(
-        find.byKey(const Key('scrape-managed-family-section')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const Key('scrape-ofje-policy-dropdown')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const Key('scrape-exact-allow-section')),
-        findsOneWidget,
-      );
-
-      final spacingKeys = <String>[
-        'scrape-settings-gap-title',
-
-        'scrape-settings-gap-sync',
-
-        'scrape-settings-gap-replace',
-
-        'scrape-settings-gap-fill',
-
-        'scrape-settings-gap-exact',
-      ];
-
-      for (final key in spacingKeys) {
-        final gap = tester.widget<SizedBox>(find.byKey(Key(key)));
-
-        expect(gap.height, inInclusiveRange(6, 8));
-      }
-
-      final titleBottom = tester
-          .getRect(find.byKey(const Key('scrape-settings-title')))
-          .bottom;
-
-      final settingsRowKeys = <String>[
-        'scrape-sync-details-switch',
-
-        'scrape-aliases-switch',
-
-        'scrape-replace-actress-image-switch',
-
-        'scrape-fill-missing-only-switch',
-      ];
-
-      final settingsRows = settingsRowKeys
-          .map((key) => tester.getRect(find.byKey(Key(key))))
-          .toList(growable: false);
-
-      expect(settingsRows.first.top - titleBottom, closeTo(8, 0.5));
-
-      for (var index = 1; index < settingsRows.length; index++) {
-        expect(
-          settingsRows[index].top - settingsRows[index - 1].bottom,
-
-          closeTo(8, 0.5),
-        );
-      }
-
-      expect(find.byKey(const Key('scrape-prefix-section')), findsOneWidget);
-
-      expect(find.byKey(const Key('scrape-prefix-count')), findsOneWidget);
-
-      expect(find.byKey(const Key('scrape-prefix-input')), findsNothing);
-
-      expect(find.byKey(const Key('scrape-prefix-add')), findsNothing);
-
-      await tester.tap(find.byKey(const Key('scrape-prefix-section')));
-
-      await tester.pumpAndSettle();
-
-      expect(find.byKey(const Key('scrape-prefix-input')), findsOneWidget);
-
-      expect(find.byKey(const Key('scrape-prefix-add')), findsOneWidget);
-
-      final prefixInputFinder = find.byKey(const Key('scrape-prefix-input'));
-      final prefixEditable = tester.widget<EditableText>(
-        find.descendant(
-          of: prefixInputFinder,
-          matching: find.byType(EditableText),
-        ),
-      );
-      final prefixTextStyle = Theme.of(
-        tester.element(prefixInputFinder),
-      ).textTheme.bodyMedium;
-      expect(prefixEditable.style.fontSize, prefixTextStyle?.fontSize);
-
-      final prefixInputDecorator = tester.widget<InputDecorator>(
-        find.descendant(
-          of: prefixInputFinder,
-          matching: find.byType(InputDecorator),
-        ),
-      );
-      final prefixBorder = prefixInputDecorator.decoration.border;
-      expect(prefixBorder, isA<OutlineInputBorder>());
-      expect(
-        (prefixBorder! as OutlineInputBorder).borderRadius,
-        const BorderRadius.all(Radius.circular(28)),
-      );
-      expect(
-        prefixInputDecorator.decoration.contentPadding,
-        const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-      );
-
-      final addButton = tester.widget<IconButton>(
-        find.byKey(const Key('scrape-prefix-add')),
-      );
-      expect(addButton.style?.backgroundColor, isNull);
-
-      await tester.enterText(
-        find.byKey(const Key('scrape-prefix-input')),
-
-        'fc2-ppv_123',
-      );
-
-      await tester.tap(find.byKey(const Key('scrape-prefix-add')));
-
-      await tester.pumpAndSettle();
-
-      expect(find.text('FC2-PPV_123'), findsOneWidget);
-
-      expect(tester.takeException(), isNull);
-    },
-  );
-
-  testWidgets('adding a prefix persists even when settings are cancelled', (
+  testWidgets('scrape action starts with persisted global preferences', (
     tester,
   ) async {
-    final database = _PersistedWorksFeatureDatabase();
-
-    await _pumpWorks(tester, database: database);
-    await _openWorksScrapeSettings(tester);
-
-    await tester.tap(find.byKey(const Key('scrape-prefix-section')));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const Key('scrape-prefix-input')),
-      'fc2-ppv_123',
+    const persisted = WorkScrapeOptions(
+      syncDetails: false,
+      fillMissingOnly: false,
+      scrapeAliases: true,
+      autoExcludeDerivedWorks: false,
+      exactDenies: [ScrapeExactDenyRule(code: 'MANUAL-001')],
     );
-    await tester.tap(find.byKey(const Key('scrape-prefix-add')));
-    await tester.pumpAndSettle();
-
-    expect(WorkScrapeOptions.decode(database.scrapeOptions).excludedPrefixes, [
-      'FC2-PPV_123',
-    ]);
-
-    await tester.tap(find.text('取消'));
-    await tester.pumpAndSettle();
-    await _openWorksScrapeSettings(tester);
-    await tester.tap(find.byKey(const Key('scrape-prefix-section')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('FC2-PPV_123'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('scrape settings remain scrollable in a constrained viewport', (
-    tester,
-  ) async {
-    await _pumpWorks(tester);
-
-    await _openWorksScrapeSettings(tester);
-
-    await tester.tap(find.byKey(const Key('scrape-prefix-section')));
-
-    await tester.pumpAndSettle();
-
-    tester.view.physicalSize = const Size(300, 300);
-
-    addTearDown(tester.view.resetPhysicalSize);
-
-    await tester.pumpAndSettle();
-
-    final scrollable = find.byKey(const Key('scrape-settings-scroll'));
-
-    expect(scrollable, findsOneWidget);
-
-    final scrollableStateFinder = find.descendant(
-      of: scrollable,
-
-      matching: find.byType(Scrollable),
-    );
-
-    final states = scrollableStateFinder
-        .evaluate()
-        .whereType<StatefulElement>()
-        .map((element) => element.state)
-        .whereType<ScrollableState>()
-        .toList(growable: false);
-
-    expect(states.any((state) => state.position.maxScrollExtent > 0), isTrue);
-
-    await tester.drag(scrollable, const Offset(0, -100));
-
-    await tester.pumpAndSettle();
-
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('starting scrape forwards settings and refreshes the grid', (
-    tester,
-  ) async {
     WorkScrapeOptions? received;
-
     await _pumpWorks(
       tester,
-
+      database: _ConfiguredWorksFeatureDatabase(persisted),
       scrapeExecutor: (options, token, onProgress) async {
         received = options;
-
-        onProgress(
-          const WorksScrapeProgress(
-            current: 1,
-
-            total: 1,
-
-            saved: 1,
-
-            excluded: 0,
-
-            failed: 0,
-          ),
-        );
-
         return const WorksScrapeResult(
           saved: 1,
-
           excluded: 0,
-
           failed: 0,
-
           cancelled: false,
         );
       },
     );
 
     await _openWorksScrapeSettings(tester);
-
-    await tester.tap(find.byKey(const Key('scrape-prefix-section')));
-
     await tester.pumpAndSettle();
 
-    await tester.enterText(
-      find.byKey(const Key('scrape-prefix-input')),
-
-      '1pon-HD',
-    );
-
-    await tester.tap(find.byKey(const Key('scrape-prefix-add')));
-
-    await tester.ensureVisible(find.text('開始刮削'));
-    await tester.tap(find.text('開始刮削'));
-
-    await tester.pumpAndSettle();
-
-    expect(received, isNotNull);
-
-    expect(received!.excludedPrefixes, ['1PON-HD']);
-
-    expect(received!.syncDetails, isTrue);
-
-    expect(received!.fillMissingOnly, isTrue);
-    expect(received!.managedFamilyModes, isEmpty);
-    expect(received!.exactAllows, isEmpty);
-
-    expect(find.byType(CircularProgressIndicator), findsNothing);
-
-    expect(find.text('刮削完成'), findsOneWidget);
-
+    expect(received?.syncDetails, isFalse);
+    expect(received?.fillMissingOnly, isFalse);
+    expect(received?.scrapeAliases, isTrue);
+    expect(received?.autoExcludeDerivedWorks, isFalse);
+    expect(received?.exactDenies.single.normalizedCode, 'MANUAL-001');
     expect(find.byKey(const Key('scrape-result-dialog')), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('scrape-result-done')));
-
     await tester.pumpAndSettle();
-
-    expect(find.byKey(const Key('scrape-result-dialog')), findsNothing);
-
-    expect(tester.takeException(), isNull);
   });
-
-  testWidgets('exact allow and OFJE policy persist from the settings UI', (
-    tester,
-  ) async {
-    WorkScrapeOptions? received;
-
-    await _pumpWorks(
-      tester,
-      scrapeExecutor: (options, token, onProgress) async {
-        received = options;
-        return const WorksScrapeResult(
-          saved: 0,
-          excluded: 0,
-          failed: 0,
-          cancelled: false,
-        );
-      },
-    );
-
-    await _openWorksScrapeSettings(tester);
-
-    await tester.tap(find.byKey(const Key('scrape-exact-allow-section')));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const Key('scrape-exact-allow-input')),
-      'ofje-605',
-    );
-    await tester.tap(find.byKey(const Key('scrape-exact-allow-add')));
-
-    await tester.tap(find.byKey(const Key('scrape-ofje-policy-dropdown')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('整個系列排除').last);
-    await tester.pumpAndSettle();
-
-    await tester.ensureVisible(find.text('開始刮削'));
-    await tester.tap(find.text('開始刮削'));
-
-    await tester.pumpAndSettle();
-
-    expect(received, isNotNull);
-    expect(received!.exactAllows.single.normalizedCode, 'OFJE-605');
-    expect(received!.managedFamilyModes['OFJE'], ManagedFamilyMode.excludeAll);
-    expect(find.text('刮削設定'), findsNothing);
-
-    expect(tester.takeException(), isNull);
-  });
-
   testWidgets('avatar failure is visible while the scrape still completes', (
     tester,
   ) async {
@@ -895,8 +573,6 @@ void main() {
     );
 
     await _openWorksScrapeSettings(tester);
-
-    await tester.tap(find.text('開始刮削'));
 
     await tester.pumpAndSettle();
 
@@ -968,8 +644,6 @@ void main() {
 
     await _openWorksScrapeSettings(tester);
 
-    await tester.tap(find.text('開始刮削'));
-
     await tester.pump();
     await tester.pump();
 
@@ -1027,8 +701,6 @@ void main() {
     );
 
     await _openWorksScrapeSettings(tester);
-
-    await tester.tap(find.text('開始刮削'));
 
     await tester.pumpAndSettle();
 
@@ -1130,7 +802,6 @@ void main() {
       );
 
       await _openWorksScrapeSettings(tester);
-      await tester.tap(find.text('開始刮削'));
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pump();
 
@@ -1215,7 +886,6 @@ void main() {
     );
 
     await _openWorksScrapeSettings(tester);
-    await tester.tap(find.text('開始刮削'));
     await tester.pump(const Duration(milliseconds: 500));
     await tester.pump();
 
@@ -1275,7 +945,6 @@ void main() {
     );
 
     await _openWorksScrapeSettings(tester);
-    await tester.tap(find.text('開始刮削'));
     await tester.pump(const Duration(milliseconds: 500));
     await tester.pump();
 
@@ -1336,7 +1005,6 @@ void main() {
       );
 
       await _openWorksScrapeSettings(tester);
-      await tester.tap(find.text('開始刮削'));
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pump();
 
@@ -1430,7 +1098,6 @@ void main() {
     );
 
     await _openWorksScrapeSettings(tester);
-    await tester.tap(find.text('開始刮削'));
     await tester.pump(const Duration(milliseconds: 500));
     await tester.pump();
 
@@ -1481,7 +1148,6 @@ void main() {
     );
 
     await _openWorksScrapeSettings(tester);
-    await tester.tap(find.text('開始刮削'));
     await tester.pumpAndSettle();
 
     expect(find.text('失敗作品（1）'), findsOneWidget);
@@ -1525,7 +1191,6 @@ void main() {
       );
 
       await _openWorksScrapeSettings(tester);
-      await tester.tap(find.text('開始刮削'));
       await tester.pumpAndSettle();
 
       expect(find.text('詳細資料'), findsOneWidget);
@@ -1606,7 +1271,7 @@ Future<void> _openWorksScrapeSettings(WidgetTester tester) async {
   await tester.tap(find.byKey(const Key('works-overflow-menu')));
   await tester.pumpAndSettle();
   await tester.tap(find.byKey(const Key('works-scrape-menu-item')));
-  await tester.pumpAndSettle();
+  await tester.pump();
 }
 
 Widget _localizedApp({

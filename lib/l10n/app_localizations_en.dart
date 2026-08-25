@@ -398,6 +398,42 @@ class AppLocalizationsEn extends AppLocalizations {
   String get scrapeSettings => 'Scrape settings';
 
   @override
+  String get scrapeExistingData => 'Existing data policy';
+
+  @override
+  String get scrapeUpdateAll => 'Update existing data';
+
+  @override
+  String get scrapeAutomaticDerivedFilter =>
+      'Automatically exclude derived or bundled works';
+
+  @override
+  String get scrapeAutomaticDerivedFilterDescription =>
+      'Use lineage and work semantics; keep unknown works and never exclude by prefix alone.';
+
+  @override
+  String get scrapeAdvancedRules => 'Advanced rules';
+
+  @override
+  String get scrapeAdvancedRulesDescription =>
+      'Manual exact allow/deny rules and compatibility prefixes.';
+
+  @override
+  String get scrapeExactAllows => 'Exact allows';
+
+  @override
+  String get scrapeExactDenies => 'Exact denies';
+
+  @override
+  String get scrapeLegacyPrefixes => 'Compatibility prefixes';
+
+  @override
+  String get scrapeRuleHint => 'Enter a work code';
+
+  @override
+  String get scrapeNoRules => 'No rules configured';
+
+  @override
   String get syncActressDetails => 'Sync profile details';
 
   @override

@@ -3,15 +3,17 @@ import 'package:avaca/models/work_scrape_options.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('round-trips exclusion settings and exact allows', () {
+  test('round-trips exclusion settings and provenance rules', () {
     const options = WorkScrapeOptions(
       syncDetails: false,
       replaceActressImage: true,
       fillMissingOnly: false,
       excludedPrefixes: ['FC2-PPV_123', '1PON'],
       scrapeAliases: true,
+      autoExcludeDerivedWorks: false,
       managedFamilyModes: {'OFJE': ManagedFamilyMode.reviewPrior},
       exactAllows: [ScrapeExactAllowRule(code: 'OFJE-605')],
+      exactDenies: [ScrapeExactDenyRule(code: 'FC2-001')],
     );
 
     final decoded = WorkScrapeOptions.decode(options.encode());
@@ -19,6 +21,8 @@ void main() {
     expect(decoded.scrapeAliases, isTrue);
     expect(decoded.managedFamilyModes['OFJE'], ManagedFamilyMode.reviewPrior);
     expect(decoded.exactAllows.single.normalizedCode, 'OFJE-605');
+    expect(decoded.autoExcludeDerivedWorks, isFalse);
+    expect(decoded.exactDenies.single.normalizedCode, 'FC2-001');
   });
 
   test('normalizes persisted prefixes without limiting their characters', () {

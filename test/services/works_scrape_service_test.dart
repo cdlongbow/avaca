@@ -53,7 +53,7 @@ void main() {
   );
 
   test(
-    'scrapes exact actress, excludes complex prefixes, and saves images',
+    'scrapes exact actress and keeps prefix-like codes by default',
     () async {
       final directory = await Directory.systemTemp.createTemp(
         'avaca_scrape_service_test_',
@@ -108,26 +108,28 @@ void main() {
       );
 
       expect(client.receivedExclusions, isEmpty);
-      expect(client.detailRequests, ['ABF-367']);
+      expect(client.detailRequests, ['ABF-367', 'FC2-PPV_123-999']);
       expect(workImages.targetPaths.map(path.basename), [
         'abf00367ps.jpg',
         'abf00367pl.jpg',
+        'fc2_ppv_123_999ps.jpg',
+        'fc2_ppv_123_999pl.jpg',
       ]);
-      expect(await database.getWorkCountForActress(actressId), 1);
+      expect(await database.getWorkCountForActress(actressId), 2);
       final works = await database.getWorksForActress(actressId);
-      expect(works.single['code'], 'ABF-367');
-      expect(works.single['studio'], 'プレステージ');
+      final ordinary = works.singleWhere((work) => work['code'] == 'ABF-367');
+      expect(ordinary['studio'], 'プレステージ');
       expect(
-        File(works.single['card_image_path']! as String).existsSync(),
+        File(ordinary['card_image_path']! as String).existsSync(),
         isTrue,
       );
       expect(
-        File(works.single['detail_image_path']! as String).existsSync(),
+        File(ordinary['detail_image_path']! as String).existsSync(),
         isTrue,
       );
       final relatedPerformers =
-          ((await database.getWorkById(
-                    works.single['id']! as int,
+        ((await database.getWorkById(
+                    ordinary['id']! as int,
                   ))!['related_performers']!
                   as List)
               .cast<Map<String, Object?>>();
@@ -140,12 +142,12 @@ void main() {
         isNotEmpty,
       );
       expect(oldAvatar.existsSync(), isFalse);
-      expect(result.saved, 1);
-      expect(result.excluded, 1);
+      expect(result.saved, 2);
+      expect(result.excluded, 0);
       expect(result.actressImageStatus, ActressImageSyncStatus.replaced);
       expect(
         observer.outcomes,
-        contains(const (code: 'ABF-367', state: ScrapeWorkOutcomeState.saved)),
+        contains(const (code: 'ABF-367', state: ScrapeWorkOutcomeState.review)),
       );
     },
   );
@@ -266,10 +268,18 @@ void main() {
       ),
     );
 
-    expect(workImages.downloads, isEmpty);
+    expect(workImages.downloads, [
+      WorkImageVariant.card,
+      WorkImageVariant.detail,
+    ]);
+    expect(workImages.targetPaths.map(path.basename), [
+      'fc2_ppv_123_999ps.jpg',
+      'fc2_ppv_123_999pl.jpg',
+    ]);
     expect(await card.readAsBytes(), [7]);
     expect(await detail.readAsBytes(), [8]);
-    final work = (await database.getWorksForActress(actressId)).single;
+    final work = (await database.getWorksForActress(actressId))
+        .singleWhere((row) => row['code'] == 'ABF-367');
     expect(work['title'], '已儲存標題');
     expect(work['duration_minutes'], 135);
   });
@@ -474,9 +484,10 @@ void main() {
       );
 
       expect(client.pageRequests, 2);
-      expect(result.saved, 1);
+      expect(result.saved, 2);
       expect(
-        (await database.getWorksForActress(actressId)).single['code'],
+        (await database.getWorksForActress(actressId))
+            .singleWhere((row) => row['code'] == 'ABF-367')['code'],
         'ABF-367',
       );
     },

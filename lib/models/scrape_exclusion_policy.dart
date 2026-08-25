@@ -8,6 +8,24 @@ import 'scrape_rules.dart';
 /// parser failures.  A review decision is still a successful scrape.
 enum ScrapeFinalAction { keep, keepReview, exclude }
 
+/// Diagnostic provenance classes. Unknown evidence is intentionally mapped to
+/// [ScrapeFinalAction.keepReview] by the evaluator.
+enum ScrapeProvenanceClass {
+  originalSolo,
+  originalCostar,
+  derivedBundle,
+  derivedOmnibus,
+  derivedExtract,
+  derivedSplit,
+  derivedReissue,
+  derivedRemaster,
+  derivedReedit,
+  mixedOldNew,
+  unknown,
+}
+
+enum ScrapeProvenanceVerdict { keep, exclude, keepUncertain }
+
 enum ScrapeEvidenceLevel { none, review, strong }
 
 enum ScrapeEvidenceStrength { weak, medium, strong }
@@ -24,6 +42,16 @@ enum ScrapeEvidenceKind {
   anthologyCollection,
   bestOfPriorWorks,
   completePriorWorks,
+  includedPriorWorks,
+  extractedFromPriorWork,
+  splitFromPriorWork,
+  packageEdition,
+  reissue,
+  remaster,
+  reedit,
+  mixedOldNew,
+  independentSegments,
+  genuineCoPerformance,
   priorWorkCollection,
   editedPresentation,
   viewpointSelection,
@@ -149,6 +177,47 @@ class ScrapeExactAllowRule {
   }
 }
 
+class ScrapeExactDenyRule {
+  const ScrapeExactDenyRule({required this.code, this.source});
+
+  final String code;
+  final String? source;
+
+  String get normalizedCode => normalizeScrapePolicyCode(code);
+
+  bool matches(String candidateCode, {String? sourceId}) {
+    final expectedSource = source?.trim().toLowerCase();
+    if (expectedSource != null &&
+        expectedSource.isNotEmpty &&
+        expectedSource != sourceId?.trim().toLowerCase()) {
+      return false;
+    }
+    return normalizedCode.isNotEmpty &&
+        normalizedCode == normalizeScrapePolicyCode(candidateCode);
+  }
+
+  Map<String, Object?> toJson() => {
+    'code': code,
+    if (source != null && source!.trim().isNotEmpty) 'source': source,
+  };
+
+  factory ScrapeExactDenyRule.fromJson(Object? source) {
+    if (source is! Map) {
+      throw const FormatException('Exact deny rule must be an object.');
+    }
+    final map = Map<String, Object?>.from(source);
+    final code = map['code']?.toString().trim() ?? '';
+    if (code.isEmpty || code.length > 80) {
+      throw const FormatException('Exact deny rule has an invalid code.');
+    }
+    final sourceId = map['source']?.toString().trim();
+    return ScrapeExactDenyRule(
+      code: code,
+      source: sourceId == null || sourceId.isEmpty ? null : sourceId,
+    );
+  }
+}
+
 /// Immutable policy materialized when a job is created.
 class ScrapePolicySnapshot {
   ScrapePolicySnapshot._({
@@ -158,16 +227,19 @@ class ScrapePolicySnapshot {
     required this.classifierVersion,
     required this.rulesBundleDigest,
     required this.snapshotDigest,
+    required this.autoExcludeDerivedWorks,
     required List<String> excludedPrefixes,
     required List<ScrapeManagedFamilyPolicy> managedFamilies,
     required List<ScrapeExactAllowRule> exactAllows,
+    required List<ScrapeExactDenyRule> exactDenies,
   }) : excludedPrefixes = List.unmodifiable(excludedPrefixes),
        managedFamilies = List.unmodifiable(managedFamilies),
-       exactAllows = List.unmodifiable(exactAllows);
+       exactAllows = List.unmodifiable(exactAllows),
+       exactDenies = List.unmodifiable(exactDenies);
 
-  static const currentSchemaVersion = 2;
-  static const currentPolicyVersion = 'exclusion-v2';
-  static const currentClassifierVersion = 'semantic-1';
+  static const currentSchemaVersion = 3;
+  static const currentPolicyVersion = 'provenance-v3';
+  static const currentClassifierVersion = 'provenance-1';
 
   final int schemaVersion;
   final String policyVersion;
@@ -175,9 +247,11 @@ class ScrapePolicySnapshot {
   final String classifierVersion;
   final String rulesBundleDigest;
   final String snapshotDigest;
+  final bool autoExcludeDerivedWorks;
   final List<String> excludedPrefixes;
   final List<ScrapeManagedFamilyPolicy> managedFamilies;
   final List<ScrapeExactAllowRule> exactAllows;
+  final List<ScrapeExactDenyRule> exactDenies;
 
   ScrapeManagedFamilyPolicy? managedFamily(String family) {
     final normalized = family.trim().toUpperCase();
@@ -192,6 +266,8 @@ class ScrapePolicySnapshot {
     required List<String> excludedPrefixes,
     required Map<String, ManagedFamilyMode> managedFamilyModes,
     required List<ScrapeExactAllowRule> exactAllows,
+    bool autoExcludeDerivedWorks = true,
+    List<ScrapeExactDenyRule> exactDenies = const [],
   }) {
     final managed = <String, ScrapeManagedFamilyPolicy>{};
     for (final entry in rules.managedFamilyRecommendations.entries) {
@@ -229,6 +305,9 @@ class ScrapePolicySnapshot {
     final allowList = exactAllows
         .where((rule) => rule.normalizedCode.isNotEmpty)
         .toList(growable: false);
+    final denyList = exactDenies
+        .where((rule) => rule.normalizedCode.isNotEmpty)
+        .toList(growable: false);
     final bundle = {
       'rules': rules.toJson(),
       'classifierVersion': currentClassifierVersion,
@@ -240,9 +319,11 @@ class ScrapePolicySnapshot {
       'rulesVersion': rules.rulesVersion,
       'classifierVersion': currentClassifierVersion,
       'rulesBundleDigest': bundleDigest,
+      'autoExcludeDerivedWorks': autoExcludeDerivedWorks,
       'excludedPrefixes': normalizedPrefixes,
       'managedFamilies': managedList.map((item) => item.toJson()).toList(),
       'exactAllows': allowList.map((item) => item.toJson()).toList(),
+      'exactDenies': denyList.map((item) => item.toJson()).toList(),
     };
     return ScrapePolicySnapshot._(
       schemaVersion: currentSchemaVersion,
@@ -251,9 +332,11 @@ class ScrapePolicySnapshot {
       classifierVersion: currentClassifierVersion,
       rulesBundleDigest: bundleDigest,
       snapshotDigest: _digest(payload),
+      autoExcludeDerivedWorks: autoExcludeDerivedWorks,
       excludedPrefixes: normalizedPrefixes,
       managedFamilies: managedList,
       exactAllows: allowList,
+      exactDenies: denyList,
     );
   }
 
@@ -264,9 +347,11 @@ class ScrapePolicySnapshot {
     'classifierVersion': classifierVersion,
     'rulesBundleDigest': rulesBundleDigest,
     'snapshotDigest': snapshotDigest,
+    'autoExcludeDerivedWorks': autoExcludeDerivedWorks,
     'excludedPrefixes': excludedPrefixes,
     'managedFamilies': managedFamilies.map((item) => item.toJson()).toList(),
     'exactAllows': exactAllows.map((item) => item.toJson()).toList(),
+    'exactDenies': exactDenies.map((item) => item.toJson()).toList(),
   };
 
   String encode() => jsonEncode(toJson());
@@ -276,12 +361,16 @@ class ScrapePolicySnapshot {
     required List<String> excludedPrefixes,
     required Map<String, ManagedFamilyMode> managedFamilyModes,
     required List<ScrapeExactAllowRule> exactAllows,
+    bool autoExcludeDerivedWorks = true,
+    List<ScrapeExactDenyRule> exactDenies = const [],
   }) {
     ScrapePolicySnapshot fallback() => ScrapePolicySnapshot.v2(
       rules: ScrapeRules.builtin,
       excludedPrefixes: excludedPrefixes,
       managedFamilyModes: managedFamilyModes,
       exactAllows: exactAllows,
+      autoExcludeDerivedWorks: autoExcludeDerivedWorks,
+      exactDenies: exactDenies,
     );
 
     if (encoded == null || encoded.trim().isEmpty) {
@@ -297,6 +386,9 @@ class ScrapePolicySnapshot {
         return fallback();
       }
       final prefixes = _strings(map['excludedPrefixes']);
+      final automaticExclusion = map['autoExcludeDerivedWorks'] is bool
+          ? map['autoExcludeDerivedWorks'] as bool
+          : autoExcludeDerivedWorks;
       final managed = <ScrapeManagedFamilyPolicy>[];
       if (map['managedFamilies'] is List) {
         for (final item in map['managedFamilies'] as List) {
@@ -315,6 +407,16 @@ class ScrapePolicySnapshot {
             allows.add(ScrapeExactAllowRule.fromJson(item));
           } on FormatException {
             // See the managed-family compatibility comment above.
+          }
+        }
+      }
+      final denies = <ScrapeExactDenyRule>[];
+      if (map['exactDenies'] is List) {
+        for (final item in map['exactDenies'] as List) {
+          try {
+            denies.add(ScrapeExactDenyRule.fromJson(item));
+          } on FormatException {
+            // Ignore malformed optional entries while preserving the job.
           }
         }
       }
@@ -344,9 +446,11 @@ class ScrapePolicySnapshot {
         'rulesVersion': rulesVersion,
         'classifierVersion': classifierVersion,
         'rulesBundleDigest': rulesBundleDigest,
+        'autoExcludeDerivedWorks': automaticExclusion,
         'excludedPrefixes': prefixes,
         'managedFamilies': managed.map((item) => item.toJson()).toList(),
         'exactAllows': allows.map((item) => item.toJson()).toList(),
+        'exactDenies': denies.map((item) => item.toJson()).toList(),
       };
       if (_digest(snapshotPayload) != snapshotDigest) {
         return fallback();
@@ -358,9 +462,11 @@ class ScrapePolicySnapshot {
         classifierVersion: classifierVersion,
         rulesBundleDigest: rulesBundleDigest,
         snapshotDigest: snapshotDigest,
+        autoExcludeDerivedWorks: automaticExclusion,
         excludedPrefixes: prefixes,
         managedFamilies: managed,
         exactAllows: allows,
+        exactDenies: denies,
       );
       return snapshot;
     } on Object {

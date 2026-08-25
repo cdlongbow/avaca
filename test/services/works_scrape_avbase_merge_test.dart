@@ -199,7 +199,7 @@ void main() {
     expect(work['series'], 'AvBase 系列');
   });
 
-  test('waits for every selected list before requesting any detail', () async {
+  test('starts primary details before waiting for secondary coverage', () async {
     final directory = await Directory.systemTemp.createTemp(
       'avaca_list_barrier_test_',
     );
@@ -254,7 +254,7 @@ void main() {
     );
     await started.future;
     await Future<void>.delayed(Duration.zero);
-    expect(javbus.detailRequests, 0);
+    expect(javbus.detailRequests, 1);
     expect(avbase.detailRequests, 0);
     gate.complete();
     expect((await scrape).saved, 1);

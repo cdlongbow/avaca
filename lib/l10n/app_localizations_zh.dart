@@ -394,6 +394,40 @@ class AppLocalizationsZh extends AppLocalizations {
   String get scrapeSettings => '刮削設定';
 
   @override
+  String get scrapeExistingData => '已有資料處理方式';
+
+  @override
+  String get scrapeUpdateAll => '更新已有資料';
+
+  @override
+  String get scrapeAutomaticDerivedFilter => '自動排除重製／合集作品';
+
+  @override
+  String get scrapeAutomaticDerivedFilterDescription =>
+      '只依來源 lineage 與作品語義判定；未知作品保留，不用前綴直接排除。';
+
+  @override
+  String get scrapeAdvancedRules => '進階規則';
+
+  @override
+  String get scrapeAdvancedRulesDescription => '手動精確允許／排除與相容性前綴。';
+
+  @override
+  String get scrapeExactAllows => '精確允許';
+
+  @override
+  String get scrapeExactDenies => '精確排除';
+
+  @override
+  String get scrapeLegacyPrefixes => '相容性前綴提示';
+
+  @override
+  String get scrapeRuleHint => '輸入番號';
+
+  @override
+  String get scrapeNoRules => '尚未設定規則';
+
+  @override
   String get syncActressDetails => '同步詳細資料';
 
   @override
@@ -1567,6 +1601,40 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get scrapeSettings => '刮削设置';
 
   @override
+  String get scrapeExistingData => '已有资料处理方式';
+
+  @override
+  String get scrapeUpdateAll => '更新已有资料';
+
+  @override
+  String get scrapeAutomaticDerivedFilter => '自动排除重制／合集作品';
+
+  @override
+  String get scrapeAutomaticDerivedFilterDescription =>
+      '只依据来源 lineage 与作品语义判断；未知作品保留，不用前缀直接排除。';
+
+  @override
+  String get scrapeAdvancedRules => '高级规则';
+
+  @override
+  String get scrapeAdvancedRulesDescription => '手动精确允许／排除与兼容性前缀。';
+
+  @override
+  String get scrapeExactAllows => '精确允许';
+
+  @override
+  String get scrapeExactDenies => '精确排除';
+
+  @override
+  String get scrapeLegacyPrefixes => '兼容性前缀提示';
+
+  @override
+  String get scrapeRuleHint => '输入番号';
+
+  @override
+  String get scrapeNoRules => '尚未设置规则';
+
+  @override
   String get syncActressDetails => '同步详细资料';
 
   @override
@@ -2738,6 +2806,40 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get scrapeSettings => '刮削設定';
+
+  @override
+  String get scrapeExistingData => '已有資料處理方式';
+
+  @override
+  String get scrapeUpdateAll => '更新已有資料';
+
+  @override
+  String get scrapeAutomaticDerivedFilter => '自動排除重製／合集作品';
+
+  @override
+  String get scrapeAutomaticDerivedFilterDescription =>
+      '只依來源 lineage 與作品語義判定；未知作品保留，不用前綴直接排除。';
+
+  @override
+  String get scrapeAdvancedRules => '進階規則';
+
+  @override
+  String get scrapeAdvancedRulesDescription => '手動精確允許／排除與相容性前綴。';
+
+  @override
+  String get scrapeExactAllows => '精確允許';
+
+  @override
+  String get scrapeExactDenies => '精確排除';
+
+  @override
+  String get scrapeLegacyPrefixes => '相容性前綴提示';
+
+  @override
+  String get scrapeRuleHint => '輸入番號';
+
+  @override
+  String get scrapeNoRules => '尚未設定規則';
 
   @override
   String get syncActressDetails => '同步詳細資料';

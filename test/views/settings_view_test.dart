@@ -2,6 +2,7 @@ import 'package:avaca/core/config.dart';
 import 'package:avaca/core/database.dart';
 import 'package:avaca/l10n/app_localizations.dart';
 import 'package:avaca/models/scrape_source_settings.dart';
+import 'package:avaca/models/work_scrape_options.dart';
 import 'package:avaca/services/javbus/prefix_route_repository.dart';
 import 'package:avaca/services/javbus/javbus_verification.dart';
 import 'package:avaca/services/javbus/work_image_route_resolver.dart';
@@ -162,7 +163,7 @@ void main() {
   ) async {
     await _pumpSettings(tester);
 
-    await tester.tap(find.text('Other'));
+    await tester.tap(find.text('Scrape settings'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Scrape sources'));
     await tester.pumpAndSettle();
@@ -236,7 +237,7 @@ void main() {
     // restoring either source's default.
     await tester.pageBack();
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Other'));
+    await tester.tap(find.text('Scrape settings'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Scrape sources'));
     await tester.pumpAndSettle();
@@ -272,7 +273,7 @@ void main() {
       },
     );
 
-    await tester.tap(find.text('Other'));
+    await tester.tap(find.text('Scrape settings'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Scrape sources'));
     await tester.pumpAndSettle();
@@ -311,6 +312,49 @@ void main() {
     ]);
     expect(find.text('Connected'), findsNWidgets(2));
     expect(find.text('Verification required'), findsOneWidget);
+  });
+
+  testWidgets('global scrape preferences persist outside the Works action', (
+    tester,
+  ) async {
+    await _pumpSettings(tester);
+
+    await tester.tap(find.text('Scrape settings'));
+    await tester.pumpAndSettle();
+
+    final preferences = find.byKey(const Key('settings-scrape-preferences'));
+    await tester.ensureVisible(preferences);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('scrape-existing-data-policy')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('scrape-auto-exclude-derived-switch')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const Key('scrape-auto-exclude-derived-switch')),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('scrape-advanced-rules')));
+    await tester.pumpAndSettle();
+    final denyInput = find.byKey(const Key('scrape-exact-deny-input'));
+    await tester.ensureVisible(denyInput);
+    await tester.enterText(denyInput, 'manual-001');
+    await tester.tap(find.byKey(const Key('scrape-exact-deny-add')));
+    await tester.pumpAndSettle();
+
+    final database = tester
+        .state<_SettingsHarnessState>(find.byType(_SettingsHarness))
+        .database;
+    final options = WorkScrapeOptions.decode(
+      await database.getSetting('works_scrape_options'),
+    );
+    expect(options.autoExcludeDerivedWorks, isFalse);
+    expect(options.exactDenies.single.normalizedCode, 'MANUAL-001');
   });
 
   testWidgets('all visible settings text uses the bundled variable font', (

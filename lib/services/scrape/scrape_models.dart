@@ -9,6 +9,50 @@ final class WorkFieldSourceEvidence {
   final Uri? sourceUri;
 }
 
+enum ScrapeCoPerformance { unknown, sharedProduction, independentSegments }
+
+/// Optional facts exposed by a source adapter for provenance classification.
+/// Empty lists and null booleans mean that the source did not provide the
+/// corresponding fact; they are never treated as negative evidence.
+final class ScrapeWorkProvenanceFacts {
+  const ScrapeWorkProvenanceFacts({
+    this.includedWorks = const [],
+    this.parentWorks = const [],
+    this.genres = const [],
+    this.tags = const [],
+    this.description,
+    this.containsPriorWorks,
+    this.extractedFromPriorWork,
+    this.splitFromPriorWork,
+    this.packageOfIndependentWorks,
+    this.oldMaterialWithNewBonus,
+    this.reissue,
+    this.remaster,
+    this.reedited,
+    this.explicitOriginalProduction,
+    this.coPerformance = ScrapeCoPerformance.unknown,
+  });
+
+  final List<String> includedWorks;
+  final List<String> parentWorks;
+  final List<String> genres;
+  final List<String> tags;
+  final String? description;
+  final bool? containsPriorWorks;
+  final bool? extractedFromPriorWork;
+  final bool? splitFromPriorWork;
+  final bool? packageOfIndependentWorks;
+  final bool? oldMaterialWithNewBonus;
+  final bool? reissue;
+  final bool? remaster;
+  final bool? reedited;
+  final bool? explicitOriginalProduction;
+  final ScrapeCoPerformance coPerformance;
+}
+
+typedef WorkProvenanceEvidence = ScrapeWorkProvenanceFacts;
+typedef ScrapeWorkProvenance = ScrapeWorkProvenanceFacts;
+
 final class ScrapeActressSearchResult {
   const ScrapeActressSearchResult({
     required this.source,
@@ -68,6 +112,12 @@ final class ScrapeWorkDetails {
     this.series,
     this.performerCount,
     this.performers,
+    this.description,
+    this.includedWorks = const [],
+    this.parentWorks = const [],
+    this.genres = const [],
+    this.coPerformance = ScrapeCoPerformance.unknown,
+    this.provenanceFacts = const ScrapeWorkProvenanceFacts(),
     this.imageUris = const [],
     this.originalImageEvidenceUris = const [],
     this.fieldSources = const {},
@@ -85,6 +135,12 @@ final class ScrapeWorkDetails {
   final String? series;
   final int? performerCount;
   final List<WorkPerformer>? performers;
+  final String? description;
+  final List<String> includedWorks;
+  final List<String> parentWorks;
+  final List<String> genres;
+  final ScrapeCoPerformance coPerformance;
+  final ScrapeWorkProvenanceFacts provenanceFacts;
   final List<Uri> imageUris;
   final List<Uri> originalImageEvidenceUris;
   final Map<String, WorkFieldSourceEvidence> fieldSources;
@@ -102,6 +158,12 @@ final class ScrapeWorkDetails {
     series: series,
     performerCount: performerCount,
     performers: performers,
+    description: description,
+    includedWorks: includedWorks,
+    parentWorks: parentWorks,
+    genres: genres,
+    coPerformance: coPerformance,
+    provenanceFacts: provenanceFacts,
     imageUris: imageUris,
     originalImageEvidenceUris: originalImageEvidenceUris,
     fieldSources: fieldSources,

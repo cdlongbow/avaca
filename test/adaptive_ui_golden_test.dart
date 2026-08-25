@@ -307,7 +307,6 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('works-scrape-menu-item')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byType(FilledButton).last);
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pump();
 

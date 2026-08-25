@@ -853,6 +853,72 @@ abstract class AppLocalizations {
   /// **'刮削設定'**
   String get scrapeSettings;
 
+  /// No description provided for @scrapeExistingData.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'已有資料處理方式'**
+  String get scrapeExistingData;
+
+  /// No description provided for @scrapeUpdateAll.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'更新已有資料'**
+  String get scrapeUpdateAll;
+
+  /// No description provided for @scrapeAutomaticDerivedFilter.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'自動排除重製／合集作品'**
+  String get scrapeAutomaticDerivedFilter;
+
+  /// No description provided for @scrapeAutomaticDerivedFilterDescription.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'只依來源 lineage 與作品語義判定；未知作品保留，不用前綴直接排除。'**
+  String get scrapeAutomaticDerivedFilterDescription;
+
+  /// No description provided for @scrapeAdvancedRules.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'進階規則'**
+  String get scrapeAdvancedRules;
+
+  /// No description provided for @scrapeAdvancedRulesDescription.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'手動精確允許／排除與相容性前綴。'**
+  String get scrapeAdvancedRulesDescription;
+
+  /// No description provided for @scrapeExactAllows.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'精確允許'**
+  String get scrapeExactAllows;
+
+  /// No description provided for @scrapeExactDenies.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'精確排除'**
+  String get scrapeExactDenies;
+
+  /// No description provided for @scrapeLegacyPrefixes.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'相容性前綴提示'**
+  String get scrapeLegacyPrefixes;
+
+  /// No description provided for @scrapeRuleHint.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'輸入番號'**
+  String get scrapeRuleHint;
+
+  /// No description provided for @scrapeNoRules.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'尚未設定規則'**
+  String get scrapeNoRules;
+
   /// No description provided for @syncActressDetails.
   ///
   /// In zh_TW, this message translates to:

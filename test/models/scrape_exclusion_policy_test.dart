@@ -11,6 +11,8 @@ void main() {
       excludedPrefixes: const ['FC2'],
       managedFamilyModes: const {'OFJE': ManagedFamilyMode.reviewPrior},
       exactAllows: const [ScrapeExactAllowRule(code: 'OFJE-605')],
+      autoExcludeDerivedWorks: false,
+      exactDenies: const [ScrapeExactDenyRule(code: 'FC2-001')],
     );
 
     final decoded = ScrapePolicySnapshot.fromEncoded(
@@ -24,6 +26,8 @@ void main() {
     expect(decoded.excludedPrefixes, ['FC2']);
     expect(decoded.managedFamily('OFJE')?.mode, ManagedFamilyMode.reviewPrior);
     expect(decoded.exactAllows.single.normalizedCode, 'OFJE-605');
+    expect(decoded.autoExcludeDerivedWorks, isFalse);
+    expect(decoded.exactDenies.single.normalizedCode, 'FC2-001');
   });
 
   test('rejects a tampered snapshot and uses the new-job fallback', () {

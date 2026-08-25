@@ -48,6 +48,8 @@ class WorksScrapeSessionFactory {
       excludedPrefixes: options.excludedPrefixes,
       managedFamilyModes: options.managedFamilyModes,
       exactAllows: options.exactAllows,
+      autoExcludeDerivedWorks: options.autoExcludeDerivedWorks,
+      exactDenies: options.exactDenies,
     );
     final requestedSourceIds = <ScrapeSourceId>{
       sourceSettings.actressDetailsSource,
