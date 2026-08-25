@@ -1,4 +1,5 @@
 import 'package:avaca/services/javbus/javbus_html_parser.dart';
+import 'package:avaca/services/javbus/javbus_models.dart';
 import 'package:avaca/services/scrape/scrape_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -106,6 +107,88 @@ void main() {
       proven.provenanceFacts.coPerformance,
       ScrapeCoPerformance.sharedProduction,
     );
+  });
+
+  test('keeps JavBus lineage, split, and independent-segment facts narrow', () {
+    JavBusWorkDetails parse(String title) => parser.parseWorkPage(
+      '<html><body><h3>MATRIX-001 $title</h3></body></html>',
+      pageUri: Uri.parse('https://www.javbus.com/MATRIX-001'),
+    );
+
+    for (final title in const ['BEST11人', 'BEST COLLECTION', '全12作', '総集編']) {
+      final facts = parse(title).provenanceFacts;
+      expect(facts.containsPriorWorks, isNull, reason: title);
+    }
+    for (final title in const ['過去作品を収録', '既存作品を再収録', '旧作4本を収録']) {
+      expect(
+        parse(title).provenanceFacts.containsPriorWorks,
+        isTrue,
+        reason: title,
+      );
+    }
+
+    for (final title in const ['個別', '各', '各作品', 'それぞれ', '分割', 'split']) {
+      final facts = parse(title).provenanceFacts;
+      expect(facts.coPerformance, ScrapeCoPerformance.unknown, reason: title);
+      expect(facts.splitFromPriorWork, isNull, reason: title);
+    }
+    for (final title in const [
+      '分割版',
+      '分割販売',
+      '元作品から分割',
+      '個別版',
+      '単独版',
+      'split edition',
+      'split from prior work',
+    ]) {
+      expect(
+        parse(title).provenanceFacts.splitFromPriorWork,
+        isTrue,
+        reason: title,
+      );
+    }
+    for (final title in const [
+      '各女優それぞれ別作品を収録',
+      '出演者ごとの独立作品',
+      'それぞれ別作品から収録',
+      '各作品を個別収録',
+      '独立した3作品をまとめて収録',
+    ]) {
+      expect(
+        parse(title).provenanceFacts.coPerformance,
+        ScrapeCoPerformance.independentSegments,
+        reason: title,
+      );
+    }
+  });
+
+  test('only promotes explicit JavBus shared-production propositions', () {
+    JavBusWorkDetails parse(String title) => parser.parseWorkPage(
+      '<html><body><h3>MATRIX-SHARED $title</h3></body></html>',
+      pageUri: Uri.parse('https://www.javbus.com/MATRIX-SHARED'),
+    );
+
+    for (final title in const ['一堂に会して', '全員参加', '同じ現場で', '全員が同一企画に参加']) {
+      expect(
+        parse(title).provenanceFacts.coPerformance,
+        isNot(ScrapeCoPerformance.sharedProduction),
+        reason: title,
+      );
+    }
+    for (final title in const [
+      '全員同時出演',
+      '同一シーンで共演',
+      '同一撮影企画',
+      '同一収録で全員共演',
+      '全編撮り下ろし大共演',
+      '完全新撮の大型共演',
+    ]) {
+      expect(
+        parse(title).provenanceFacts.coPerformance,
+        ScrapeCoPerformance.sharedProduction,
+        reason: title,
+      );
+    }
   });
 
   test('parses unique actresses only from the work actress section', () {

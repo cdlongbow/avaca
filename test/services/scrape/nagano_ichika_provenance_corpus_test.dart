@@ -166,4 +166,44 @@ const _naganoIchikaCorpus = <_NaganoCorpusFixture>[
     releaseDate: '2025-05-30',
     expectedAction: ScrapeFinalAction.exclude,
   ),
+  _NaganoCorpusFixture(
+    code: 'UMSO-650',
+    title: '美少女BEST50本番',
+    expectedAction: ScrapeFinalAction.exclude,
+  ),
+  _NaganoCorpusFixture(
+    code: 'UMSO-651',
+    title: '美少女ベスト50本番',
+    expectedAction: ScrapeFinalAction.exclude,
+  ),
+  _NaganoCorpusFixture(
+    code: 'SETH-020',
+    title: '制服限定BEST30！43時間',
+    expectedAction: ScrapeFinalAction.exclude,
+  ),
+  _NaganoCorpusFixture(
+    code: 'SETH-021',
+    title: '制服限定BEST30・43時間',
+    expectedAction: ScrapeFinalAction.exclude,
+  ),
+  _NaganoCorpusFixture(
+    code: 'SETH-022',
+    title: '制服限定BEST30、43時間',
+    expectedAction: ScrapeFinalAction.exclude,
+  ),
+  _NaganoCorpusFixture(
+    code: 'AMBS-084',
+    title: '美少女BEST30選',
+    expectedAction: ScrapeFinalAction.exclude,
+  ),
+  _NaganoCorpusFixture(
+    code: 'AMBS-085',
+    title: '美少女BEST100選',
+    expectedAction: ScrapeFinalAction.exclude,
+  ),
+  _NaganoCorpusFixture(
+    code: 'CJOB-214',
+    title: 'BEST11人・撮り下ろし特典映像付き',
+    expectedAction: ScrapeFinalAction.exclude,
+  ),
 ];

@@ -117,12 +117,8 @@ class JavBusHtmlParser {
     final hasPriorMarker =
         includedWorks.isNotEmpty ||
         parentWorks.isNotEmpty ||
-        ScrapeProvenanceSemantics.explicitCompilationLabel(text) != null ||
-        ScrapeProvenanceSemantics.strongReuseProposition([text]) != null;
-    final isSplit = RegExp(
-      r'分割|個別版|単独版|split',
-      caseSensitive: false,
-    ).hasMatch(text);
+        ScrapeProvenanceSemantics.containsExplicitPriorWorkStatement(text);
+    final isSplit = ScrapeProvenanceSemantics.containsStrongSplitEvidence(text);
     final isExtract = RegExp(
       r'抜粋|切り出し|extract',
       caseSensitive: false,
@@ -138,10 +134,9 @@ class JavBusHtmlParser {
     final sharedHint = ScrapeProvenanceSemantics.containsSharedProductionHint(
       text,
     );
-    final independent = RegExp(
-      r'個別|各作品|別作品|それぞれ|独立.*(?:セグメント|作品)',
-      caseSensitive: false,
-    ).hasMatch(text);
+    final independent = ScrapeProvenanceSemantics.containsIndependentSegments(
+      text,
+    );
     return ScrapeWorkProvenanceFacts(
       includedWorks: includedWorks,
       parentWorks: parentWorks,

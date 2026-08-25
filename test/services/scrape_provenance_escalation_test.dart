@@ -190,6 +190,131 @@ void main() {
       expect(supplemental.detailTotal, 1);
     },
   );
+
+  test(
+    'escalates primary bonus-only material for secondary evidence',
+    () async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.dispose);
+      final primary = _EscalationSource(
+        id: ScrapeSourceId.javbus,
+        works: [_summary(ScrapeSourceId.javbus, 'BONUS-001')],
+        details: const ScrapeWorkDetails(
+          source: ScrapeSourceId.javbus,
+          code: 'BONUS-001',
+          title: '撮り下ろし特典映像付き',
+        ),
+      );
+      final secondary = _EscalationSource(
+        id: ScrapeSourceId.avbase,
+        works: [_summary(ScrapeSourceId.avbase, 'BONUS-001')],
+        details: const ScrapeWorkDetails(
+          source: ScrapeSourceId.avbase,
+          code: 'BONUS-001',
+          title: '全編撮り下ろし新作',
+        ),
+      );
+
+      final result = await fixture
+          .service(sources: {primary.id: primary, secondary.id: secondary})
+          .scrape(
+            actressId: fixture.actressId,
+            actressName: '测试女优',
+            options: const WorkScrapeOptions(),
+            sourceSettings: const ScrapeSourceSettings(
+              actressDetailsSource: ScrapeSourceId.javbus,
+              worksSources: [ScrapeSourceId.javbus, ScrapeSourceId.avbase],
+            ),
+          );
+
+      expect(result.saved, 1);
+      expect(result.excluded, 0);
+      expect(primary.detailCalls, 1);
+      expect(secondary.worksCalls, 1);
+      expect(secondary.detailRequests, ['BONUS-001']);
+    },
+  );
+
+  test('does not escalate a whole-production original surface', () async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.dispose);
+    final primary = _EscalationSource(
+      id: ScrapeSourceId.javbus,
+      works: [_summary(ScrapeSourceId.javbus, 'WHOLE-001')],
+      details: const ScrapeWorkDetails(
+        source: ScrapeSourceId.javbus,
+        code: 'WHOLE-001',
+        title: '全編撮り下ろし新作',
+      ),
+    );
+    final secondary = _EscalationSource(
+      id: ScrapeSourceId.avbase,
+      works: [_summary(ScrapeSourceId.avbase, 'WHOLE-001')],
+      details: const ScrapeWorkDetails(
+        source: ScrapeSourceId.avbase,
+        code: 'WHOLE-001',
+        title: 'secondary should not be requested',
+      ),
+    );
+
+    final result = await fixture
+        .service(sources: {primary.id: primary, secondary.id: secondary})
+        .scrape(
+          actressId: fixture.actressId,
+          actressName: '测试女优',
+          options: const WorkScrapeOptions(),
+          sourceSettings: const ScrapeSourceSettings(
+            actressDetailsSource: ScrapeSourceId.javbus,
+            worksSources: [ScrapeSourceId.javbus, ScrapeSourceId.avbase],
+          ),
+        );
+
+    expect(result.saved, 1);
+    expect(primary.detailCalls, 1);
+    expect(secondary.worksCalls, 0);
+    expect(secondary.detailCalls, 0);
+  });
+
+  test('does not escalate a mixed derived surface', () async {
+    final fixture = await _Fixture.create();
+    addTearDown(fixture.dispose);
+    final primary = _EscalationSource(
+      id: ScrapeSourceId.javbus,
+      works: [_summary(ScrapeSourceId.javbus, 'MIXED-001')],
+      details: const ScrapeWorkDetails(
+        source: ScrapeSourceId.javbus,
+        code: 'MIXED-001',
+        title: 'BEST11人・撮り下ろし特典映像付き',
+      ),
+    );
+    final secondary = _EscalationSource(
+      id: ScrapeSourceId.avbase,
+      works: [_summary(ScrapeSourceId.avbase, 'MIXED-001')],
+      details: const ScrapeWorkDetails(
+        source: ScrapeSourceId.avbase,
+        code: 'MIXED-001',
+        title: 'secondary should not be requested',
+      ),
+    );
+
+    final result = await fixture
+        .service(sources: {primary.id: primary, secondary.id: secondary})
+        .scrape(
+          actressId: fixture.actressId,
+          actressName: '测试女优',
+          options: const WorkScrapeOptions(),
+          sourceSettings: const ScrapeSourceSettings(
+            actressDetailsSource: ScrapeSourceId.javbus,
+            worksSources: [ScrapeSourceId.javbus, ScrapeSourceId.avbase],
+          ),
+        );
+
+    expect(result.saved, 0);
+    expect(result.excluded, 1);
+    expect(primary.detailCalls, 1);
+    expect(secondary.worksCalls, 0);
+    expect(secondary.detailCalls, 0);
+  });
 }
 
 ScrapeWorkSummary _summary(ScrapeSourceId source, String code) {

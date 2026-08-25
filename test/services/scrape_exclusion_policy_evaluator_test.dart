@@ -4,6 +4,7 @@ import 'package:avaca/models/scrape_source_settings.dart';
 import 'package:avaca/models/work.dart';
 import 'package:avaca/services/scrape/scrape_classification_context.dart';
 import 'package:avaca/services/scrape/scrape_models.dart';
+import 'package:avaca/services/scrape/provenance_semantics.dart';
 import 'package:avaca/services/scrape_exclusion_policy_evaluator.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -244,6 +245,210 @@ void main() {
       );
       expect(decision.finalAction, ScrapeFinalAction.exclude, reason: title);
       expect(decision.evidence, isNotEmpty, reason: title);
+    }
+  });
+
+  test(
+    'keeps bonus-only material uncertain and distinguishes whole production',
+    () {
+      for (final title in const [
+        '撮り下ろし特典',
+        '新撮特典',
+        '新撮ボーナス',
+        '未公開新作映像',
+        '撮り下ろし',
+      ]) {
+        expect(
+          ScrapeProvenanceSemantics.newMaterialScope(title),
+          ScrapeNewMaterialScope.bonusOnly,
+          reason: title,
+        );
+        final decision = _evaluator().evaluate(
+          code: 'BONUS-${title.hashCode}',
+          details: [_details('BONUS-${title.hashCode}', title)],
+        );
+        expect(
+          decision.finalAction,
+          ScrapeFinalAction.keepReview,
+          reason: title,
+        );
+        expect(
+          decision.evidence.any(
+            (item) => item.kind == ScrapeEvidenceKind.bonusNewMaterial,
+          ),
+          isTrue,
+          reason: title,
+        );
+      }
+
+      for (final title in const [
+        '全編撮り下ろし',
+        '全編新撮',
+        '完全撮り下ろし新作',
+        '完全新撮の大型共演',
+        '全編撮り下ろし大共演',
+      ]) {
+        expect(
+          ScrapeProvenanceSemantics.newMaterialScope(title),
+          ScrapeNewMaterialScope.wholeProduction,
+          reason: title,
+        );
+        expect(
+          _evaluator()
+              .evaluate(
+                code: 'WHOLE-${title.hashCode}',
+                details: [_details('WHOLE-${title.hashCode}', title)],
+              )
+              .finalAction,
+          ScrapeFinalAction.keep,
+          reason: title,
+        );
+      }
+
+      final mixed = _evaluator().evaluate(
+        code: 'MIXED-BEST-WHOLE',
+        details: [_details('MIXED-BEST-WHOLE', 'BEST11人・全編撮り下ろし')],
+      );
+      expect(mixed.finalAction, ScrapeFinalAction.keepReview);
+      expect(mixed.hasConflict, isTrue);
+    },
+  );
+
+  test(
+    'covers collection false negatives without using cast or runtime alone',
+    () {
+      for (final title in const [
+        'BEST50本番',
+        'ベスト50本番',
+        'BEST30！43時間',
+        'BEST30・43時間',
+        'BEST30、43時間',
+        'BEST30選',
+        'BEST100選',
+        '12作品を収録',
+        '12タイトルを収録',
+        '4本を収録',
+        '4本を完全収録',
+        '全12作',
+      ]) {
+        final decision = _evaluator().evaluate(
+          code: 'COLLECTION-${title.hashCode}',
+          details: [_details('COLLECTION-${title.hashCode}', title)],
+        );
+        expect(decision.finalAction, ScrapeFinalAction.exclude, reason: title);
+      }
+
+      for (final title in const ['全4本番', '全3本番', '全5本番完全新撮']) {
+        final decision = _evaluator().evaluate(
+          code: 'SAFE-COUNT-${title.hashCode}',
+          details: [_details('SAFE-COUNT-${title.hashCode}', title)],
+        );
+        expect(
+          decision.finalAction,
+          isNot(ScrapeFinalAction.exclude),
+          reason: title,
+        );
+      }
+    },
+  );
+
+  test(
+    'preserves target-title BEST suffixes and rejects only standalone target BEST',
+    () {
+      final context = const ScrapeClassificationContext(
+        targetActressName: '永野いち夏',
+      );
+      for (final title in const [
+        '永野いち夏 BEST FRIEND',
+        '永野いち夏 ベストフレンド',
+        '永野いち夏 BEST PARTNER',
+        '永野いち夏 BEST CONDITION',
+        '永野いち夏 ベストパートナー',
+        '永野いち夏 ベストコンディション',
+      ]) {
+        final decision = _evaluator().evaluate(
+          code: 'TARGET-SAFE-${title.hashCode}',
+          details: [_details('TARGET-SAFE-${title.hashCode}', title)],
+          classificationContext: context,
+        );
+        expect(
+          decision.finalAction,
+          isNot(ScrapeFinalAction.exclude),
+          reason: title,
+        );
+      }
+
+      for (final title in const [
+        '永野いち夏 BEST',
+        '永野いち夏 12時間BEST',
+        '永野いち夏 BEST COLLECTION',
+      ]) {
+        final decision = _evaluator().evaluate(
+          code: 'TARGET-DERIVED-${title.hashCode}',
+          details: [_details('TARGET-DERIVED-${title.hashCode}', title)],
+          classificationContext: context,
+        );
+        expect(decision.finalAction, ScrapeFinalAction.exclude, reason: title);
+      }
+    },
+  );
+
+  test('enforces metamorphic provenance safety invariants', () {
+    final weakCoPerformance = [
+      'BEST11人・一堂に会して',
+      'BEST11人・全員参加',
+      'BEST11人・同じ現場で',
+    ];
+    for (final title in weakCoPerformance) {
+      final decision = _evaluator().evaluate(
+        code: 'META-CO-${title.hashCode}',
+        details: [_details('META-CO-${title.hashCode}', title)],
+      );
+      expect(decision.finalAction, ScrapeFinalAction.exclude, reason: title);
+      expect(decision.hasConflict, isFalse, reason: title);
+    }
+
+    for (final title in const [
+      'BEST11人',
+      'BEST11人・撮り下ろし特典',
+      'BEST11人・未公開新作映像',
+    ]) {
+      final decision = _evaluator().evaluate(
+        code: 'META-BONUS-${title.hashCode}',
+        details: [_details('META-BONUS-${title.hashCode}', title)],
+      );
+      expect(decision.finalAction, ScrapeFinalAction.exclude, reason: title);
+    }
+
+    for (final title in const [
+      'BEST・完全版',
+      'BEST・4K',
+      'BEST・マルチアングル',
+      'BEST・選択型',
+      'old',
+      'previous',
+      'old model',
+      'previous title',
+      'GOLD・全編撮り下ろし新作',
+      '18-year-old model・全編撮り下ろし',
+    ]) {
+      final decision = _evaluator().evaluate(
+        code: 'META-SAFE-${title.hashCode}',
+        details: [_details('META-SAFE-${title.hashCode}', title)],
+      );
+      expect(
+        decision.finalAction,
+        isNot(ScrapeFinalAction.exclude),
+        reason: title,
+      );
+    }
+
+    for (final title in const ['100人8時間', '64人323分', '30名参加']) {
+      final decision = _evaluator().evaluate(
+        code: 'META-COUNT-${title.hashCode}',
+        details: [_details('META-COUNT-${title.hashCode}', title)],
+      );
+      expect(decision.finalAction, ScrapeFinalAction.keepReview, reason: title);
     }
   });
 

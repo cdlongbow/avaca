@@ -53,6 +53,7 @@ enum ScrapeEvidenceKind {
   independentSegments,
   genuineCoPerformance,
   possibleCoPerformance,
+  bonusNewMaterial,
   priorWorkCollection,
   editedPresentation,
   viewpointSelection,

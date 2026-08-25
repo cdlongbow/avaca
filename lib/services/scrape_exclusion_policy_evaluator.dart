@@ -403,6 +403,7 @@ class ScrapeExclusionPolicyEvaluator {
       facts.description ?? '',
       ...genres,
     ].join(' ').trim();
+    var hasStrongDerivedSurfaceEvidence = false;
 
     void strong({
       required ScrapeEvidenceKind kind,
@@ -411,6 +412,9 @@ class ScrapeExclusionPolicyEvaluator {
       required String observedText,
       String field = 'provenance',
     }) {
+      if (polarity == ScrapeEvidencePolarity.supportsCompilation) {
+        hasStrongDerivedSurfaceEvidence = true;
+      }
       addEvidence(
         surface: surface,
         field: field,
@@ -586,21 +590,6 @@ class ScrapeExclusionPolicyEvaluator {
       );
     }
 
-    final hasStrongDerivedSurfaceEvidence =
-        includedWorks.isNotEmpty ||
-        parentWorks.isNotEmpty ||
-        facts.containsPriorWorks == true ||
-        facts.extractedFromPriorWork == true ||
-        facts.splitFromPriorWork == true ||
-        facts.packageOfIndependentWorks == true ||
-        facts.oldMaterialWithNewBonus == true ||
-        facts.reissue == true ||
-        facts.remaster == true ||
-        facts.reedited == true ||
-        compilation != null ||
-        reuseProposition != null ||
-        oldBonus;
-
     if (facts.explicitOriginalProduction == true) {
       strong(
         kind: ScrapeEvidenceKind.explicitOriginalWork,
@@ -609,19 +598,25 @@ class ScrapeExclusionPolicyEvaluator {
         observedText: 'source says this is a new production',
       );
     }
-    final original = ScrapeProvenanceSemantics.containsReliableOriginal(text)
-        ? RegExp(
-            r'全編\s*(?:新撮|撮り下ろし)|完全\s*(?:新撮|撮り下ろし)|新撮|撮り下ろし',
-            caseSensitive: false,
-          ).firstMatch(ScrapeProvenanceSemantics.normalize(text))
-        : null;
-    if (original != null) {
+    final newMaterialScope = ScrapeProvenanceSemantics.newMaterialScope(text);
+    if (newMaterialScope == ScrapeNewMaterialScope.wholeProduction) {
       strong(
         kind: ScrapeEvidenceKind.explicitOriginalWork,
         polarity: ScrapeEvidencePolarity.supportsOriginalWork,
         ruleId: 'semantic_original_production',
-        observedText: original.group(0)!,
+        observedText: 'whole production is described as newly filmed',
         field: 'title_or_metadata',
+      );
+    } else if (newMaterialScope == ScrapeNewMaterialScope.bonusOnly) {
+      addEvidence(
+        surface: surface,
+        field: 'title_or_metadata',
+        kind: ScrapeEvidenceKind.bonusNewMaterial,
+        strength: ScrapeEvidenceStrength.weak,
+        polarity: ScrapeEvidencePolarity.neutral,
+        ruleId: 'semantic_bonus_new_material',
+        observedText:
+            'newly filmed or unreleased material is described as a bonus',
       );
     }
     if (!hasStrongDerivedSurfaceEvidence &&
