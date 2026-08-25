@@ -45,8 +45,6 @@ class WorksScrapeSessionFactory {
     final options = WorkScrapeOptions.decode(job.optionsSnapshot);
     final policySnapshot = ScrapePolicySnapshot.fromEncoded(
       encoded: job.rulesSnapshot,
-      excludedPrefixes: options.excludedPrefixes,
-      managedFamilyModes: options.managedFamilyModes,
       exactAllows: options.exactAllows,
       autoExcludeDerivedWorks: options.autoExcludeDerivedWorks,
       exactDenies: options.exactDenies,

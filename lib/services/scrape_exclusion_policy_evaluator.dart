@@ -116,10 +116,6 @@ class ScrapeExclusionPolicyEvaluator {
 
   final ScrapePolicySnapshot snapshot;
 
-  /// Automatic exclusion is detail/evidence based. There is no safe
-  /// pre-detail prefix exclusion path anymore.
-  bool canPreExcludeCode(String code) => false;
-
   ScrapePolicyDecision evaluate({
     required String code,
     required List<ScrapeWorkDetails> details,
@@ -185,19 +181,6 @@ class ScrapeExclusionPolicyEvaluator {
     final hasConflict = strongCompilation && strongOriginal;
     final automaticClass = _classForEvidence(evidence, surfaces);
 
-    final family = _managedFamilyFor(code);
-    if (family != null) {
-      policyMatches.add(
-        ScrapePolicyMatch(
-          id: 'm${policyMatches.length}',
-          type: 'managedFamily',
-          ruleId: 'managed_family_${family.family}',
-          origin: family.origin,
-          matchedValue: family.family,
-        ),
-      );
-    }
-
     var automaticAction = ScrapeFinalAction.keepReview;
     var automaticReasons = <String>[];
     var automaticLevel = ScrapeEvidenceLevel.none;
@@ -225,29 +208,11 @@ class ScrapeExclusionPolicyEvaluator {
       automaticAction = ScrapeFinalAction.keep;
       automaticReasons = const ['safe_presentation_context'];
       automaticLevel = ScrapeEvidenceLevel.none;
-    } else if (family?.mode == ManagedFamilyMode.reviewPrior ||
-        hasReviewEvidence) {
-      automaticReasons = [
-        if (hasReviewEvidence) 'review_evidence',
-        if (!hasReviewEvidence && family?.mode == ManagedFamilyMode.reviewPrior)
-          'review_evidence',
-        if (family?.mode == ManagedFamilyMode.reviewPrior)
-          'managed_family_review_prior',
-      ];
-      automaticLevel = hasReviewEvidence
-          ? ScrapeEvidenceLevel.review
-          : ScrapeEvidenceLevel.none;
+    } else if (hasReviewEvidence) {
+      automaticReasons = ['review_evidence'];
+      automaticLevel = ScrapeEvidenceLevel.review;
     } else {
       automaticReasons = const ['unknown_provenance'];
-    }
-
-    // Legacy managed-family exclusion is retained only as an explicit user
-    // rule. It is never inferred from a family/prefix by itself.
-    if (family?.origin == ScrapePolicyOrigin.user &&
-        family?.mode == ManagedFamilyMode.excludeAll) {
-      automaticAction = ScrapeFinalAction.exclude;
-      automaticReasons = const ['managed_family_exclude_all'];
-      automaticLevel = ScrapeEvidenceLevel.none;
     }
 
     final exactAllows = _exactAllowsFor(surfaces);
@@ -364,18 +329,6 @@ class ScrapeExclusionPolicyEvaluator {
       hasConflict: hasConflict,
       snapshotDigest: snapshot.snapshotDigest,
     );
-  }
-
-  ScrapeManagedFamilyPolicy? _managedFamilyFor(String code) {
-    final normalized = normalizeScrapePolicyCode(code);
-    for (final policy in snapshot.managedFamilies) {
-      if (normalized == policy.family ||
-          normalized.startsWith('${policy.family}-') ||
-          normalized.startsWith('${policy.family}_')) {
-        return policy;
-      }
-    }
-    return null;
   }
 
   List<ScrapeExactAllowRule> _exactAllowsFor(List<_PolicySurface> surfaces) {

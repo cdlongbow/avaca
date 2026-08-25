@@ -1695,7 +1695,6 @@ class _ScrapePreferencesSettingsBodyState
   late final Future<WorkScrapeOptions> _optionsFuture;
   final exactAllowController = TextEditingController();
   final exactDenyController = TextEditingController();
-  final prefixController = TextEditingController();
   WorkScrapeOptions? options;
   bool advancedExpanded = false;
 
@@ -1709,7 +1708,6 @@ class _ScrapePreferencesSettingsBodyState
   void dispose() {
     exactAllowController.dispose();
     exactDenyController.dispose();
-    prefixController.dispose();
     super.dispose();
   }
 
@@ -1770,19 +1768,6 @@ class _ScrapePreferencesSettingsBodyState
             ...current.exactDenies,
             ScrapeExactDenyRule(code: value),
           ],
-        ),
-      ),
-    );
-  }
-
-  void _addPrefix(WorkScrapeOptions current) {
-    final value = prefixController.text.trim().toUpperCase();
-    if (value.isEmpty || current.excludedPrefixes.contains(value)) return;
-    prefixController.clear();
-    unawaited(
-      _update(
-        current.copyWith(
-          excludedPrefixes: [...current.excludedPrefixes, value],
         ),
       ),
     );
@@ -1865,15 +1850,14 @@ class _ScrapePreferencesSettingsBodyState
         if (current == null) {
           return const Center(child: CircularProgressIndicator());
         }
-        final ofjeMode =
-            current.managedFamilyModes['OFJE'] ?? ManagedFamilyMode.reviewPrior;
         return Card(
           key: const Key('settings-scrape-preferences'),
           margin: EdgeInsets.zero,
           elevation: 0,
           clipBehavior: Clip.antiAlias,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+            key: const Key('scrape-preferences-padding'),
+            padding: const EdgeInsets.fromLTRB(8, 7, 8, 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1942,6 +1926,8 @@ class _ScrapePreferencesSettingsBodyState
                   key: const Key('scrape-advanced-rules'),
                   tilePadding: EdgeInsets.zero,
                   childrenPadding: const EdgeInsets.only(bottom: 8),
+                  shape: const Border(),
+                  collapsedShape: const Border(),
                   title: Text(localizations.scrapeAdvancedRules),
                   subtitle: Text(localizations.scrapeAdvancedRulesDescription),
                   initiallyExpanded: advancedExpanded,
@@ -1990,61 +1976,6 @@ class _ScrapePreferencesSettingsBodyState
                       ),
                       inputKey: const Key('scrape-exact-deny-input'),
                       addKey: const Key('scrape-exact-deny-add'),
-                    ),
-                    const SizedBox(height: 16),
-                    _ruleEditor(
-                      title: localizations.scrapeLegacyPrefixes,
-                      hint: localizations.codePrefixHint,
-                      controller: prefixController,
-                      values: current.excludedPrefixes,
-                      onAdd: () => _addPrefix(current),
-                      onDelete: (value) => unawaited(
-                        _update(
-                          current.copyWith(
-                            excludedPrefixes: [
-                              for (final prefix in current.excludedPrefixes)
-                                if (prefix != value) prefix,
-                            ],
-                          ),
-                        ),
-                      ),
-                      inputKey: const Key('scrape-prefix-input'),
-                      addKey: const Key('scrape-prefix-add'),
-                    ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<ManagedFamilyMode>(
-                      key: const Key('scrape-ofje-policy-dropdown'),
-                      initialValue: ofjeMode,
-                      isExpanded: true,
-                      decoration: const InputDecoration(
-                        labelText: 'OFJE',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      items: const [
-                        DropdownMenuItem(
-                          value: ManagedFamilyMode.reviewPrior,
-                          child: Text('保留・待檢視（建議）'),
-                        ),
-                        DropdownMenuItem(
-                          value: ManagedFamilyMode.evidenceOnly,
-                          child: Text('只依作品語義判定'),
-                        ),
-                        DropdownMenuItem(
-                          value: ManagedFamilyMode.excludeAll,
-                          child: Text('整個系列排除'),
-                        ),
-                      ],
-                      onChanged: (value) {
-                        if (value == null) return;
-                        final modes = <String, ManagedFamilyMode>{
-                          ...current.managedFamilyModes,
-                          'OFJE': value,
-                        };
-                        unawaited(
-                          _update(current.copyWith(managedFamilyModes: modes)),
-                        );
-                      },
                     ),
                   ],
                 ),

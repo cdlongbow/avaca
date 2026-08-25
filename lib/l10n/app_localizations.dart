@@ -886,7 +886,7 @@ abstract class AppLocalizations {
   /// No description provided for @scrapeAdvancedRulesDescription.
   ///
   /// In zh_TW, this message translates to:
-  /// **'手動精確允許／排除與相容性前綴。'**
+  /// **'手動精確允許／排除作品。'**
   String get scrapeAdvancedRulesDescription;
 
   /// No description provided for @scrapeExactAllows.
@@ -900,12 +900,6 @@ abstract class AppLocalizations {
   /// In zh_TW, this message translates to:
   /// **'精確排除'**
   String get scrapeExactDenies;
-
-  /// No description provided for @scrapeLegacyPrefixes.
-  ///
-  /// In zh_TW, this message translates to:
-  /// **'相容性前綴提示'**
-  String get scrapeLegacyPrefixes;
 
   /// No description provided for @scrapeRuleHint.
   ///
@@ -948,24 +942,6 @@ abstract class AppLocalizations {
   /// In zh_TW, this message translates to:
   /// **'二次刮削只補齊缺少的資訊'**
   String get fillMissingOnly;
-
-  /// No description provided for @excludedCodePrefixes.
-  ///
-  /// In zh_TW, this message translates to:
-  /// **'不刮削的番號開頭'**
-  String get excludedCodePrefixes;
-
-  /// No description provided for @codePrefixHint.
-  ///
-  /// In zh_TW, this message translates to:
-  /// **'輸入番號前綴'**
-  String get codePrefixHint;
-
-  /// No description provided for @addPrefix.
-  ///
-  /// In zh_TW, this message translates to:
-  /// **'新增'**
-  String get addPrefix;
 
   /// No description provided for @startScrape.
   ///

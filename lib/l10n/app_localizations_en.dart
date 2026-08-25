@@ -416,16 +416,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get scrapeAdvancedRulesDescription =>
-      'Manual exact allow/deny rules and compatibility prefixes.';
+      'Manual exact allow/deny rules for works.';
 
   @override
   String get scrapeExactAllows => 'Exact allows';
 
   @override
   String get scrapeExactDenies => 'Exact denies';
-
-  @override
-  String get scrapeLegacyPrefixes => 'Compatibility prefixes';
 
   @override
   String get scrapeRuleHint => 'Enter a work code';
@@ -448,15 +445,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get fillMissingOnly => 'Only fill missing information on rescrape';
-
-  @override
-  String get excludedCodePrefixes => 'Excluded code prefixes';
-
-  @override
-  String get codePrefixHint => 'Enter a code prefix';
-
-  @override
-  String get addPrefix => 'Add';
 
   @override
   String get startScrape => 'Start scraping';

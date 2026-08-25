@@ -9,7 +9,6 @@ import 'package:avaca/models/work.dart';
 import 'package:avaca/models/work_scrape_options.dart';
 import 'package:avaca/services/javbus/javbus_client.dart';
 import 'package:avaca/services/javbus/javbus_models.dart';
-import 'package:avaca/services/javbus/prefix_exclusion.dart';
 import 'package:avaca/services/javbus/work_image_downloader.dart';
 import 'package:avaca/services/javbus/work_image_policy.dart';
 import 'package:avaca/services/javbus/work_image_route_resolver.dart';
@@ -97,17 +96,13 @@ void main() {
       final result = await service.scrape(
         actressId: actressId,
         actressName: '涼森れむ',
-        options: const WorkScrapeOptions(
-          replaceActressImage: true,
-          excludedPrefixes: ['fc2-ppv_123'],
-        ),
+        options: const WorkScrapeOptions(replaceActressImage: true),
         sourceSettings: const ScrapeSourceSettings(
           actressDetailsSource: ScrapeSourceId.javbus,
         ),
         observer: observer,
       );
 
-      expect(client.receivedExclusions, isEmpty);
       expect(client.detailRequests, ['ABF-367', 'FC2-PPV_123-999']);
       expect(workImages.targetPaths.map(path.basename), [
         'abf00367ps.jpg',
@@ -119,16 +114,13 @@ void main() {
       final works = await database.getWorksForActress(actressId);
       final ordinary = works.singleWhere((work) => work['code'] == 'ABF-367');
       expect(ordinary['studio'], 'プレステージ');
-      expect(
-        File(ordinary['card_image_path']! as String).existsSync(),
-        isTrue,
-      );
+      expect(File(ordinary['card_image_path']! as String).existsSync(), isTrue);
       expect(
         File(ordinary['detail_image_path']! as String).existsSync(),
         isTrue,
       );
       final relatedPerformers =
-        ((await database.getWorkById(
+          ((await database.getWorkById(
                     ordinary['id']! as int,
                   ))!['related_performers']!
                   as List)
@@ -261,7 +253,6 @@ void main() {
       options: const WorkScrapeOptions(
         syncDetails: false,
         fillMissingOnly: true,
-        excludedPrefixes: ['FC2-PPV_123'],
       ),
       sourceSettings: const ScrapeSourceSettings(
         actressDetailsSource: ScrapeSourceId.javbus,
@@ -278,8 +269,9 @@ void main() {
     ]);
     expect(await card.readAsBytes(), [7]);
     expect(await detail.readAsBytes(), [8]);
-    final work = (await database.getWorksForActress(actressId))
-        .singleWhere((row) => row['code'] == 'ABF-367');
+    final work = (await database.getWorksForActress(
+      actressId,
+    )).singleWhere((row) => row['code'] == 'ABF-367');
     expect(work['title'], '已儲存標題');
     expect(work['duration_minutes'], 135);
   });
@@ -477,7 +469,7 @@ void main() {
         actressId: actressId,
         actressName: '涼森れむ',
         aliases: const ['Remu'],
-        options: const WorkScrapeOptions(excludedPrefixes: ['FC2']),
+        options: const WorkScrapeOptions(),
         sourceSettings: const ScrapeSourceSettings(
           actressDetailsSource: ScrapeSourceId.javbus,
         ),
@@ -486,8 +478,9 @@ void main() {
       expect(client.pageRequests, 2);
       expect(result.saved, 2);
       expect(
-        (await database.getWorksForActress(actressId))
-            .singleWhere((row) => row['code'] == 'ABF-367')['code'],
+        (await database.getWorksForActress(
+          actressId,
+        )).singleWhere((row) => row['code'] == 'ABF-367')['code'],
         'ABF-367',
       );
     },
@@ -529,10 +522,7 @@ void main() {
       final result = await service.scrape(
         actressId: actressId,
         actressName: '涼森れむ',
-        options: const WorkScrapeOptions(
-          replaceActressImage: true,
-          excludedPrefixes: ['FC2-PPV_123'],
-        ),
+        options: const WorkScrapeOptions(replaceActressImage: true),
         sourceSettings: const ScrapeSourceSettings(
           actressDetailsSource: ScrapeSourceId.javbus,
         ),
@@ -586,7 +576,6 @@ class _FakeJavBusBinarySession implements JavBusBinarySession {
 class _FakeJavBusClient extends JavBusClient {
   _FakeJavBusClient() : super(transport: _NeverTransport());
 
-  List<String> receivedExclusions = [];
   List<String> detailRequests = [];
 
   @override
@@ -620,12 +609,10 @@ class _FakeJavBusClient extends JavBusClient {
   @override
   Future<List<JavBusWorkSummary>> fetchAllActressWorks(
     Uri actressUri, {
-    PrefixExclusion? exclusions,
     bool Function()? isCancelled,
     JavBusActressPage? firstPage,
     void Function(int currentPage, int totalPages, int discovered)? onProgress,
   }) async {
-    receivedExclusions = exclusions?.values ?? [];
     return [
       JavBusWorkSummary(
         code: 'ABF-367',
@@ -680,7 +667,6 @@ class _OverlapJavBusClient extends _FakeJavBusClient {
   @override
   Future<List<JavBusWorkSummary>> fetchAllActressWorks(
     Uri actressUri, {
-    PrefixExclusion? exclusions,
     bool Function()? isCancelled,
     JavBusActressPage? firstPage,
     void Function(int currentPage, int totalPages, int discovered)? onProgress,
@@ -822,7 +808,6 @@ class _MergedJavBusClient extends JavBusClient {
   @override
   Future<List<JavBusWorkSummary>> fetchAllActressWorks(
     Uri actressUri, {
-    PrefixExclusion? exclusions,
     bool Function()? isCancelled,
     JavBusActressPage? firstPage,
     void Function(int currentPage, int totalPages, int discovered)? onProgress,
@@ -925,7 +910,6 @@ class _AliasAwareJavBusClient extends JavBusClient {
   @override
   Future<List<JavBusWorkSummary>> fetchAllActressWorks(
     Uri actressUri, {
-    PrefixExclusion? exclusions,
     bool Function()? isCancelled,
     JavBusActressPage? firstPage,
     void Function(int currentPage, int totalPages, int discovered)? onProgress,

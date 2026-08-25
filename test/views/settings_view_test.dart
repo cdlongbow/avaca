@@ -357,6 +357,40 @@ void main() {
     expect(options.exactDenies.single.normalizedCode, 'MANUAL-001');
   });
 
+  testWidgets('scrape advanced rules only expose exact overrides', (
+    tester,
+  ) async {
+    await _pumpSettings(tester);
+
+    await tester.tap(find.text('Scrape settings'));
+    await tester.pumpAndSettle();
+
+    final padding = tester.widget<Padding>(
+      find.byKey(const Key('scrape-preferences-padding')),
+    );
+    expect(padding.padding, const EdgeInsets.fromLTRB(8, 7, 8, 8));
+
+    final tileFinder = find.byKey(const Key('scrape-advanced-rules'));
+    final collapsed = tester.widget<ExpansionTile>(tileFinder);
+    expect(collapsed.shape, const Border());
+    expect(collapsed.collapsedShape, const Border());
+    expect(find.byKey(const Key('scrape-prefix-input')), findsNothing);
+    expect(find.byKey(const Key('scrape-ofje-policy-dropdown')), findsNothing);
+
+    await tester.tap(tileFinder);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('scrape-exact-allow-input')), findsOneWidget);
+    expect(find.byKey(const Key('scrape-exact-deny-input')), findsOneWidget);
+    expect(find.byKey(const Key('scrape-prefix-input')), findsNothing);
+    expect(find.byKey(const Key('scrape-ofje-policy-dropdown')), findsNothing);
+    expect(find.text('Compatibility prefixes'), findsNothing);
+    expect(
+      find.text('Manual exact allow/deny rules for works.'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('all visible settings text uses the bundled variable font', (
     tester,
   ) async {

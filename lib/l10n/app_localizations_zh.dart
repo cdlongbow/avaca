@@ -410,16 +410,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get scrapeAdvancedRules => '進階規則';
 
   @override
-  String get scrapeAdvancedRulesDescription => '手動精確允許／排除與相容性前綴。';
+  String get scrapeAdvancedRulesDescription => '手動精確允許／排除作品。';
 
   @override
   String get scrapeExactAllows => '精確允許';
 
   @override
   String get scrapeExactDenies => '精確排除';
-
-  @override
-  String get scrapeLegacyPrefixes => '相容性前綴提示';
 
   @override
   String get scrapeRuleHint => '輸入番號';
@@ -441,15 +438,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get fillMissingOnly => '二次刮削只補齊缺少的資訊';
-
-  @override
-  String get excludedCodePrefixes => '不刮削的番號開頭';
-
-  @override
-  String get codePrefixHint => '輸入番號前綴';
-
-  @override
-  String get addPrefix => '新增';
 
   @override
   String get startScrape => '開始刮削';
@@ -1617,16 +1605,13 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get scrapeAdvancedRules => '高级规则';
 
   @override
-  String get scrapeAdvancedRulesDescription => '手动精确允许／排除与兼容性前缀。';
+  String get scrapeAdvancedRulesDescription => '手动精确允许／排除作品。';
 
   @override
   String get scrapeExactAllows => '精确允许';
 
   @override
   String get scrapeExactDenies => '精确排除';
-
-  @override
-  String get scrapeLegacyPrefixes => '兼容性前缀提示';
 
   @override
   String get scrapeRuleHint => '输入番号';
@@ -1648,15 +1633,6 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get fillMissingOnly => '二次刮削只补齐缺少的信息';
-
-  @override
-  String get excludedCodePrefixes => '不刮削的番号开头';
-
-  @override
-  String get codePrefixHint => '输入番号前缀';
-
-  @override
-  String get addPrefix => '新增';
 
   @override
   String get startScrape => '开始刮削';
@@ -2824,16 +2800,13 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get scrapeAdvancedRules => '進階規則';
 
   @override
-  String get scrapeAdvancedRulesDescription => '手動精確允許／排除與相容性前綴。';
+  String get scrapeAdvancedRulesDescription => '手動精確允許／排除作品。';
 
   @override
   String get scrapeExactAllows => '精確允許';
 
   @override
   String get scrapeExactDenies => '精確排除';
-
-  @override
-  String get scrapeLegacyPrefixes => '相容性前綴提示';
 
   @override
   String get scrapeRuleHint => '輸入番號';
@@ -2855,15 +2828,6 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get fillMissingOnly => '二次刮削只補齊缺少的資訊';
-
-  @override
-  String get excludedCodePrefixes => '不刮削的番號開頭';
-
-  @override
-  String get codePrefixHint => '輸入番號前綴';
-
-  @override
-  String get addPrefix => '新增';
 
   @override
   String get startScrape => '開始刮削';

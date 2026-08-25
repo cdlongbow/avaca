@@ -358,10 +358,8 @@ class WorksScrapeService {
     final settings = sourceSettings ?? const ScrapeSourceSettings();
     final effectivePolicy =
         policySnapshot ??
-        ScrapePolicySnapshot.v2(
+        ScrapePolicySnapshot.current(
           rules: ScrapeRules.builtin,
-          excludedPrefixes: options.excludedPrefixes,
-          managedFamilyModes: options.managedFamilyModes,
           exactAllows: options.exactAllows,
           autoExcludeDerivedWorks: options.autoExcludeDerivedWorks,
           exactDenies: options.exactDenies,
@@ -601,10 +599,7 @@ class WorksScrapeService {
     if (_isCancelled(cancellationToken)) {
       return WorksScrapeResult(
         saved: 0,
-        excluded: pipelineResults.fold(
-          0,
-          (total, pipeline) => total + pipeline.preExcluded,
-        ),
+        excluded: 0,
         failed: 0,
         cancelled: true,
         actressImageStatus: actressImageStatus,
@@ -640,10 +635,6 @@ class WorksScrapeService {
     final failedCandidates = pipelineResults
         .expand((pipeline) => pipeline.failedCandidates)
         .toList(growable: false);
-    final preExcluded = pipelineResults.fold(
-      0,
-      (total, pipeline) => total + pipeline.preExcluded,
-    );
     final resolvedGroups = _resolveAcrossSources(fetched, failedCandidates);
     final postDetailDuplicates = resolvedGroups.fold<int>(
       0,
@@ -659,7 +650,7 @@ class WorksScrapeService {
     if (_isCancelled(cancellationToken)) {
       return WorksScrapeResult(
         saved: 0,
-        excluded: preExcluded,
+        excluded: 0,
         failed: 0,
         cancelled: true,
         actressImageStatus: actressImageStatus,
@@ -675,7 +666,7 @@ class WorksScrapeService {
       0,
       resolvedGroups.length,
       0,
-      preExcluded,
+      0,
       0,
       phase: WorksScrapePhase.resolvingWorks,
       totalKnown: true,
@@ -689,7 +680,7 @@ class WorksScrapeService {
         0,
         resolvedGroups.length,
         0,
-        preExcluded,
+        0,
         0,
         phase: WorksScrapePhase.resolvingWorks,
         source: group.sourceId,
@@ -734,11 +725,9 @@ class WorksScrapeService {
         .where((outcome) => outcome.status == _CanonicalWorkStatus.saved)
         .length;
 
-    int excludedCount() =>
-        preExcluded +
-        outcomes.values
-            .where((outcome) => outcome.status == _CanonicalWorkStatus.excluded)
-            .length;
+    int excludedCount() => outcomes.values
+        .where((outcome) => outcome.status == _CanonicalWorkStatus.excluded)
+        .length;
 
     int failedCount() => outcomes.values
         .where((outcome) => outcome.status == _CanonicalWorkStatus.failed)
@@ -1162,7 +1151,6 @@ class WorksScrapeService {
     required List<ScrapeSourceId> requestedWorkIds,
     required Map<ScrapeSourceId, _CollectedSource> collectedById,
     required List<String> retryWorkCodes,
-    required ScrapeExclusionPolicyEvaluator policyEvaluator,
   }) {
     final grouped = <String, List<_WorkCandidate>>{};
     var rawDiscovered = 0;
@@ -1194,7 +1182,6 @@ class WorksScrapeService {
         .whereType<String>()
         .toSet();
     final groups = <_GlobalWorkGroup>[];
-    var preExcluded = 0;
     var ordinal = 0;
     for (final entry in grouped.entries) {
       final allCandidates = entry.value;
@@ -1230,17 +1217,6 @@ class WorksScrapeService {
           source: first.source.id,
         );
       }
-      if (storageCode.isNotEmpty &&
-          policyEvaluator.canPreExcludeCode(storageCode)) {
-        preExcluded++;
-        _notifyWorkOutcome(
-          code: storageCode,
-          source: first.source.id,
-          status: _CanonicalWorkStatus.excluded,
-          reason: 'prefix_excluded',
-        );
-        continue;
-      }
       groups.add(
         _GlobalWorkGroup(
           identityKey: entry.key,
@@ -1260,7 +1236,7 @@ class WorksScrapeService {
       if (sourceComparison != 0) return sourceComparison;
       return left.ordinal.compareTo(right.ordinal);
     });
-    final uniqueCount = groups.length + preExcluded;
+    final uniqueCount = groups.length;
     return _GlobalCandidateSelection(
       groups: List.unmodifiable(groups),
       rawDiscovered: rawDiscovered,
@@ -1268,7 +1244,6 @@ class WorksScrapeService {
       duplicateCount: rawDiscovered > uniqueCount
           ? rawDiscovered - uniqueCount
           : 0,
-      preExcluded: preExcluded,
     );
   }
 
@@ -1303,7 +1278,6 @@ class WorksScrapeService {
         requestedWorkIds: requestedWorkIds,
         collectedById: collectedById,
         retryWorkCodes: retryWorkCodes,
-        policyEvaluator: policyEvaluator,
       );
       if (candidateSelection.groups.isNotEmpty) {
         selection = candidateSelection;
@@ -1417,7 +1391,6 @@ class WorksScrapeService {
             sourceId: collectedById[sourceId]!,
         },
         groups: stageGroups,
-        preExcluded: sourceIndex == firstStageIndex ? selected.preExcluded : 0,
         cancellationToken: cancellationToken,
         onProgress: onProgress,
       );
@@ -1478,7 +1451,6 @@ class WorksScrapeService {
     required List<ScrapeSourceId> requestedWorkIds,
     required Map<ScrapeSourceId, _CollectedSource> collectedById,
     required List<_GlobalWorkGroup> groups,
-    required int preExcluded,
     required WorksScrapeCancellationToken? cancellationToken,
     void Function(WorksScrapeProgress progress)? onProgress,
   }) async {
@@ -1505,7 +1477,7 @@ class WorksScrapeService {
       0,
       _detailTotal > 0 ? _detailTotal : groups.length,
       0,
-      preExcluded,
+      0,
       0,
       phase: WorksScrapePhase.fetchingDetails,
       totalKnown: true,
@@ -1612,7 +1584,7 @@ class WorksScrapeService {
         _detailCompleted,
         _detailTotal > 0 ? _detailTotal : groups.length,
         0,
-        preExcluded,
+        0,
         0,
         phase: WorksScrapePhase.fetchingDetails,
         source: group.candidates.first.source.id,
@@ -1642,7 +1614,6 @@ class WorksScrapeService {
           failedCandidates: List.unmodifiable(
             failedBySource[requestedWorkIds[index]] ?? const [],
           ),
-          preExcluded: index == 0 ? preExcluded : 0,
         ),
     ];
   }
@@ -2332,14 +2303,12 @@ final class _GlobalCandidateSelection {
     required this.rawDiscovered,
     required this.uniqueCount,
     required this.duplicateCount,
-    required this.preExcluded,
   });
 
   final List<_GlobalWorkGroup> groups;
   final int rawDiscovered;
   final int uniqueCount;
   final int duplicateCount;
-  final int preExcluded;
 }
 
 final class _SourcePipelineOutcome {
@@ -2349,7 +2318,6 @@ final class _SourcePipelineOutcome {
     this.collected,
     this.fetched = const [],
     this.failedCandidates = const [],
-    this.preExcluded = 0,
   });
 
   final ScrapeSourceId sourceId;
@@ -2357,7 +2325,6 @@ final class _SourcePipelineOutcome {
   final ScrapeSourceRunResult result;
   final List<_FetchedWorkDetail> fetched;
   final List<_FailedWorkCandidate> failedCandidates;
-  final int preExcluded;
 }
 
 final class _FetchedWorkDetail {

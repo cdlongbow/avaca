@@ -50,16 +50,25 @@ void main() {
     expect(decision.reasonCodes, contains('strong_compilation_evidence'));
   });
 
-  test('treats OFJE as review-prior rather than compilation by code alone', () {
-    final decision = _evaluator().evaluate(
-      code: 'OFJE-605',
-      details: [_details('OFJE-605', 'オール巨乳女優 100連発', performerCount: 100)],
-    );
+  test(
+    'does not assign a family-specific verdict to OFJE or unknown families',
+    () {
+      final ofje = _evaluator().evaluate(
+        code: 'OFJE-605',
+        details: [_details('OFJE-605', '普通の単体作品')],
+      );
+      final unknownFamily = _evaluator().evaluate(
+        code: 'MIZD-605',
+        details: [_details('MIZD-605', '普通の單體作品')],
+      );
 
-    expect(decision.finalAction, ScrapeFinalAction.keepReview);
-    expect(decision.reasonCodes, contains('managed_family_review_prior'));
-    expect(decision.reasonCodes, contains('review_evidence'));
-  });
+      expect(ofje.finalAction, ScrapeFinalAction.keepReview);
+      expect(ofje.reasonCodes, ['unknown_provenance']);
+      expect(ofje.policyMatches, isEmpty);
+      expect(unknownFamily.reasonCodes, ofje.reasonCodes);
+      expect(unknownFamily.finalAction, ofje.finalAction);
+    },
+  );
 
   test(
     'allows an exact surface even when its title looks like a compilation',
@@ -70,22 +79,6 @@ void main() {
 
       expect(decision.finalAction, ScrapeFinalAction.keep);
       expect(decision.reasonCodes, ['exact_allow']);
-    },
-  );
-
-  test(
-    'supports an explicit user family deny without relying on performer count',
-    () {
-      final decision =
-          _evaluator(
-            managedFamilyModes: const {'OFJE': ManagedFamilyMode.excludeAll},
-          ).evaluate(
-            code: 'OFJE-605',
-            details: [_details('OFJE-605', '通常の単体作品', performerCount: 100)],
-          );
-
-      expect(decision.finalAction, ScrapeFinalAction.exclude);
-      expect(decision.reasonCodes, ['managed_family_exclude_all']);
     },
   );
 
@@ -143,17 +136,14 @@ void main() {
     expect(decision.reasonCodes, ['source_evidence_conflict']);
   });
 
-  test('prefixes are only hints and exact allow can still override them', () {
-    final excluded = _evaluator(
-      excludedPrefixes: const ['FC2'],
-    ).evaluate(code: 'FC2-001', details: [_details('FC2-001', '普通作品')]);
-    final allowed = _evaluator(
-      excludedPrefixes: const ['FC2'],
-      exactAllows: const [ScrapeExactAllowRule(code: 'FC2-001')],
-    ).evaluate(code: 'FC2-001', details: [_details('FC2-001', '普通作品')]);
+  test('a former prefix never excludes an otherwise unknown work', () {
+    final decision = _evaluator().evaluate(
+      code: 'FC2-001',
+      details: [_details('FC2-001', '普通作品')],
+    );
 
-    expect(excluded.finalAction, ScrapeFinalAction.keepReview);
-    expect(allowed.finalAction, ScrapeFinalAction.keep);
+    expect(decision.finalAction, ScrapeFinalAction.keepReview);
+    expect(decision.reasonCodes, ['unknown_provenance']);
   });
 
   test('unions source-scoped exact allows across all resolved surfaces', () {
@@ -263,20 +253,31 @@ void main() {
     expect(decision.finalAction, ScrapeFinalAction.exclude);
     expect(decision.reasonCodes, ['exact_deny']);
   });
+
+  test('conflicting exact allow and deny rules fail open to review', () {
+    final decision =
+        _evaluator(
+          exactAllows: const [ScrapeExactAllowRule(code: 'CONFLICT-001')],
+          exactDenies: const [ScrapeExactDenyRule(code: 'CONFLICT-001')],
+        ).evaluate(
+          code: 'CONFLICT-001',
+          details: [_details('CONFLICT-001', '普通作品')],
+        );
+
+    expect(decision.finalAction, ScrapeFinalAction.keepReview);
+    expect(decision.reasonCodes, ['manual_override_conflict']);
+    expect(decision.hasConflict, isTrue);
+  });
 }
 
 ScrapeExclusionPolicyEvaluator _evaluator({
-  List<String> excludedPrefixes = const [],
-  Map<String, ManagedFamilyMode> managedFamilyModes = const {},
   List<ScrapeExactAllowRule> exactAllows = const [],
   List<ScrapeExactDenyRule> exactDenies = const [],
   bool autoExcludeDerivedWorks = true,
 }) {
   return ScrapeExclusionPolicyEvaluator(
-    ScrapePolicySnapshot.v2(
+    ScrapePolicySnapshot.current(
       rules: ScrapeRules.builtin,
-      excludedPrefixes: excludedPrefixes,
-      managedFamilyModes: managedFamilyModes,
       exactAllows: exactAllows,
       exactDenies: exactDenies,
       autoExcludeDerivedWorks: autoExcludeDerivedWorks,

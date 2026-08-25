@@ -411,16 +411,13 @@ class AppLocalizationsJa extends AppLocalizations {
   String get scrapeAdvancedRules => '詳細ルール';
 
   @override
-  String get scrapeAdvancedRulesDescription => '番号単位の許可・除外と互換プレフィックス。';
+  String get scrapeAdvancedRulesDescription => '作品番号単位で許可・除外。';
 
   @override
   String get scrapeExactAllows => '番号単位で許可';
 
   @override
   String get scrapeExactDenies => '番号単位で除外';
-
-  @override
-  String get scrapeLegacyPrefixes => '互換プレフィックス';
 
   @override
   String get scrapeRuleHint => '品番を入力';
@@ -442,15 +439,6 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get fillMissingOnly => '再取得時は未入力の情報のみ補完';
-
-  @override
-  String get excludedCodePrefixes => '除外する品番プレフィックス';
-
-  @override
-  String get codePrefixHint => '品番プレフィックスを入力';
-
-  @override
-  String get addPrefix => '追加';
 
   @override
   String get startScrape => '取得を開始';
@@ -1629,16 +1617,13 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
   String get scrapeAdvancedRules => '詳細ルール';
 
   @override
-  String get scrapeAdvancedRulesDescription => '番号単位の許可・除外と互換プレフィックス。';
+  String get scrapeAdvancedRulesDescription => '作品番号単位で許可・除外。';
 
   @override
   String get scrapeExactAllows => '番号単位で許可';
 
   @override
   String get scrapeExactDenies => '番号単位で除外';
-
-  @override
-  String get scrapeLegacyPrefixes => '互換プレフィックス';
 
   @override
   String get scrapeRuleHint => '品番を入力';
@@ -1660,15 +1645,6 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
 
   @override
   String get fillMissingOnly => '再取得時は未入力の情報のみ補完';
-
-  @override
-  String get excludedCodePrefixes => '除外する品番プレフィックス';
-
-  @override
-  String get codePrefixHint => '品番プレフィックスを入力';
-
-  @override
-  String get addPrefix => '追加';
 
   @override
   String get startScrape => '取得を開始';

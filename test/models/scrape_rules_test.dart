@@ -14,6 +14,7 @@ void main() {
         'ABC': ['1abc'],
       },
       'excludedSuffixes': ['-V'],
+      'managedFamilyRecommendations': {'OFJE': 'excludeAll'},
       'cookie': 'must not be accepted as a rule',
     });
 
@@ -21,6 +22,7 @@ void main() {
     expect(rules.aliases['ABC'], 'ABC-123');
     expect(rules.imageFamilyPrefixHints['ABC'], ['1abc']);
     expect(rules.toJson().containsKey('cookie'), isFalse);
+    expect(rules.toJson().containsKey('managedFamilyRecommendations'), isFalse);
   });
 
   test('remote endpoint is fixed to the allowlisted data file', () {

@@ -1,36 +1,48 @@
+import 'dart:convert';
+
 import 'package:avaca/models/scrape_exclusion_policy.dart';
 import 'package:avaca/models/work_scrape_options.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('round-trips exclusion settings and provenance rules', () {
+  test('round-trips active scrape settings and exact provenance rules', () {
     const options = WorkScrapeOptions(
       syncDetails: false,
       replaceActressImage: true,
       fillMissingOnly: false,
-      excludedPrefixes: ['FC2-PPV_123', '1PON'],
       scrapeAliases: true,
       autoExcludeDerivedWorks: false,
-      managedFamilyModes: {'OFJE': ManagedFamilyMode.reviewPrior},
       exactAllows: [ScrapeExactAllowRule(code: 'OFJE-605')],
       exactDenies: [ScrapeExactDenyRule(code: 'FC2-001')],
     );
 
-    final decoded = WorkScrapeOptions.decode(options.encode());
-    expect(decoded.excludedPrefixes, ['FC2-PPV_123', '1PON']);
+    final encoded = options.encode();
+    final decoded = WorkScrapeOptions.decode(encoded);
+
     expect(decoded.scrapeAliases, isTrue);
-    expect(decoded.managedFamilyModes['OFJE'], ManagedFamilyMode.reviewPrior);
     expect(decoded.exactAllows.single.normalizedCode, 'OFJE-605');
     expect(decoded.autoExcludeDerivedWorks, isFalse);
     expect(decoded.exactDenies.single.normalizedCode, 'FC2-001');
+    expect(encoded, isNot(contains('excludedPrefixes')));
+    expect(encoded, isNot(contains('managedFamilyModes')));
   });
 
-  test('normalizes persisted prefixes without limiting their characters', () {
+  test('ignores legacy exclusion fields when reading persisted settings', () {
     final options = WorkScrapeOptions.decode(
-      '{"excludedPrefixes":[" fc2-ppv_123 ","1pon","FC2-PPV_123"]}',
+      jsonEncode({
+        'excludedPrefixes': ['FC2', 'OFJE'],
+        'managedFamilyModes': {'OFJE': 'excludeAll'},
+        'maxActressCount': 2,
+        'exactAllows': [
+          {'code': 'KEEP-001'},
+        ],
+      }),
     );
 
-    expect(options.excludedPrefixes, ['FC2-PPV_123', '1PON']);
+    expect(options.exactAllows.single.normalizedCode, 'KEEP-001');
+    expect(options.encode(), isNot(contains('excludedPrefixes')));
+    expect(options.encode(), isNot(contains('managedFamilyModes')));
+    expect(options.encode(), isNot(contains('maxActressCount')));
   });
 
   test('uses safe defaults for malformed settings', () {
@@ -39,17 +51,7 @@ void main() {
     expect(options.syncDetails, isTrue);
     expect(options.replaceActressImage, isFalse);
     expect(options.fillMissingOnly, isTrue);
-    expect(options.excludedPrefixes, isEmpty);
-    expect(options.managedFamilyModes, isEmpty);
     expect(options.exactAllows, isEmpty);
-  });
-
-  test('ignores the removed actress-count setting', () {
-    final options = WorkScrapeOptions.decode(
-      '{"maxActressCount":2,"excludedPrefixes":["ABC"]}',
-    );
-
-    expect(options.excludedPrefixes, ['ABC']);
-    expect(options.encode(), isNot(contains('maxActressCount')));
+    expect(options.exactDenies, isEmpty);
   });
 }

@@ -7,7 +7,6 @@ import '../http_safety.dart';
 import 'javbus_html_parser.dart';
 import 'javbus_models.dart';
 import 'javbus_verification.dart';
-import 'prefix_exclusion.dart';
 import 'work_code.dart';
 import 'work_image_downloader.dart';
 
@@ -281,14 +280,12 @@ class JavBusClient {
 
   Future<List<JavBusWorkSummary>> fetchAllActressWorks(
     Uri actressUri, {
-    PrefixExclusion? exclusions,
     bool Function()? isCancelled,
     JavBusActressPage? firstPage,
     void Function(int currentPage, int totalPages, int discovered)? onProgress,
   }) async {
     return (await fetchAllActressWorksResult(
       actressUri,
-      exclusions: exclusions,
       isCancelled: isCancelled,
       firstPage: firstPage,
       onProgress: onProgress,
@@ -297,7 +294,6 @@ class JavBusClient {
 
   Future<JavBusWorkCollectionResult> fetchAllActressWorksResult(
     Uri actressUri, {
-    PrefixExclusion? exclusions,
     bool Function()? isCancelled,
     JavBusActressPage? firstPage,
     void Function(int currentPage, int totalPages, int discovered)? onProgress,
@@ -318,9 +314,6 @@ class JavBusClient {
     void append(Iterable<JavBusWorkSummary> works) {
       for (final work in works) {
         final normalizedCode = work.code.trim().toUpperCase();
-        if (exclusions?.matches(normalizedCode) ?? false) {
-          continue;
-        }
         final existingIndex = codeIndexes[normalizedCode];
         if (existingIndex == null) {
           codeIndexes[normalizedCode] = result.length;

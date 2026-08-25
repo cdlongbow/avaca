@@ -2,14 +2,13 @@ import 'dart:convert';
 
 import 'package:avaca/services/javbus/javbus_client.dart';
 import 'package:avaca/services/javbus/javbus_models.dart';
-import 'package:avaca/services/javbus/prefix_exclusion.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 void main() {
   test(
-    'fetches every actress page, excludes prefixes and deduplicates codes',
+    'fetches every actress page and deduplicates codes without prefix filters',
     () async {
       final transport = _FakeTransport({
         'https://www.javbus.com/star/uly': _page(
@@ -26,13 +25,16 @@ void main() {
 
       final works = await client.fetchAllActressWorks(
         Uri.parse('https://www.javbus.com/star/uly'),
-        exclusions: PrefixExclusion(['FC2']),
         onProgress: (current, total, discovered) =>
             pageProgress.add((current, total, discovered)),
       );
 
-      expect(works.map((work) => work.code), ['ABF-183', 'SONE-833']);
-      expect(pageProgress, [(1, 2, 1), (2, 2, 2)]);
+      expect(works.map((work) => work.code), [
+        'ABF-183',
+        'FC2-123',
+        'SONE-833',
+      ]);
+      expect(pageProgress, [(1, 2, 2), (2, 2, 3)]);
       expect(transport.requested, [
         'https://www.javbus.com/star/uly',
         'https://www.javbus.com/star/uly/2',

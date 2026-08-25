@@ -59,25 +59,7 @@ enum ScrapeEvidenceKind {
   explicitOriginalWork,
 }
 
-enum ManagedFamilyMode { evidenceOnly, reviewPrior, excludeAll }
-
 enum ScrapePolicyOrigin { builtin, remote, user }
-
-extension ManagedFamilyModeCodec on ManagedFamilyMode {
-  String get storageValue => switch (this) {
-    ManagedFamilyMode.evidenceOnly => 'evidenceOnly',
-    ManagedFamilyMode.reviewPrior => 'reviewPrior',
-    ManagedFamilyMode.excludeAll => 'excludeAll',
-  };
-
-  static ManagedFamilyMode parse(Object? value) {
-    return switch (value?.toString()) {
-      'excludeAll' => ManagedFamilyMode.excludeAll,
-      'reviewPrior' => ManagedFamilyMode.reviewPrior,
-      _ => ManagedFamilyMode.evidenceOnly,
-    };
-  }
-}
 
 extension ScrapePolicyOriginCodec on ScrapePolicyOrigin {
   String get storageValue => switch (this) {
@@ -85,48 +67,6 @@ extension ScrapePolicyOriginCodec on ScrapePolicyOrigin {
     ScrapePolicyOrigin.remote => 'remote',
     ScrapePolicyOrigin.user => 'user',
   };
-
-  static ScrapePolicyOrigin parse(Object? value) {
-    return switch (value?.toString()) {
-      'remote' => ScrapePolicyOrigin.remote,
-      'user' => ScrapePolicyOrigin.user,
-      _ => ScrapePolicyOrigin.builtin,
-    };
-  }
-}
-
-class ScrapeManagedFamilyPolicy {
-  const ScrapeManagedFamilyPolicy({
-    required this.family,
-    required this.mode,
-    required this.origin,
-  });
-
-  final String family;
-  final ManagedFamilyMode mode;
-  final ScrapePolicyOrigin origin;
-
-  Map<String, Object?> toJson() => {
-    'family': family,
-    'mode': mode.storageValue,
-    'origin': origin.storageValue,
-  };
-
-  factory ScrapeManagedFamilyPolicy.fromJson(Object? source) {
-    if (source is! Map) {
-      throw const FormatException('Managed family policy must be an object.');
-    }
-    final map = Map<String, Object?>.from(source);
-    final family = map['family']?.toString().trim().toUpperCase() ?? '';
-    if (family.isEmpty || family.length > 32) {
-      throw const FormatException('Managed family policy has an invalid key.');
-    }
-    return ScrapeManagedFamilyPolicy(
-      family: family,
-      mode: ManagedFamilyModeCodec.parse(map['mode']),
-      origin: ScrapePolicyOriginCodec.parse(map['origin']),
-    );
-  }
 }
 
 class ScrapeExactAllowRule {
@@ -228,17 +168,13 @@ class ScrapePolicySnapshot {
     required this.rulesBundleDigest,
     required this.snapshotDigest,
     required this.autoExcludeDerivedWorks,
-    required List<String> excludedPrefixes,
-    required List<ScrapeManagedFamilyPolicy> managedFamilies,
     required List<ScrapeExactAllowRule> exactAllows,
     required List<ScrapeExactDenyRule> exactDenies,
-  }) : excludedPrefixes = List.unmodifiable(excludedPrefixes),
-       managedFamilies = List.unmodifiable(managedFamilies),
-       exactAllows = List.unmodifiable(exactAllows),
+  }) : exactAllows = List.unmodifiable(exactAllows),
        exactDenies = List.unmodifiable(exactDenies);
 
-  static const currentSchemaVersion = 3;
-  static const currentPolicyVersion = 'provenance-v3';
+  static const currentSchemaVersion = 4;
+  static const currentPolicyVersion = 'provenance-v4';
   static const currentClassifierVersion = 'provenance-1';
 
   final int schemaVersion;
@@ -248,60 +184,15 @@ class ScrapePolicySnapshot {
   final String rulesBundleDigest;
   final String snapshotDigest;
   final bool autoExcludeDerivedWorks;
-  final List<String> excludedPrefixes;
-  final List<ScrapeManagedFamilyPolicy> managedFamilies;
   final List<ScrapeExactAllowRule> exactAllows;
   final List<ScrapeExactDenyRule> exactDenies;
 
-  ScrapeManagedFamilyPolicy? managedFamily(String family) {
-    final normalized = family.trim().toUpperCase();
-    for (final policy in managedFamilies) {
-      if (policy.family == normalized) return policy;
-    }
-    return null;
-  }
-
-  static ScrapePolicySnapshot v2({
+  static ScrapePolicySnapshot current({
     required ScrapeRules rules,
-    required List<String> excludedPrefixes,
-    required Map<String, ManagedFamilyMode> managedFamilyModes,
     required List<ScrapeExactAllowRule> exactAllows,
     bool autoExcludeDerivedWorks = true,
     List<ScrapeExactDenyRule> exactDenies = const [],
   }) {
-    final managed = <String, ScrapeManagedFamilyPolicy>{};
-    for (final entry in rules.managedFamilyRecommendations.entries) {
-      final family = entry.key.trim().toUpperCase();
-      if (family.isEmpty) continue;
-      managed[family] = ScrapeManagedFamilyPolicy(
-        family: family,
-        mode: ManagedFamilyModeCodec.parse(entry.value),
-        origin: ScrapePolicyOrigin.builtin,
-      );
-    }
-    for (final entry in managedFamilyModes.entries) {
-      final family = entry.key.trim().toUpperCase();
-      if (family.isEmpty) continue;
-      managed[family] = ScrapeManagedFamilyPolicy(
-        family: family,
-        mode: entry.value,
-        origin: ScrapePolicyOrigin.user,
-      );
-    }
-    if (!managed.containsKey('OFJE')) {
-      managed['OFJE'] = const ScrapeManagedFamilyPolicy(
-        family: 'OFJE',
-        mode: ManagedFamilyMode.reviewPrior,
-        origin: ScrapePolicyOrigin.builtin,
-      );
-    }
-    final normalizedPrefixes = excludedPrefixes
-        .map(normalizeScrapePolicyCode)
-        .where((value) => value.isNotEmpty)
-        .toSet()
-        .toList(growable: false);
-    final managedList = managed.values.toList(growable: false)
-      ..sort((left, right) => left.family.compareTo(right.family));
     final allowList = exactAllows
         .where((rule) => rule.normalizedCode.isNotEmpty)
         .toList(growable: false);
@@ -320,8 +211,6 @@ class ScrapePolicySnapshot {
       'classifierVersion': currentClassifierVersion,
       'rulesBundleDigest': bundleDigest,
       'autoExcludeDerivedWorks': autoExcludeDerivedWorks,
-      'excludedPrefixes': normalizedPrefixes,
-      'managedFamilies': managedList.map((item) => item.toJson()).toList(),
       'exactAllows': allowList.map((item) => item.toJson()).toList(),
       'exactDenies': denyList.map((item) => item.toJson()).toList(),
     };
@@ -333,8 +222,6 @@ class ScrapePolicySnapshot {
       rulesBundleDigest: bundleDigest,
       snapshotDigest: _digest(payload),
       autoExcludeDerivedWorks: autoExcludeDerivedWorks,
-      excludedPrefixes: normalizedPrefixes,
-      managedFamilies: managedList,
       exactAllows: allowList,
       exactDenies: denyList,
     );
@@ -348,8 +235,6 @@ class ScrapePolicySnapshot {
     'rulesBundleDigest': rulesBundleDigest,
     'snapshotDigest': snapshotDigest,
     'autoExcludeDerivedWorks': autoExcludeDerivedWorks,
-    'excludedPrefixes': excludedPrefixes,
-    'managedFamilies': managedFamilies.map((item) => item.toJson()).toList(),
     'exactAllows': exactAllows.map((item) => item.toJson()).toList(),
     'exactDenies': exactDenies.map((item) => item.toJson()).toList(),
   };
@@ -358,16 +243,12 @@ class ScrapePolicySnapshot {
 
   factory ScrapePolicySnapshot.fromEncoded({
     required String? encoded,
-    required List<String> excludedPrefixes,
-    required Map<String, ManagedFamilyMode> managedFamilyModes,
     required List<ScrapeExactAllowRule> exactAllows,
     bool autoExcludeDerivedWorks = true,
     List<ScrapeExactDenyRule> exactDenies = const [],
   }) {
-    ScrapePolicySnapshot fallback() => ScrapePolicySnapshot.v2(
+    ScrapePolicySnapshot fallback() => ScrapePolicySnapshot.current(
       rules: ScrapeRules.builtin,
-      excludedPrefixes: excludedPrefixes,
-      managedFamilyModes: managedFamilyModes,
       exactAllows: exactAllows,
       autoExcludeDerivedWorks: autoExcludeDerivedWorks,
       exactDenies: exactDenies,
@@ -385,21 +266,12 @@ class ScrapePolicySnapshot {
       if (schema != currentSchemaVersion || version != currentPolicyVersion) {
         return fallback();
       }
-      final prefixes = _strings(map['excludedPrefixes']);
+      // provenance-v3 snapshots may carry excludedPrefixes and managedFamilies.
+      // They are deliberately never read here; only current exact overrides
+      // can enter the active policy snapshot.
       final automaticExclusion = map['autoExcludeDerivedWorks'] is bool
           ? map['autoExcludeDerivedWorks'] as bool
           : autoExcludeDerivedWorks;
-      final managed = <ScrapeManagedFamilyPolicy>[];
-      if (map['managedFamilies'] is List) {
-        for (final item in map['managedFamilies'] as List) {
-          try {
-            managed.add(ScrapeManagedFamilyPolicy.fromJson(item));
-          } on FormatException {
-            // Ignore one malformed optional policy entry without losing the
-            // rest of a valid job snapshot.
-          }
-        }
-      }
       final allows = <ScrapeExactAllowRule>[];
       if (map['exactAllows'] is List) {
         for (final item in map['exactAllows'] as List) {
@@ -420,15 +292,6 @@ class ScrapePolicySnapshot {
           }
         }
       }
-      if (managed.isEmpty) {
-        managed.add(
-          const ScrapeManagedFamilyPolicy(
-            family: 'OFJE',
-            mode: ManagedFamilyMode.reviewPrior,
-            origin: ScrapePolicyOrigin.builtin,
-          ),
-        );
-      }
       final rulesVersion =
           map['rulesVersion']?.toString() ?? ScrapeRules.builtin.rulesVersion;
       final classifierVersion =
@@ -447,8 +310,6 @@ class ScrapePolicySnapshot {
         'classifierVersion': classifierVersion,
         'rulesBundleDigest': rulesBundleDigest,
         'autoExcludeDerivedWorks': automaticExclusion,
-        'excludedPrefixes': prefixes,
-        'managedFamilies': managed.map((item) => item.toJson()).toList(),
         'exactAllows': allows.map((item) => item.toJson()).toList(),
         'exactDenies': denies.map((item) => item.toJson()).toList(),
       };
@@ -463,8 +324,6 @@ class ScrapePolicySnapshot {
         rulesBundleDigest: rulesBundleDigest,
         snapshotDigest: snapshotDigest,
         autoExcludeDerivedWorks: automaticExclusion,
-        excludedPrefixes: prefixes,
-        managedFamilies: managed,
         exactAllows: allows,
         exactDenies: denies,
       );
@@ -484,13 +343,3 @@ String _digest(Object value) =>
 
 int _int(Object? value) =>
     value is num ? value.toInt() : int.tryParse('$value') ?? 0;
-
-List<String> _strings(Object? value) {
-  if (value is! List) return const [];
-  return value
-      .whereType<String>()
-      .map(normalizeScrapePolicyCode)
-      .where((item) => item.isNotEmpty)
-      .toSet()
-      .toList(growable: false);
-}

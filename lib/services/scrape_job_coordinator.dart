@@ -312,10 +312,8 @@ class ScrapeJobCoordinator extends ChangeNotifier {
     required ScrapeSourceSettings sourceSettings,
   }) async {
     await initialize();
-    final policySnapshot = ScrapePolicySnapshot.v2(
+    final policySnapshot = ScrapePolicySnapshot.current(
       rules: rulesRepository.current,
-      excludedPrefixes: options.excludedPrefixes,
-      managedFamilyModes: options.managedFamilyModes,
       exactAllows: options.exactAllows,
       autoExcludeDerivedWorks: options.autoExcludeDerivedWorks,
       exactDenies: options.exactDenies,
