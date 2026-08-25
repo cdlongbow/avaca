@@ -74,7 +74,12 @@ class JavBusHtmlParser {
       publisher: _field(fields, const ['發行商', '发行商', 'レーベル']),
       series: _field(fields, const ['系列', 'シリーズ']),
       performers: performers,
-      provenanceFacts: _provenanceFacts(document, fields, rawTitle, genres),
+      provenanceFacts: _provenanceFacts(
+        document,
+        fields,
+        strippedTitle.isEmpty ? rawTitle : strippedTitle,
+        genres,
+      ),
       actressUris: _actressUris(document, pageUri),
       originalImageEvidenceUris: _originalImageEvidenceUris(
         document,
@@ -148,13 +153,15 @@ class JavBusHtmlParser {
       splitFromPriorWork: isSplit ? true : null,
       packageOfIndependentWorks: isPackage ? true : null,
       oldMaterialWithNewBonus: isOldWithBonus ? true : null,
-      reissue: RegExp(r'再発売|復刻', caseSensitive: false).hasMatch(text)
+      reissue:
+          ScrapeProvenanceSemantics.containsStrongReissueEvidence(text) ||
+              ScrapeProvenanceSemantics.containsPremiumRepackageEvidence(text)
           ? true
           : null,
       remaster: RegExp(r'リマスター|remaster', caseSensitive: false).hasMatch(text)
           ? true
           : null,
-      reedited: RegExp(r'再編集|re-?edit', caseSensitive: false).hasMatch(text)
+      reedited: ScrapeProvenanceSemantics.containsStrongReeditEvidence(text)
           ? true
           : null,
       explicitOriginalProduction:

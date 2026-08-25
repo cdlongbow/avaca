@@ -818,6 +818,101 @@ void main() {
     expect(bestWithBonus.finalAction, ScrapeFinalAction.exclude);
   });
 
+  test(
+    'closes real re-edit, reissue, and premium-repackage provenance gaps',
+    () {
+      final reeditTitles = const [
+        '未公開映像収録のプレミアムエディション！ディレクターズカット版 新人NO.1STYLE 河北彩花 AVデビュー',
+        'IPZZ-080 未公開映像収録のプレミアムエディション！ディレクターズカット版 BEAUTY VENUS VI',
+        'REPLAY ドリーム学園3 ディレクターズカット版',
+        "director's cut",
+        '再編集版',
+      ];
+      for (final title in reeditTitles) {
+        final decision = _evaluator().evaluate(
+          code: 'REEDIT-${title.hashCode}',
+          details: [_details('REEDIT-${title.hashCode}', title)],
+        );
+
+        expect(decision.finalAction, ScrapeFinalAction.exclude, reason: title);
+        expect(
+          decision.evidence.any(
+            (item) =>
+                item.kind == ScrapeEvidenceKind.reedit &&
+                item.polarity == ScrapeEvidencePolarity.supportsCompilation,
+          ),
+          isTrue,
+          reason: title,
+        );
+      }
+
+      final reissueTitles = const [
+        '未公開映像収録のプレミアムエディション！河北彩花 既存作品',
+        'LOVE GIRL (REPLAY版)',
+        'ブラックパール(再販版)',
+        '再リリース作品',
+      ];
+      for (final title in reissueTitles) {
+        final decision = _evaluator().evaluate(
+          code: 'REISSUE-${title.hashCode}',
+          details: [_details('REISSUE-${title.hashCode}', title)],
+        );
+
+        expect(decision.finalAction, ScrapeFinalAction.exclude, reason: title);
+        expect(
+          decision.evidence.any(
+            (item) =>
+                item.kind == ScrapeEvidenceKind.reissue &&
+                item.polarity == ScrapeEvidencePolarity.supportsCompilation,
+          ),
+          isTrue,
+          reason: title,
+        );
+      }
+
+      final premiumOnly = _evaluator().evaluate(
+        code: 'PREMIUM-001',
+        details: [_details('PREMIUM-001', '未公開映像収録のプレミアムエディション')],
+      );
+      expect(
+        premiumOnly.evidence.any(
+          (item) => item.ruleId == 'semantic_premium_repackage',
+        ),
+        isTrue,
+      );
+    },
+  );
+
+  test('keeps standalone premium, unreleased, and editing labels safe', () {
+    for (final title in const [
+      '未公開映像',
+      '未公開映像収録',
+      'プレミアムエディション',
+      '完全版',
+      'マルチアングル編集',
+    ]) {
+      final decision = _evaluator().evaluate(
+        code: 'REEDIT-SAFE-${title.hashCode}',
+        details: [_details('REEDIT-SAFE-${title.hashCode}', title)],
+      );
+
+      expect(
+        decision.finalAction,
+        isNot(ScrapeFinalAction.exclude),
+        reason: title,
+      );
+      expect(
+        decision.evidence.where(
+          (item) =>
+              item.strength == ScrapeEvidenceStrength.strong &&
+              item.polarity == ScrapeEvidencePolarity.supportsCompilation,
+        ),
+        isEmpty,
+        reason: title,
+      );
+    }
+  });
+
   test('a former prefix never excludes an otherwise unknown work', () {
     final decision = _evaluator().evaluate(
       code: 'FC2-001',

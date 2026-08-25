@@ -566,23 +566,56 @@ class ScrapeExclusionPolicyEvaluator {
       );
     }
 
-    final reissue = RegExp(
-      r'再発売|復刻|リマスター|再編集|再収録|reissue|remaster|re-?edit',
+    final semanticReedit = facts.reedited == true
+        ? null
+        : ScrapeProvenanceSemantics.strongReeditProposition(text);
+    if (semanticReedit != null) {
+      strong(
+        kind: ScrapeEvidenceKind.reedit,
+        polarity: ScrapeEvidencePolarity.supportsCompilation,
+        ruleId: semanticReedit.ruleId,
+        observedText: semanticReedit.observedText,
+        field: 'title_or_metadata',
+      );
+    }
+
+    final semanticReissue = facts.reissue == true
+        ? null
+        : ScrapeProvenanceSemantics.strongReissueProposition(text);
+    if (semanticReissue != null) {
+      strong(
+        kind: ScrapeEvidenceKind.reissue,
+        polarity: ScrapeEvidencePolarity.supportsCompilation,
+        ruleId: semanticReissue.ruleId,
+        observedText: semanticReissue.observedText,
+        field: 'title_or_metadata',
+      );
+    }
+
+    final premiumRepackage =
+        ScrapeProvenanceSemantics.premiumRepackageProposition(text);
+    if (premiumRepackage != null &&
+        facts.reissue != true &&
+        facts.reedited != true) {
+      strong(
+        kind: ScrapeEvidenceKind.reissue,
+        polarity: ScrapeEvidencePolarity.supportsCompilation,
+        ruleId: premiumRepackage.ruleId,
+        observedText: premiumRepackage.observedText,
+        field: 'title_or_metadata',
+      );
+    }
+
+    final remaster = RegExp(
+      r'リマスター|remaster',
       caseSensitive: false,
     ).firstMatch(text);
-    if (reissue != null) {
-      final value = reissue.group(0)!;
-      final kind =
-          value.contains('リマスター') || value.toLowerCase().contains('remaster')
-          ? ScrapeEvidenceKind.remaster
-          : value.contains('再編集') || value.toLowerCase().contains('edit')
-          ? ScrapeEvidenceKind.reedit
-          : ScrapeEvidenceKind.reissue;
+    if (remaster != null && facts.remaster != true) {
       strong(
-        kind: kind,
+        kind: ScrapeEvidenceKind.remaster,
         polarity: ScrapeEvidencePolarity.supportsCompilation,
-        ruleId: 'semantic_reuse_proposition',
-        observedText: value,
+        ruleId: 'semantic_remaster',
+        observedText: remaster.group(0)!,
         field: 'title_or_metadata',
       );
     }

@@ -235,6 +235,51 @@ void main() {
     },
   );
 
+  test(
+    'does not escalate a confident director-cut premium repackage',
+    () async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.dispose);
+      const title = '未公開映像収録のプレミアムエディション！ディレクターズカット版 新人NO.1STYLE 河北彩花 AVデビュー';
+      final primary = _EscalationSource(
+        id: ScrapeSourceId.javbus,
+        works: [_summary(ScrapeSourceId.javbus, 'REEDIT-001')],
+        details: const ScrapeWorkDetails(
+          source: ScrapeSourceId.javbus,
+          code: 'REEDIT-001',
+          title: title,
+        ),
+      );
+      final secondary = _EscalationSource(
+        id: ScrapeSourceId.avbase,
+        works: [_summary(ScrapeSourceId.avbase, 'REEDIT-001')],
+        details: const ScrapeWorkDetails(
+          source: ScrapeSourceId.avbase,
+          code: 'REEDIT-001',
+          title: 'secondary should not be requested',
+        ),
+      );
+
+      final result = await fixture
+          .service(sources: {primary.id: primary, secondary.id: secondary})
+          .scrape(
+            actressId: fixture.actressId,
+            actressName: '测试女优',
+            options: const WorkScrapeOptions(),
+            sourceSettings: const ScrapeSourceSettings(
+              actressDetailsSource: ScrapeSourceId.javbus,
+              worksSources: [ScrapeSourceId.javbus, ScrapeSourceId.avbase],
+            ),
+          );
+
+      expect(result.saved, 0);
+      expect(result.excluded, 1);
+      expect(primary.detailCalls, 1);
+      expect(secondary.worksCalls, 0);
+      expect(secondary.detailCalls, 0);
+    },
+  );
+
   test('does not escalate a whole-production original surface', () async {
     final fixture = await _Fixture.create();
     addTearDown(fixture.dispose);

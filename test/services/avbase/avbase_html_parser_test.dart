@@ -252,6 +252,45 @@ void main() {
     }
   });
 
+  test('shares strong re-edit and reissue semantics with the evaluator', () {
+    AvBaseWorkDetails parse(String title) => parser.parseWorkPage(
+      '<html><body><h1>MATRIX-SEMANTIC $title</h1></body></html>',
+      pageUri: Uri.parse('https://www.avbase.net/works/test:MATRIX-SEMANTIC'),
+    );
+
+    for (final title in const [
+      'ディレクターズカット版',
+      "director's cut",
+      'directors cut',
+      '再編集版',
+      're-edited',
+    ]) {
+      expect(parse(title).provenanceFacts.reedited, isTrue, reason: title);
+    }
+    for (final title in const [
+      '再販版',
+      '再販商品',
+      '再リリース',
+      'REPLAY版',
+      're-release',
+      '未公開映像収録のプレミアムエディション',
+    ]) {
+      expect(parse(title).provenanceFacts.reissue, isTrue, reason: title);
+    }
+    for (final title in const ['未公開映像', 'プレミアムエディション', '完全版', 'マルチアングル編集']) {
+      final facts = parse(title).provenanceFacts;
+      expect(facts.reissue, isNull, reason: title);
+      expect(facts.reedited, isNull, reason: title);
+    }
+
+    final codeOnlyMarker = parser.parseWorkPage(
+      '<html><body><h1>MATRIX-REEDIT 未公開映像</h1></body></html>',
+      pageUri: Uri.parse('https://www.avbase.net/works/test:MATRIX-REEDIT'),
+    );
+    expect(codeOnlyMarker.provenanceFacts.reissue, isNull);
+    expect(codeOnlyMarker.provenanceFacts.reedited, isNull);
+  });
+
   test('only promotes explicit AvBase shared-production propositions', () {
     AvBaseWorkDetails parse(String title) => parser.parseWorkPage(
       '<html><body><h1>MATRIX-SHARED $title</h1></body></html>',

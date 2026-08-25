@@ -24,6 +24,21 @@ final class ScrapeProvenanceSemantics {
     caseSensitive: false,
   );
 
+  static final RegExp _strongReeditPattern = RegExp(
+    r"再編集|ディレクターズ?[\s・･-]*カット(?:版)?|\bdirector(?:['’]?s)?\s*cut(?:\s*(?:version|edition))?|\bre[\s-]?edit(?:ed)?",
+    caseSensitive: false,
+  );
+
+  static final RegExp _strongReissuePattern = RegExp(
+    r'再発売|復刻|再収録|再販(?:版|商品)|再リリース|\bre[\s-]?issue(?:d)?|\bre[\s-]?release(?:d)?|\breplay\s*版',
+    caseSensitive: false,
+  );
+
+  static final RegExp _premiumRepackagePattern = RegExp(
+    r'(?:未公開映像\s*(?:を\s*)?(?:追加\s*)?収録)[^\n]{0,12}(?:プレミアム\s*エディション|premium\s*edition)|(?:プレミアム\s*エディション|premium\s*edition)[^\n]{0,24}(?:未公開映像\s*(?:を\s*)?(?:追加\s*)?収録)',
+    caseSensitive: false,
+  );
+
   static final RegExp _bestWithBonusPattern = RegExp(
     r'(?:best(?!\s*(?:friend|partner|condition)\b)(?![a-z0-9])|ベスト(?![\s・･]*(?:フレンド|パートナー|コンディション)))[\s・･:：+＋,，、-]{0,8}(?:全編|完全|ノーカット)?\s*(?:未公開|新作(?:映像|カット|特典)?|撮り下ろし|新撮|bonus)|(?:未公開|新作(?:映像|カット|特典)?|撮り下ろし|新撮|bonus)[^\n]{0,12}(?:best(?!\s*(?:friend|partner|condition)\b)(?![a-z0-9])|ベスト(?![\s・･]*(?:フレンド|パートナー|コンディション)))',
     caseSensitive: false,
@@ -223,6 +238,48 @@ final class ScrapeProvenanceSemantics {
         strongReuseProposition([text]) != null ||
         containsExplicitPriorWorkStatement(text) ||
         _bestWithBonusPattern.hasMatch(text);
+  }
+
+  static ScrapeSemanticProposition? strongReeditProposition(String value) {
+    final match = _strongReeditPattern.firstMatch(normalize(value));
+    return match == null
+        ? null
+        : ScrapeSemanticProposition(
+            ruleId: 'semantic_strong_reedit',
+            observedText: match.group(0)!,
+          );
+  }
+
+  static bool containsStrongReeditEvidence(String value) {
+    return strongReeditProposition(value) != null;
+  }
+
+  static ScrapeSemanticProposition? strongReissueProposition(String value) {
+    final match = _strongReissuePattern.firstMatch(normalize(value));
+    return match == null
+        ? null
+        : ScrapeSemanticProposition(
+            ruleId: 'semantic_strong_reissue',
+            observedText: match.group(0)!,
+          );
+  }
+
+  static bool containsStrongReissueEvidence(String value) {
+    return strongReissueProposition(value) != null;
+  }
+
+  static ScrapeSemanticProposition? premiumRepackageProposition(String value) {
+    final match = _premiumRepackagePattern.firstMatch(normalize(value));
+    return match == null
+        ? null
+        : ScrapeSemanticProposition(
+            ruleId: 'semantic_premium_repackage',
+            observedText: match.group(0)!,
+          );
+  }
+
+  static bool containsPremiumRepackageEvidence(String value) {
+    return premiumRepackageProposition(value) != null;
   }
 
   static bool containsExplicitPriorWorkStatement(String value) {

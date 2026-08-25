@@ -44,11 +44,12 @@ final class AvBaseHtmlParser {
     final fields = _detailFields(document);
     final rawCode = _codeFromUri(pageUri);
     final title = _clean(document.querySelector('h1')?.text) ?? '';
+    final strippedTitle = _stripCode(title, rawCode);
     final performers = _performers(document, pageUri);
 
     return AvBaseWorkDetails(
       code: rawCode,
-      title: _stripCode(title, rawCode),
+      title: strippedTitle,
       releaseDate: _normalizeDate(_field(fields, const ['発売日', '発売日'])),
       durationMinutes: _digitsAsInt(_field(fields, const ['収録分数', '収録時間'])),
       studio: _field(fields, const ['メーカー', '製作メーカー']),
@@ -56,7 +57,12 @@ final class AvBaseHtmlParser {
       series: _field(fields, const ['シリーズ']),
       performerCount: performers?.length,
       performers: performers,
-      provenanceFacts: _provenanceFacts(document, fields, title, pageUri),
+      provenanceFacts: _provenanceFacts(
+        document,
+        fields,
+        strippedTitle,
+        pageUri,
+      ),
       originalImageEvidenceUris: _originalImageEvidenceUris(
         document,
         pageUri,
@@ -135,13 +141,15 @@ final class AvBaseHtmlParser {
       splitFromPriorWork: isSplit ? true : null,
       packageOfIndependentWorks: isPackage ? true : null,
       oldMaterialWithNewBonus: isOldWithBonus ? true : null,
-      reissue: RegExp(r'再発売|復刻', caseSensitive: false).hasMatch(text)
+      reissue:
+          ScrapeProvenanceSemantics.containsStrongReissueEvidence(text) ||
+              ScrapeProvenanceSemantics.containsPremiumRepackageEvidence(text)
           ? true
           : null,
       remaster: RegExp(r'リマスター|remaster', caseSensitive: false).hasMatch(text)
           ? true
           : null,
-      reedited: RegExp(r'再編集|re-?edit', caseSensitive: false).hasMatch(text)
+      reedited: ScrapeProvenanceSemantics.containsStrongReeditEvidence(text)
           ? true
           : null,
       explicitOriginalProduction:
