@@ -133,10 +133,13 @@ void main() {
     final work = await client.fetchWorkDetails(
       Uri.parse('https://www.javbus.com/ABF-183'),
     );
+    final direct = await client.fetchWorkDetailsByCode('ABF-183');
 
     expect(actresses.single.name, '涼森れむ');
     expect(work.durationMinutes, 100);
     expect(work.toWork().code, 'ABF-183');
+    expect(direct.code, 'ABF-183');
+    expect(transport.requested.last, 'https://www.javbus.com/ABF-183');
   });
 
   test('HTTP transport decodes UTF-8 and rejects non-success status', () async {

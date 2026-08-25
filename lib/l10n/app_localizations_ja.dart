@@ -1193,6 +1193,28 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String scrapeJobCandidateSummary(int count, int duplicates) {
+    return '候補作品 $count、コレクション重複 $duplicates';
+  }
+
+  @override
+  String scrapeJobSupplementalEvidence(int current, int total) {
+    return '補足証拠 $current/$total';
+  }
+
+  @override
+  String scrapeJobOutcomeSummary(
+    int processed,
+    int total,
+    int keep,
+    int review,
+    int excluded,
+    int failed,
+  ) {
+    return '処理 $processed/$total、保持 $keep、要確認 $review、除外 $excluded、失敗 $failed';
+  }
+
+  @override
   String scrapeJobRulesVersion(String version) {
     return 'ルールバージョン：$version';
   }
@@ -2396,6 +2418,28 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
     int failed,
   ) {
     return '処理 $processed/$total、保存 $saved、除外 $excluded、失敗 $failed';
+  }
+
+  @override
+  String scrapeJobCandidateSummary(int count, int duplicates) {
+    return '候補作品 $count、コレクション重複 $duplicates';
+  }
+
+  @override
+  String scrapeJobSupplementalEvidence(int current, int total) {
+    return '補足証拠 $current/$total';
+  }
+
+  @override
+  String scrapeJobOutcomeSummary(
+    int processed,
+    int total,
+    int keep,
+    int review,
+    int excluded,
+    int failed,
+  ) {
+    return '処理 $processed/$total、保持 $keep、要確認 $review、除外 $excluded、失敗 $failed';
   }
 
   @override

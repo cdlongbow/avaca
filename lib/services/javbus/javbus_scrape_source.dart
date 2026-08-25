@@ -5,7 +5,10 @@ import 'javbus_client.dart';
 import 'javbus_models.dart';
 
 final class JavBusScrapeSource
-    implements ScrapeSource, ScrapeSourceDiagnosticsProvider {
+    implements
+        ScrapeSource,
+        ScrapeSourceDiagnosticsProvider,
+        ScrapeSourceWorkCodeLookup {
   JavBusScrapeSource(this.client);
 
   final JavBusClient client;
@@ -99,22 +102,19 @@ final class JavBusScrapeSource
   @override
   Future<ScrapeWorkDetails> fetchWorkDetails(ScrapeWorkSummary work) async {
     final details = await client.fetchWorkDetails(work.detailUri);
-    return ScrapeWorkDetails(
-      source: id,
-      code: details.rawCode ?? details.code,
-      rawCode: details.rawCode ?? details.code,
-      title: details.title,
-      releaseDate: details.releaseDate,
-      durationMinutes: details.durationMinutes,
-      studio: details.studio,
-      publisher: details.publisher,
-      series: details.series,
-      performers: details.performers,
-      provenanceFacts: details.provenanceFacts,
-      coPerformance: details.provenanceFacts.coPerformance,
-      performerCount: details.actressUris.length,
-      originalImageEvidenceUris: details.originalImageEvidenceUris,
-    );
+    return _mapDetails(details);
+  }
+
+  @override
+  Future<ScrapeWorkDetails?> fetchWorkDetailsByCode(
+    String canonicalCode,
+  ) async {
+    try {
+      return _mapDetails(await client.fetchWorkDetailsByCode(canonicalCode));
+    } on JavBusRequestException catch (error) {
+      if (error.kind == JavBusFailureKind.notFound) return null;
+      rethrow;
+    }
   }
 
   @override
@@ -132,6 +132,29 @@ final class JavBusScrapeSource
   @override
   void close() {
     client.close();
+  }
+
+  ScrapeWorkDetails _mapDetails(JavBusWorkDetails details) {
+    return ScrapeWorkDetails(
+      source: id,
+      code: details.rawCode ?? details.code,
+      rawCode: details.rawCode ?? details.code,
+      title: details.title,
+      releaseDate: details.releaseDate,
+      durationMinutes: details.durationMinutes,
+      studio: details.studio,
+      publisher: details.publisher,
+      series: details.series,
+      performers: details.performers,
+      description: details.provenanceFacts.description,
+      includedWorks: details.provenanceFacts.includedWorks,
+      parentWorks: details.provenanceFacts.parentWorks,
+      genres: details.provenanceFacts.genres,
+      provenanceFacts: details.provenanceFacts,
+      coPerformance: details.provenanceFacts.coPerformance,
+      performerCount: details.actressUris.length,
+      originalImageEvidenceUris: details.originalImageEvidenceUris,
+    );
   }
 
   ScrapeWorkSummary _summary(JavBusWorkSummary work) {

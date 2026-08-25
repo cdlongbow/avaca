@@ -5,7 +5,10 @@ import 'avbase_client.dart';
 import 'avbase_models.dart';
 
 final class AvBaseScrapeSource
-    implements ScrapeSource, ScrapeSourceDiagnosticsProvider {
+    implements
+        ScrapeSource,
+        ScrapeSourceDiagnosticsProvider,
+        ScrapeSourceWorkCodeLookup {
   AvBaseScrapeSource(this.client);
 
   final AvBaseClient client;
@@ -91,6 +94,28 @@ final class AvBaseScrapeSource
   @override
   Future<ScrapeWorkDetails> fetchWorkDetails(ScrapeWorkSummary work) async {
     final details = await client.fetchWorkDetails(work.detailUri);
+    return _mapDetails(details);
+  }
+
+  @override
+  Future<ScrapeWorkDetails?> fetchWorkDetailsByCode(
+    String canonicalCode,
+  ) async {
+    try {
+      return _mapDetails(await client.fetchWorkDetailsByCode(canonicalCode));
+    } on AvBaseRequestException catch (error) {
+      if (error.kind == AvBaseFailureKind.notFound) return null;
+      rethrow;
+    }
+  }
+
+  @override
+  bool acceptsImageUri(Uri uri) => client.acceptsImageUri(uri);
+
+  @override
+  void close() => client.close();
+
+  ScrapeWorkDetails _mapDetails(AvBaseWorkDetails details) {
     return ScrapeWorkDetails(
       source: id,
       code: details.code,
@@ -103,18 +128,16 @@ final class AvBaseScrapeSource
       series: details.series,
       performerCount: details.performerCount,
       performers: details.performers,
+      description: details.provenanceFacts.description,
+      includedWorks: details.provenanceFacts.includedWorks,
+      parentWorks: details.provenanceFacts.parentWorks,
+      genres: details.provenanceFacts.genres,
       provenanceFacts: details.provenanceFacts,
       coPerformance: details.provenanceFacts.coPerformance,
       imageUris: const [],
       originalImageEvidenceUris: details.originalImageEvidenceUris,
     );
   }
-
-  @override
-  bool acceptsImageUri(Uri uri) => client.acceptsImageUri(uri);
-
-  @override
-  void close() => client.close();
 
   ScrapeWorkSummary _summary(AvBaseWorkSummary work) {
     return ScrapeWorkSummary(

@@ -1182,6 +1182,28 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String scrapeJobCandidateSummary(int count, int duplicates) {
+    return '候选作品 $count，集合重复 $duplicates';
+  }
+
+  @override
+  String scrapeJobSupplementalEvidence(int current, int total) {
+    return '补充证据 $current/$total';
+  }
+
+  @override
+  String scrapeJobOutcomeSummary(
+    int processed,
+    int total,
+    int keep,
+    int review,
+    int excluded,
+    int failed,
+  ) {
+    return '已处理 $processed/$total，保留 $keep，待检查 $review，排除 $excluded，失败 $failed';
+  }
+
+  @override
   String scrapeJobRulesVersion(String version) {
     return '規則版本：$version';
   }
@@ -2377,6 +2399,28 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   }
 
   @override
+  String scrapeJobCandidateSummary(int count, int duplicates) {
+    return '候选作品 $count，集合重复 $duplicates';
+  }
+
+  @override
+  String scrapeJobSupplementalEvidence(int current, int total) {
+    return '补充证据 $current/$total';
+  }
+
+  @override
+  String scrapeJobOutcomeSummary(
+    int processed,
+    int total,
+    int keep,
+    int review,
+    int excluded,
+    int failed,
+  ) {
+    return '已处理 $processed/$total，保留 $keep，待检查 $review，排除 $excluded，失败 $failed';
+  }
+
+  @override
   String scrapeJobRulesVersion(String version) {
     return '规则版本：$version';
   }
@@ -3569,6 +3613,28 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
     int failed,
   ) {
     return '已處理 $processed/$total，保存 $saved，排除 $excluded，失敗 $failed';
+  }
+
+  @override
+  String scrapeJobCandidateSummary(int count, int duplicates) {
+    return '候選作品 $count，集合重複 $duplicates';
+  }
+
+  @override
+  String scrapeJobSupplementalEvidence(int current, int total) {
+    return '補充證據 $current/$total';
+  }
+
+  @override
+  String scrapeJobOutcomeSummary(
+    int processed,
+    int total,
+    int keep,
+    int review,
+    int excluded,
+    int failed,
+  ) {
+    return '已處理 $processed/$total，保留 $keep，待檢視 $review，排除 $excluded，失敗 $failed';
   }
 
   @override

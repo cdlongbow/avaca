@@ -175,7 +175,7 @@ class ScrapePolicySnapshot {
 
   static const currentSchemaVersion = 4;
   static const currentPolicyVersion = 'provenance-v4';
-  static const currentClassifierVersion = 'provenance-1';
+  static const currentClassifierVersion = 'semantic-1';
 
   final int schemaVersion;
   final String policyVersion;

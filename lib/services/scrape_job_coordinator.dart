@@ -25,10 +25,13 @@ class ScrapeJobProgressAccumulator {
     this.savedCount = 0,
     this.excludedCount = 0,
     this.failedCount = 0,
+    this.reviewCount = 0,
     this.rawDiscoveredCount = 0,
     this.duplicateCount = 0,
     this.detailCompletedCount = 0,
     this.detailTotalCount = 0,
+    this.supplementalEvidenceCompletedCount = 0,
+    this.supplementalEvidenceTotalCount = 0,
   });
 
   int discoveredCount;
@@ -36,10 +39,13 @@ class ScrapeJobProgressAccumulator {
   int savedCount;
   int excludedCount;
   int failedCount;
+  int reviewCount;
   int rawDiscoveredCount;
   int duplicateCount;
   int detailCompletedCount;
   int detailTotalCount;
+  int supplementalEvidenceCompletedCount;
+  int supplementalEvidenceTotalCount;
   final _outcomes = <String, ScrapeWorkOutcomeState>{};
   int _excludedBaseline = 0;
   bool _hasOutcome = false;
@@ -50,6 +56,7 @@ class ScrapeJobProgressAccumulator {
     savedCount = math.max(savedCount, job.savedCount);
     excludedCount = math.max(excludedCount, job.excludedCount);
     failedCount = math.max(failedCount, job.failedCount);
+    reviewCount = math.max(reviewCount, job.reviewCount);
     rawDiscoveredCount = math.max(rawDiscoveredCount, job.rawDiscoveredCount);
     duplicateCount = math.max(duplicateCount, job.duplicateCount);
     detailCompletedCount = math.max(
@@ -57,6 +64,14 @@ class ScrapeJobProgressAccumulator {
       job.detailCompletedCount,
     );
     detailTotalCount = math.max(detailTotalCount, job.detailTotalCount);
+    supplementalEvidenceCompletedCount = math.max(
+      supplementalEvidenceCompletedCount,
+      job.supplementalEvidenceCompletedCount,
+    );
+    supplementalEvidenceTotalCount = math.max(
+      supplementalEvidenceTotalCount,
+      job.supplementalEvidenceTotalCount,
+    );
   }
 
   void seedItems(Iterable<ScrapeJobItem> items) {
@@ -110,8 +125,17 @@ class ScrapeJobProgressAccumulator {
       progress.detailCompleted,
     );
     detailTotalCount = math.max(detailTotalCount, progress.detailTotal);
+    supplementalEvidenceCompletedCount = math.max(
+      supplementalEvidenceCompletedCount,
+      progress.supplementalEvidenceCompleted,
+    );
+    supplementalEvidenceTotalCount = math.max(
+      supplementalEvidenceTotalCount,
+      progress.supplementalEvidenceTotal,
+    );
     if (!_hasOutcome) {
       savedCount = math.max(savedCount, progress.saved);
+      reviewCount = math.max(reviewCount, progress.review);
       excludedCount = math.max(excludedCount, progress.excluded);
       failedCount = math.max(failedCount, progress.failed);
     } else {
@@ -134,6 +158,7 @@ class ScrapeJobProgressAccumulator {
     savedCount =
         _count(ScrapeWorkOutcomeState.saved) +
         _count(ScrapeWorkOutcomeState.review);
+    reviewCount = _count(ScrapeWorkOutcomeState.review);
     excludedCount = _excludedBaseline + _count(ScrapeWorkOutcomeState.excluded);
     failedCount = _count(ScrapeWorkOutcomeState.failed);
     processedCount = math.max(
@@ -168,6 +193,7 @@ class ScrapeJobTerminalCounters {
   const ScrapeJobTerminalCounters({
     required this.processed,
     required this.saved,
+    required this.review,
     required this.excluded,
     required this.failed,
     required this.imageFailures,
@@ -178,6 +204,7 @@ class ScrapeJobTerminalCounters {
     return ScrapeJobTerminalCounters(
       processed: result.saved + result.excluded + result.failed,
       saved: result.saved,
+      review: result.review,
       excluded: result.excluded,
       failed: result.failed,
       imageFailures: result.imageFailures.length,
@@ -187,6 +214,7 @@ class ScrapeJobTerminalCounters {
 
   final int processed;
   final int saved;
+  final int review;
   final int excluded;
   final int failed;
   final int imageFailures;
@@ -578,6 +606,7 @@ class ScrapeJobCoordinator extends ChangeNotifier {
             phase: ScrapeJobPhase.completed,
             processedCount: counters.processed,
             savedCount: counters.saved,
+            reviewCount: counters.review,
             excludedCount: counters.excluded,
             failedCount: counters.failed,
             imageFailureCount: counters.imageFailures,
@@ -597,6 +626,7 @@ class ScrapeJobCoordinator extends ChangeNotifier {
             message: _resultMessage(finalState),
             metadata: {
               'saved': result.saved,
+              'review': result.review,
               'excluded': result.excluded,
               'failed': result.failed,
               'image_failures': result.imageFailures.length,
@@ -782,7 +812,9 @@ class _JobObserver extends ScrapeRunObserver {
         '${progress.total}:${progress.saved}:${progress.excluded}:'
         '${progress.failed}:${progress.rawDiscovered}:'
         '${progress.duplicateCount}:${progress.detailCompleted}:'
-        '${progress.detailTotal}:$sourceKey';
+        '${progress.detailTotal}:${progress.review}:'
+        '${progress.supplementalEvidenceCompleted}:'
+        '${progress.supplementalEvidenceTotal}:$sourceKey';
     if (_lastProgressKey == progressKey) return;
     _lastProgressKey = progressKey;
     _enqueue(() async {
@@ -800,6 +832,11 @@ class _JobObserver extends ScrapeRunObserver {
         savedCount: _progress.savedCount,
         excludedCount: _progress.excludedCount,
         failedCount: _progress.failedCount,
+        reviewCount: _progress.reviewCount,
+        supplementalEvidenceCompletedCount:
+            _progress.supplementalEvidenceCompletedCount,
+        supplementalEvidenceTotalCount:
+            _progress.supplementalEvidenceTotalCount,
       );
       for (final entry in progress.sourceProgress.entries) {
         await repository.upsertSourceProgress(
@@ -889,6 +926,7 @@ class _JobObserver extends ScrapeRunObserver {
     Object? error,
     String? reason,
     Iterable<String> imageFailureVariants = const <String>[],
+    Map<String, Object?> metadata = const <String, Object?>{},
   }) {
     final imageVariants = imageFailureVariants.toList(growable: false);
     final diagnostic = error == null && reason == null && imageVariants.isEmpty
@@ -919,17 +957,21 @@ class _JobObserver extends ScrapeRunObserver {
         savedCount: _progress.savedCount,
         excludedCount: _progress.excludedCount,
         failedCount: _progress.failedCount,
+        reviewCount: _progress.reviewCount,
       );
-      if (diagnostic != null) {
+      if (diagnostic != null || metadata.isNotEmpty) {
         await repository.appendEvent(
           jobId,
           severity: outcome == ScrapeWorkOutcomeState.failed
               ? ScrapeJobEventSeverity.error
+              : diagnostic == null
+              ? ScrapeJobEventSeverity.info
               : ScrapeJobEventSeverity.warning,
           stage: ScrapeJobPhase.completed,
           canonicalCode: code,
           source: source.storageValue,
-          message: diagnostic,
+          message: diagnostic ?? '作品 provenance 分類已記錄',
+          metadata: metadata,
         );
       }
     });

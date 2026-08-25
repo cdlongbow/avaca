@@ -81,6 +81,41 @@ final class AvBaseClient {
     return details;
   }
 
+  Future<AvBaseWorkDetails> fetchWorkDetailsByCode(String code) {
+    final trimmed = code.trim();
+    if (trimmed.isEmpty) {
+      throw ArgumentError.value(code, 'code', 'Must not be empty.');
+    }
+    final searchUri = _baseUri.replace(
+      pathSegments: [
+        ..._baseUri.pathSegments.where((part) => part.isNotEmpty),
+        'works',
+      ],
+      queryParameters: {'q': trimmed},
+    );
+    return _fetchWorkDetailsBySearch(searchUri, trimmed);
+  }
+
+  Future<AvBaseWorkDetails> _fetchWorkDetailsBySearch(
+    Uri searchUri,
+    String code,
+  ) async {
+    final source = await _transport.get(searchUri);
+    final uri = _parser.findWorkUriByCode(
+      source,
+      pageUri: searchUri,
+      code: code,
+    );
+    if (uri == null) {
+      throw AvBaseRequestException(
+        searchUri,
+        404,
+        kind: AvBaseFailureKind.notFound,
+      );
+    }
+    return fetchWorkDetails(uri);
+  }
+
   Future<AvBaseWorkCollectionResult> fetchAllActressWorks(
     Uri actressUri, {
     required AvBaseActressPage firstPage,

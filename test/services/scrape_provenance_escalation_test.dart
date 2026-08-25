@@ -126,7 +126,68 @@ void main() {
         unorderedEquals(['NEW-002', 'UNKNOWN-002']),
       );
       expect(secondary.worksCalls, 1);
-    expect(secondary.detailRequests, ['UNKNOWN-002']);
+      expect(secondary.detailRequests, ['UNKNOWN-002']);
+    },
+  );
+
+  test(
+    'uses exact-code secondary lookup without collecting the secondary catalog',
+    () async {
+      final fixture = await _Fixture.create();
+      addTearDown(fixture.dispose);
+      final primary = _EscalationSource(
+        id: ScrapeSourceId.javbus,
+        works: [_summary(ScrapeSourceId.javbus, 'UNKNOWN-003')],
+        details: const ScrapeWorkDetails(
+          source: ScrapeSourceId.javbus,
+          code: 'UNKNOWN-003',
+          title: '普通作品',
+        ),
+      );
+      final secondary = _DirectEscalationSource(
+        id: ScrapeSourceId.avbase,
+        works: const [],
+        detailsByCode: const {
+          'UNKNOWN-003': ScrapeWorkDetails(
+            source: ScrapeSourceId.avbase,
+            code: 'UNKNOWN-003',
+            title: '作品集',
+            provenanceFacts: ScrapeWorkProvenanceFacts(
+              includedWorks: ['OLD-003'],
+            ),
+          ),
+        },
+      );
+      final progress = <WorksScrapeProgress>[];
+
+      final result = await fixture
+          .service(sources: {primary.id: primary, secondary.id: secondary})
+          .scrape(
+            actressId: fixture.actressId,
+            actressName: '测试女优',
+            options: const WorkScrapeOptions(),
+            sourceSettings: const ScrapeSourceSettings(
+              actressDetailsSource: ScrapeSourceId.javbus,
+              worksSources: [ScrapeSourceId.javbus, ScrapeSourceId.avbase],
+            ),
+            onProgress: progress.add,
+          );
+
+      expect(result.saved, 0);
+      expect(result.excluded, 1);
+      expect(secondary.worksCalls, 0);
+      expect(secondary.detailCalls, 0);
+      expect(secondary.directRequests, ['UNKNOWN-003']);
+      expect(
+        progress.lastWhere((item) => item.supplementalEvidenceTotal > 0),
+        isA<WorksScrapeProgress>(),
+      );
+      final supplemental = progress.lastWhere(
+        (item) => item.supplementalEvidenceTotal > 0,
+      );
+      expect(supplemental.supplementalEvidenceTotal, 1);
+      expect(supplemental.supplementalEvidenceCompleted, 1);
+      expect(supplemental.detailTotal, 1);
     },
   );
 }
@@ -178,7 +239,7 @@ final class _Fixture {
   }
 }
 
-final class _EscalationSource implements ScrapeSource {
+class _EscalationSource implements ScrapeSource {
   _EscalationSource({
     required this.id,
     required this.works,
@@ -248,6 +309,25 @@ final class _EscalationSource implements ScrapeSource {
 
   @override
   void close() {}
+}
+
+final class _DirectEscalationSource extends _EscalationSource
+    implements ScrapeSourceWorkCodeLookup {
+  _DirectEscalationSource({
+    required super.id,
+    required super.works,
+    super.detailsByCode,
+  });
+
+  final directRequests = <String>[];
+
+  @override
+  Future<ScrapeWorkDetails?> fetchWorkDetailsByCode(
+    String canonicalCode,
+  ) async {
+    directRequests.add(canonicalCode);
+    return detailsByCode[canonicalCode];
+  }
 }
 
 final class _NoopWorkImageDownloader extends WorkImageDownloader {

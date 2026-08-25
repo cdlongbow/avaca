@@ -302,19 +302,28 @@ class _ScrapeJobsViewState extends State<ScrapeJobsView> {
   }
 
   String _progressLabel(AppLocalizations l10n, ScrapeJob job) {
-    final collection = l10n.scrapeJobCollectionSummary(
-      job.rawDiscoveredCount,
+    final collection = l10n.scrapeJobCandidateSummary(
       job.discoveredCount,
       job.duplicateCount,
     );
+    final supplemental = job.supplementalEvidenceTotalCount > 0
+        ? l10n.scrapeJobSupplementalEvidence(
+            job.supplementalEvidenceCompletedCount,
+            job.supplementalEvidenceTotalCount,
+          )
+        : null;
     return switch (job.phase) {
       ScrapeJobPhase.collectingSources => collection,
       ScrapeJobPhase.fetchingDetails || ScrapeJobPhase.resolvingWorks =>
-        '$collection · ${l10n.scrapeJobDetailProgress(job.detailCompletedCount, job.detailTotalCount)}',
-      _ => l10n.scrapeJobTerminalProgress(
+        '$collection · ${l10n.scrapeJobDetailProgress(job.detailCompletedCount, job.detailTotalCount)}'
+            '${supplemental == null ? '' : ' · $supplemental'}',
+      _ => l10n.scrapeJobOutcomeSummary(
         job.processedCount,
         job.discoveredCount,
-        job.savedCount,
+        job.savedCount - job.reviewCount < 0
+            ? 0
+            : job.savedCount - job.reviewCount,
+        job.reviewCount,
         job.excludedCount,
         job.failedCount,
       ),

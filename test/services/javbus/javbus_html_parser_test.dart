@@ -46,6 +46,8 @@ void main() {
     expect(work.studio, 'プレステージ');
     expect(work.publisher, 'ABS');
     expect(work.series, 'PRESTIGE PREMIUM');
+    expect(work.provenanceFacts.genres, ['高畫質', '女上位']);
+    expect(work.provenanceFacts.tags, ['高畫質', '女上位']);
   });
 
   test('removes V T and VT edition suffixes from scraped work codes', () {
@@ -161,6 +163,11 @@ const _workHtml = '''
     <p><span class="header">製作商:</span> <a>プレステージ</a></p>
     <p><span class="header">發行商:</span> <a>ABS</a></p>
     <p><span class="header">系列:</span> <a>PRESTIGE PREMIUM</a></p>
+    <p class="header">類別:<span id="genre-toggle">+</span></p>
+    <p>
+      <span class="genre"><label><input type="checkbox"><a href="/genre/1">高畫質</a></label></span>
+      <span class="genre"><label><input type="checkbox"><a href="/genre/2">女上位</a></label></span>
+    </p>
   </div>
 </body></html>
 ''';

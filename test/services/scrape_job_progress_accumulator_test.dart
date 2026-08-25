@@ -83,6 +83,44 @@ void main() {
     expect(accumulator.excludedCount, 1);
   });
 
+  test('keeps canonical detail totals separate from supplemental evidence', () {
+    final accumulator = ScrapeJobProgressAccumulator();
+    accumulator.apply(
+      const WorksScrapeProgress(
+        current: 179,
+        total: 179,
+        saved: 0,
+        excluded: 0,
+        failed: 0,
+        detailCompleted: 179,
+        detailTotal: 179,
+        supplementalEvidenceTotal: 69,
+      ),
+    );
+    accumulator.apply(
+      const WorksScrapeProgress(
+        current: 179,
+        total: 179,
+        saved: 12,
+        excluded: 0,
+        failed: 0,
+        detailCompleted: 179,
+        detailTotal: 179,
+        supplementalEvidenceCompleted: 42,
+        supplementalEvidenceTotal: 69,
+        review: 3,
+      ),
+    );
+
+    expect(accumulator.discoveredCount, 179);
+    expect(accumulator.detailCompletedCount, 179);
+    expect(accumulator.detailTotalCount, 179);
+    expect(accumulator.supplementalEvidenceCompletedCount, 42);
+    expect(accumulator.supplementalEvidenceTotalCount, 69);
+    expect(accumulator.savedCount, 12);
+    expect(accumulator.reviewCount, 3);
+  });
+
   test(
     'per-work outcomes prevent a reset progress snapshot from inflating counts',
     () {
@@ -168,6 +206,7 @@ void main() {
     final counters = ScrapeJobTerminalCounters.fromResult(
       const WorksScrapeResult(
         saved: 4,
+        review: 1,
         excluded: 2,
         failed: 1,
         cancelled: false,
@@ -176,6 +215,7 @@ void main() {
 
     expect(counters.processed, 7);
     expect(counters.saved, 4);
+    expect(counters.review, 1);
     expect(counters.excluded, 2);
     expect(counters.failed, 1);
     expect(counters.imageFailures, 0);

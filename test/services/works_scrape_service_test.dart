@@ -555,6 +555,7 @@ class _RecordingScrapeObserver extends ScrapeRunObserver {
     Object? error,
     String? reason,
     Iterable<String> imageFailureVariants = const <String>[],
+    Map<String, Object?> metadata = const <String, Object?>{},
   }) {
     outcomes.add((code: code, state: outcome));
   }

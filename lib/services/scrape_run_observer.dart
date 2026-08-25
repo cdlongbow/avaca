@@ -35,6 +35,7 @@ abstract class ScrapeRunObserver {
     Object? error,
     String? reason,
     Iterable<String> imageFailureVariants = const <String>[],
+    Map<String, Object?> metadata = const <String, Object?>{},
   }) {}
 
   void onSourceResult(ScrapeSourceRunResult result) {}

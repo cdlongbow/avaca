@@ -5,6 +5,7 @@ import '../../models/scraped_actress_details.dart';
 import '../../models/work.dart';
 import '../../models/scrape_source_settings.dart';
 import '../scrape/scrape_models.dart';
+import '../scrape/provenance_semantics.dart';
 import 'avbase_models.dart';
 
 final class AvBaseHtmlParser {
@@ -55,7 +56,7 @@ final class AvBaseHtmlParser {
       series: _field(fields, const ['シリーズ']),
       performerCount: performers?.length,
       performers: performers,
-      provenanceFacts: _provenanceFacts(document, fields, title),
+      provenanceFacts: _provenanceFacts(document, fields, title, pageUri),
       originalImageEvidenceUris: _originalImageEvidenceUris(
         document,
         pageUri,
@@ -68,37 +69,43 @@ final class AvBaseHtmlParser {
     Document document,
     Map<String, String> fields,
     String title,
+    Uri pageUri,
   ) {
-    final description = _clean(
-      document
-              .querySelector('meta[name="description"]')
-              ?.attributes['content'] ??
-          _field(fields, const ['説明', '概要', '内容']),
-    );
-    final includedWorks = _fieldValues(fields, const [
-      '収録作品',
-      '収録タイトル',
-      '収録内容',
-      '収録作品名',
-    ]);
-    final parentWorks = _fieldValues(fields, const [
-      '元作品',
-      '親作品',
-      '収録元',
-      '原作品',
-    ]);
+    final tags = _sectionTags(document);
+    final description =
+        _sectionDescription(document) ??
+        _clean(
+          document
+                  .querySelector('meta[name="description"]')
+                  ?.attributes['content'] ??
+              _field(fields, const ['説明', '概要', '内容']),
+        );
+    final includedWorks = <String>{
+      ..._sectionWorkCodes(document, pageUri, const ['収録作品']),
+      ..._fieldValues(fields, const ['収録作品', '収録タイトル', '収録内容', '収録作品名']),
+    }.toList(growable: false);
+    final parentWorks = <String>{
+      ..._sectionWorkCodes(document, pageUri, const [
+        '元作品',
+        '親作品',
+        '収録元',
+        '原作品',
+      ]),
+      ..._fieldValues(fields, const ['元作品', '親作品', '収録元', '原作品']),
+    }.toList(growable: false);
     final genres = _fieldValues(fields, const ['ジャンル', '類別', '類型']);
     final text = [
       title,
       description ?? '',
       ...fields.values,
       ...genres,
+      ...tags,
     ].join(' ');
     final hasPriorMarker =
         includedWorks.isNotEmpty ||
         parentWorks.isNotEmpty ||
         RegExp(
-          r'収録作品|収録タイトル|過去作品|既存作品|再収録|全\s*\d+\s*(?:作品|タイトル)|\d+\s*タイトル全部入り',
+          r'過去作品|既存作品|再収録|全\s*\d+\s*(?:作品|タイトル)|\d+\s*タイトル全部入り',
           caseSensitive: false,
         ).hasMatch(text);
     final isSplit = RegExp(
@@ -114,8 +121,7 @@ final class AvBaseHtmlParser {
       caseSensitive: false,
     ).hasMatch(text);
     final isOldWithBonus =
-        RegExp(r'未公開|bonus', caseSensitive: false).hasMatch(text) &&
-        RegExp(r'過去|既存|再収録|収録|old', caseSensitive: false).hasMatch(text);
+        ScrapeProvenanceSemantics.containsOldMaterialWithNewBonus(text);
     final shared = RegExp(
       r'共演|同時出演|同じ.*作品|同一.*作品|ストーリー|コラボ',
       caseSensitive: false,
@@ -128,6 +134,7 @@ final class AvBaseHtmlParser {
       includedWorks: includedWorks,
       parentWorks: parentWorks,
       genres: genres,
+      tags: tags,
       description: description,
       containsPriorWorks: hasPriorMarker ? true : null,
       extractedFromPriorWork: isExtract ? true : null,
@@ -144,7 +151,7 @@ final class AvBaseHtmlParser {
           ? true
           : null,
       explicitOriginalProduction:
-          RegExp(r'新撮|撮り下ろし|新作', caseSensitive: false).hasMatch(text)
+          ScrapeProvenanceSemantics.containsReliableOriginal(text)
           ? true
           : null,
       coPerformance: independent
@@ -164,6 +171,74 @@ final class AvBaseHtmlParser {
     return List.unmodifiable(values);
   }
 
+  List<String> _sectionTags(Document document) {
+    final section = _sectionForHeading(document, const ['タグ・説明文']);
+    if (section == null) return const [];
+    final values = <String>[];
+    final seen = <String>{};
+    for (final anchor in section.querySelectorAll('a[href*="/tags/"]')) {
+      final value = _clean(anchor.text);
+      if (value != null && seen.add(value)) values.add(value);
+    }
+    return List.unmodifiable(values);
+  }
+
+  String? _sectionDescription(Document document) {
+    final section = _sectionForHeading(document, const ['タグ・説明文']);
+    if (section == null) return null;
+    for (final element in section.querySelectorAll(
+      'p, article, [data-description], .prose, [class*="prose"]',
+    )) {
+      final value = _clean(element.text);
+      if (value == null || value.length < 8) continue;
+      final links = element.querySelectorAll('a');
+      if (links.isNotEmpty &&
+          element.querySelectorAll('a[href*="/tags/"]').length ==
+              links.length) {
+        continue;
+      }
+      return value;
+    }
+    for (final element in section.children.skip(1)) {
+      if (element.querySelectorAll('a').isNotEmpty) continue;
+      final value = _clean(element.text);
+      if (value != null && value.length >= 8) return value;
+    }
+    return null;
+  }
+
+  List<String> _sectionWorkCodes(
+    Document document,
+    Uri pageUri,
+    List<String> headings,
+  ) {
+    final section = _sectionForHeading(document, headings);
+    if (section == null) return const [];
+    final values = <String>[];
+    final seen = <String>{};
+    for (final anchor in section.querySelectorAll('a[href*="/works/"]')) {
+      final href = _clean(anchor.attributes['href']);
+      if (href == null) continue;
+      final code = _codeFromUri(pageUri.resolve(href));
+      if (code.isNotEmpty && seen.add(code)) values.add(code);
+    }
+    return List.unmodifiable(values);
+  }
+
+  Element? _sectionForHeading(Document document, List<String> headings) {
+    for (final heading in document.querySelectorAll('h2, h3')) {
+      final headingText = _clean(heading.text) ?? '';
+      if (!headings.any(headingText.contains)) continue;
+      Element? current = heading;
+      while (current != null) {
+        if (current.localName == 'section') return current;
+        final parent = current.parent;
+        current = parent is Element ? parent : null;
+      }
+    }
+    return null;
+  }
+
   ScrapeActressSearchResult? parseActressSearchResult(
     String source, {
     required Uri pageUri,
@@ -179,6 +254,23 @@ final class AvBaseHtmlParser {
       name: name,
       uri: pageUri,
     );
+  }
+
+  Uri? findWorkUriByCode(
+    String source, {
+    required Uri pageUri,
+    required String code,
+  }) {
+    final expected = code.trim().toUpperCase();
+    if (expected.isEmpty) return null;
+    final document = html.parse(source);
+    for (final anchor in document.querySelectorAll('a[href*="/works/"]')) {
+      final href = _clean(anchor.attributes['href']);
+      if (href == null) continue;
+      final uri = pageUri.resolve(href);
+      if (_codeFromUri(uri) == expected) return uri;
+    }
+    return null;
   }
 
   Map<String, String> _profileFields(Document document) {

@@ -25,9 +25,17 @@ void main() {
         sourceSettingsSnapshot: '{}',
         rulesVersionSnapshot: 'builtin-1',
         rulesSnapshot: '{}',
+        discoveredCount: 179,
+        rawDiscoveredCount: 251,
+        duplicateCount: 67,
+        detailCompletedCount: 179,
+        detailTotalCount: 179,
         processedCount: 31,
         savedCount: 30,
+        reviewCount: 3,
         failedCount: 1,
+        supplementalEvidenceCompletedCount: 42,
+        supplementalEvidenceTotalCount: 69,
         lastError: '來源 javbus：partial\n作品 BAD-001：detailsUnavailable',
       );
       final now = DateTime.now().toUtc();
@@ -74,6 +82,10 @@ void main() {
 
       expect(find.byKey(const Key('scrape-job-diagnostic')), findsOneWidget);
       expect(find.textContaining('BAD-001'), findsWidgets);
+      expect(find.textContaining('候選作品 179'), findsOneWidget);
+      expect(find.textContaining('補充證據 42/69'), findsOneWidget);
+      expect(find.textContaining('待檢視 3'), findsOneWidget);
+      expect(find.textContaining('取得 251'), findsNothing);
       expect(find.byKey(const Key('scrape-job-items-list')), findsOneWidget);
       final viewport = tester.getSize(
         find.byKey(const Key('scrape-job-items-viewport')),

@@ -2323,6 +2323,31 @@ abstract class AppLocalizations {
     int failed,
   );
 
+  /// No description provided for @scrapeJobCandidateSummary.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'候選作品 {count}，集合重複 {duplicates}'**
+  String scrapeJobCandidateSummary(int count, int duplicates);
+
+  /// No description provided for @scrapeJobSupplementalEvidence.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'補充證據 {current}/{total}'**
+  String scrapeJobSupplementalEvidence(int current, int total);
+
+  /// No description provided for @scrapeJobOutcomeSummary.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'已處理 {processed}/{total}，保留 {keep}，待檢視 {review}，排除 {excluded}，失敗 {failed}'**
+  String scrapeJobOutcomeSummary(
+    int processed,
+    int total,
+    int keep,
+    int review,
+    int excluded,
+    int failed,
+  );
+
   /// No description provided for @scrapeJobRulesVersion.
   ///
   /// In zh_TW, this message translates to:

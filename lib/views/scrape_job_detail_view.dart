@@ -330,8 +330,7 @@ class _ScrapeJobDetailViewState extends State<ScrapeJobDetailView> {
 
   String _progressSummary(BuildContext context, ScrapeJob job) {
     final l10n = AppLocalizations.of(context);
-    final collection = l10n.scrapeJobCollectionSummary(
-      job.rawDiscoveredCount,
+    final collection = l10n.scrapeJobCandidateSummary(
       job.discoveredCount,
       job.duplicateCount,
     );
@@ -339,18 +338,28 @@ class _ScrapeJobDetailViewState extends State<ScrapeJobDetailView> {
       job.detailCompletedCount,
       job.detailTotalCount,
     );
-    final terminal = l10n.scrapeJobTerminalProgress(
+    final supplemental = job.supplementalEvidenceTotalCount > 0
+        ? l10n.scrapeJobSupplementalEvidence(
+            job.supplementalEvidenceCompletedCount,
+            job.supplementalEvidenceTotalCount,
+          )
+        : null;
+    final terminal = l10n.scrapeJobOutcomeSummary(
       job.processedCount,
       job.discoveredCount,
-      job.savedCount,
+      job.savedCount - job.reviewCount < 0
+          ? 0
+          : job.savedCount - job.reviewCount,
+      job.reviewCount,
       job.excludedCount,
       job.failedCount,
     );
     return switch (job.phase) {
       ScrapeJobPhase.collectingSources => collection,
-      ScrapeJobPhase.fetchingDetails ||
-      ScrapeJobPhase.resolvingWorks => '$collection\n$details',
-      _ => '$collection\n$details\n$terminal',
+      ScrapeJobPhase.fetchingDetails || ScrapeJobPhase.resolvingWorks =>
+        '$collection\n$details${supplemental == null ? '' : '\n$supplemental'}',
+      _ =>
+        '$collection\n$details${supplemental == null ? '' : '\n$supplemental'}\n$terminal',
     };
   }
 
@@ -456,8 +465,8 @@ class _ScrapeJobDetailViewState extends State<ScrapeJobDetailView> {
     return switch (state) {
       ScrapeJobItemState.queued => l10n.scrapeJobStateQueued,
       ScrapeJobItemState.running => l10n.scrapeJobStateRunning,
-        ScrapeJobItemState.succeeded => l10n.scrapeJobStateSucceeded,
-        ScrapeJobItemState.review => '待檢視',
+      ScrapeJobItemState.succeeded => l10n.scrapeJobStateSucceeded,
+      ScrapeJobItemState.review => '待檢視',
       ScrapeJobItemState.excluded => l10n.scrapeJobStateExcluded,
       ScrapeJobItemState.failed => l10n.scrapeJobStateFailed,
       ScrapeJobItemState.cancelled => l10n.scrapeJobStateCancelled,

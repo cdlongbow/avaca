@@ -148,6 +148,9 @@ class ScrapeJob {
     this.savedCount = 0,
     this.excludedCount = 0,
     this.failedCount = 0,
+    this.reviewCount = 0,
+    this.supplementalEvidenceCompletedCount = 0,
+    this.supplementalEvidenceTotalCount = 0,
     this.imageFailureCount = 0,
     this.attemptCount = 0,
     this.retryTargetCodes = const [],
@@ -176,6 +179,9 @@ class ScrapeJob {
   final int savedCount;
   final int excludedCount;
   final int failedCount;
+  final int reviewCount;
+  final int supplementalEvidenceCompletedCount;
+  final int supplementalEvidenceTotalCount;
   final int imageFailureCount;
   final int attemptCount;
   final List<String> retryTargetCodes;
@@ -213,6 +219,9 @@ class ScrapeJob {
     'saved_count': savedCount,
     'excluded_count': excludedCount,
     'failed_count': failedCount,
+    'review_count': reviewCount,
+    'supplemental_evidence_completed_count': supplementalEvidenceCompletedCount,
+    'supplemental_evidence_total_count': supplementalEvidenceTotalCount,
     'image_failure_count': imageFailureCount,
     'attempt_count': attemptCount,
     'created_at': createdAt?.toUtc().toIso8601String(),
@@ -245,6 +254,13 @@ class ScrapeJob {
       savedCount: _int(row['saved_count']),
       excludedCount: _int(row['excluded_count']),
       failedCount: _int(row['failed_count']),
+      reviewCount: _int(row['review_count']),
+      supplementalEvidenceCompletedCount: _int(
+        row['supplemental_evidence_completed_count'],
+      ),
+      supplementalEvidenceTotalCount: _int(
+        row['supplemental_evidence_total_count'],
+      ),
       imageFailureCount: _int(row['image_failure_count']),
       attemptCount: _int(row['attempt_count']),
       createdAt: _date(row['created_at']),

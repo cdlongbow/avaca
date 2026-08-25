@@ -64,6 +64,23 @@ void main() {
           <h2>出演者・メモ</h2>
           <a href="/talents/%E7%9F%B3%E5%B7%9D%E6%BE%AA">石川澪</a>
         </section>
+        <section class="p-3">
+          <h2>タグ・説明文</h2>
+          <p>過去作品を厳選収録した作品紹介ではなく、実際の説明文です。</p>
+          <a href="/tags/best">ベスト・総集編</a>
+          <a href="/tags/vr">ハイクオリティVR</a>
+        </section>
+        <section class="p-3">
+          <h2>収録作品</h2>
+          <div class="flex flex-col gap-3">
+            <div class="flex flex-col gap-2">
+              <div dir="rtl"><span>sodcreate:OLD-001</span></div>
+              <a href="/works/sodcreate:OLD-001">収録された旧作品</a>
+            </div>
+            <div dir="rtl"><span>OLD-002</span></div>
+            <a href="/works/OLD-002">収録された別作品</a>
+          </div>
+        </section>
         <img src="https://pics.dmm.co.jp/digital/video/mizd00549/mizd00549pl.jpg">
         <img src="https://www.avbase.net/assets/not-a-work-image.jpg">
       </body></html>
@@ -77,6 +94,10 @@ void main() {
     expect(details.series, 'テストシリーズ');
     expect(details.performerCount, 1);
     expect(details.performers?.single.name, '石川澪');
+    expect(details.provenanceFacts.description, contains('実際の説明文'));
+    expect(details.provenanceFacts.tags, ['ベスト・総集編', 'ハイクオリティVR']);
+    expect(details.provenanceFacts.includedWorks, ['OLD-001', 'OLD-002']);
+    expect(details.provenanceFacts.containsPriorWorks, isTrue);
     expect(details.originalImageEvidenceUris, hasLength(1));
     expect(details.originalImageEvidenceUris.single.host, 'pics.dmm.co.jp');
   });
@@ -100,5 +121,42 @@ void main() {
     expect(result?.source, ScrapeSourceId.avbase);
     expect(result?.name, '石川澪');
     expect(result?.uri, talentUri);
+  });
+
+  test('parses the real 永野いち夏 corpus card shape without name rules', () {
+    final page = parser.parseActressPage(
+      '''
+      <html><body>
+        <h1>永野いち夏</h1>
+        <div class="bg-background border-light rounded-lg">
+          <a data-slot="button" href="/works/chijoheaven:CJOB-213">見つめて乳首をカリカリ！さすさす！こねこね！主観乳首責めで何度も射精ブッコぬかれる僕。</a>
+          <a href="/works/date/2026-08-21">2026/08/21</a>
+        </div>
+        <div class="bg-background border-light rounded-lg">
+          <a data-slot="button" href="/works/umanami:UMSO-643">折れそうなくらい華奢なスレンダーボディ美少女12人</a>
+          <a href="/works/date/2026-05-23">2026/05/23</a>
+        </div>
+        <div class="bg-background border-light rounded-lg">
+          <a data-slot="button" href="/works/chijoheaven:CJOB-196">スキルもテクニックも超SSS級！もう射精してるってばぁ！ド痴女の天才SEX 100本番BEST！8時間！</a>
+          <a href="/works/date/2026-01-23">2026/01/23</a>
+        </div>
+        <nav>
+          <a href="?q=&amp;page=1">1</a>
+          <a href="?q=&amp;page=6">6</a>
+        </nav>
+      </body></html>
+      ''',
+      pageUri: Uri.parse(
+        'https://www.avbase.net/talents/${Uri.encodeComponent('永野いち夏')}',
+      ),
+    );
+
+    expect(page.details.name, '永野いち夏');
+    expect(page.pageCount, 6);
+    expect(page.works.map((work) => work.code), [
+      'CJOB-213',
+      'UMSO-643',
+      'CJOB-196',
+    ]);
   });
 }

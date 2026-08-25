@@ -186,6 +186,9 @@ class ScrapeJobRepository {
     int? savedCount,
     int? excludedCount,
     int? failedCount,
+    int? reviewCount,
+    int? supplementalEvidenceCompletedCount,
+    int? supplementalEvidenceTotalCount,
     int? imageFailureCount,
     int? attemptCount,
     List<String>? retryTargetCodes,
@@ -208,6 +211,10 @@ class ScrapeJobRepository {
       'saved_count': ?savedCount,
       'excluded_count': ?excludedCount,
       'failed_count': ?failedCount,
+      'review_count': ?reviewCount,
+      'supplemental_evidence_completed_count':
+          ?supplementalEvidenceCompletedCount,
+      'supplemental_evidence_total_count': ?supplementalEvidenceTotalCount,
       'image_failure_count': ?imageFailureCount,
       'attempt_count': ?attemptCount,
       if (retryTargetCodes != null)

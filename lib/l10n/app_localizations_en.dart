@@ -1229,6 +1229,28 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String scrapeJobCandidateSummary(int count, int duplicates) {
+    return 'Candidates $count; collection duplicates $duplicates';
+  }
+
+  @override
+  String scrapeJobSupplementalEvidence(int current, int total) {
+    return 'Supplemental evidence $current/$total';
+  }
+
+  @override
+  String scrapeJobOutcomeSummary(
+    int processed,
+    int total,
+    int keep,
+    int review,
+    int excluded,
+    int failed,
+  ) {
+    return 'Processed $processed/$total; kept $keep; review $review; excluded $excluded; failed $failed';
+  }
+
+  @override
   String scrapeJobRulesVersion(String version) {
     return 'Rules version: $version';
   }

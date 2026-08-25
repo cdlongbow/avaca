@@ -278,6 +278,20 @@ class JavBusClient {
     return _parser.parseWorkPage(source, pageUri: uri);
   }
 
+  Future<JavBusWorkDetails> fetchWorkDetailsByCode(String code) {
+    final trimmed = code.trim();
+    if (trimmed.isEmpty) {
+      throw ArgumentError.value(code, 'code', 'Must not be empty.');
+    }
+    final uri = _baseUri.replace(
+      pathSegments: [
+        ..._baseUri.pathSegments.where((part) => part.isNotEmpty),
+        trimmed,
+      ],
+    );
+    return fetchWorkDetails(uri);
+  }
+
   Future<List<JavBusWorkSummary>> fetchAllActressWorks(
     Uri actressUri, {
     bool Function()? isCancelled,

@@ -187,6 +187,9 @@ class WorksScrapeProgress {
     this.duplicateCount = 0,
     this.detailCompleted = 0,
     this.detailTotal = 0,
+    this.supplementalEvidenceCompleted = 0,
+    this.supplementalEvidenceTotal = 0,
+    this.review = 0,
   });
 
   final WorksScrapePhase phase;
@@ -217,6 +220,11 @@ class WorksScrapeProgress {
   final int duplicateCount;
   final int detailCompleted;
   final int detailTotal;
+  final int supplementalEvidenceCompleted;
+  final int supplementalEvidenceTotal;
+  final int review;
+
+  int get confidentKeep => saved > review ? saved - review : 0;
 }
 
 class WorksScrapeResult {
@@ -225,6 +233,7 @@ class WorksScrapeResult {
     required this.excluded,
     required this.failed,
     required this.cancelled,
+    this.review = 0,
     this.actressImageStatus = ActressImageSyncStatus.notRequested,
     this.partialSuccess = false,
     this.sourceResults = const {},
@@ -238,6 +247,7 @@ class WorksScrapeResult {
   final int excluded;
   final int failed;
   final bool cancelled;
+  final int review;
   final ActressImageSyncStatus actressImageStatus;
   final bool partialSuccess;
   final Map<ScrapeSourceId, ScrapeSourceRunResult> sourceResults;
@@ -249,6 +259,8 @@ class WorksScrapeResult {
 
   /// Work sources whose results were merged into the aggregate counters.
   final List<ScrapeSourceId> worksSources;
+
+  int get confidentKeep => saved > review ? saved - review : 0;
 }
 
 class WorksScrapeException implements Exception {
@@ -296,6 +308,8 @@ class WorksScrapeService {
   int _detailCompleted = 0;
   int _detailTotal = 0;
   int _uniqueTotal = 0;
+  int _supplementalEvidenceCompleted = 0;
+  int _supplementalEvidenceTotal = 0;
 
   static Map<ScrapeSourceId, ScrapeSource> _singleJavBusSource(
     JavBusClient? client,
@@ -342,6 +356,8 @@ class WorksScrapeService {
     _detailCompleted = 0;
     _detailTotal = 0;
     _uniqueTotal = 0;
+    _supplementalEvidenceCompleted = 0;
+    _supplementalEvidenceTotal = 0;
     final name = actressName.trim();
     if (name.isEmpty) {
       throw const WorksScrapeException('Actress name is empty.');
@@ -636,17 +652,6 @@ class WorksScrapeService {
         .expand((pipeline) => pipeline.failedCandidates)
         .toList(growable: false);
     final resolvedGroups = _resolveAcrossSources(fetched, failedCandidates);
-    final postDetailDuplicates = resolvedGroups.fold<int>(
-      0,
-      (total, group) =>
-          total + (group.details.length > 1 ? group.details.length - 1 : 0),
-    );
-    if (postDetailDuplicates > 0) {
-      _duplicateCount += postDetailDuplicates;
-      _uniqueTotal = _uniqueTotal > postDetailDuplicates
-          ? _uniqueTotal - postDetailDuplicates
-          : 0;
-    }
     if (_isCancelled(cancellationToken)) {
       return WorksScrapeResult(
         saved: 0,
@@ -698,6 +703,7 @@ class WorksScrapeService {
       Set<WorkImageVariant> imageFailures = const <WorkImageVariant>{},
       String? reason,
       bool review = false,
+      Map<String, Object?> metadata = const <String, Object?>{},
     }) {
       final existing = outcomes[identityKey];
       if (existing == null) {
@@ -708,6 +714,7 @@ class WorksScrapeService {
           imageFailures: imageFailures,
           reason: reason,
           review: review,
+          metadata: metadata,
         );
         return;
       }
@@ -718,11 +725,19 @@ class WorksScrapeService {
         existing.failure = failure;
         existing.reason = reason;
         existing.review = review;
+        existing.metadata = metadata;
       }
     }
 
     int savedCount() => outcomes.values
         .where((outcome) => outcome.status == _CanonicalWorkStatus.saved)
+        .length;
+
+    int reviewCount() => outcomes.values
+        .where(
+          (outcome) =>
+              outcome.status == _CanonicalWorkStatus.saved && outcome.review,
+        )
         .length;
 
     int excludedCount() => outcomes.values
@@ -740,6 +755,7 @@ class WorksScrapeService {
       savedCount(),
       excludedCount(),
       failedCount(),
+      review: reviewCount(),
       phase: WorksScrapePhase.savingWorks,
       totalKnown: true,
     );
@@ -774,6 +790,7 @@ class WorksScrapeService {
         savedCount(),
         excludedCount(),
         failedCount(),
+        review: reviewCount(),
         phase: WorksScrapePhase.savingWorks,
         source: resolved.sourceId,
         totalKnown: true,
@@ -816,12 +833,32 @@ class WorksScrapeService {
           code: code,
           details: resolved.details,
         );
+        final decisionMetadata = <String, Object?>{
+          'canonicalCode': code,
+          'finalVerdict': decision.verdict.name,
+          'provenanceClass': decision.provenanceClass.name,
+          'evidenceLevel': decision.evidenceLevel.name,
+          'reasonCodes': decision.reasonCodes,
+          'evidenceRuleIds': decision.evidence
+              .map((item) => item.ruleId)
+              .toSet()
+              .toList(),
+          'evidenceSources': resolved.details
+              .map((item) => item.source.storageValue)
+              .toSet()
+              .toList(),
+          'primarySource': selectedDetails.source.storageValue,
+          'secondaryEscalated': resolved.details.length > 1,
+          if (resolved.details.length > 1)
+            'escalationReason': 'primary_uncertain',
+        };
         if (decision.finalAction == ScrapeFinalAction.exclude) {
           recordOutcome(
             identityKey: resolved.identityKey,
             code: code,
             status: _CanonicalWorkStatus.excluded,
             reason: decision.reason,
+            metadata: decisionMetadata,
           );
         } else {
           try {
@@ -838,6 +875,7 @@ class WorksScrapeService {
                   savedCount(),
                   excludedCount(),
                   failedCount(),
+                  review: reviewCount(),
                   phase: WorksScrapePhase.downloadingImages,
                   source: resolved.sourceId,
                   workCode: imageCode,
@@ -853,6 +891,7 @@ class WorksScrapeService {
               imageFailures: savedWork.failedVariants,
               reason: decision.reason,
               review: decision.reviewRequired,
+              metadata: decisionMetadata,
             );
           } on _ScrapeCancelled {
             break;
@@ -884,6 +923,7 @@ class WorksScrapeService {
           reason: recordedOutcome.reason,
           imageFailures: recordedOutcome.imageFailures,
           review: recordedOutcome.review,
+          metadata: recordedOutcome.metadata,
         );
       }
       _notify(
@@ -893,6 +933,7 @@ class WorksScrapeService {
         savedCount(),
         excludedCount(),
         failedCount(),
+        review: reviewCount(),
         phase: WorksScrapePhase.savingWorks,
         source: resolved.sourceId,
         totalKnown: true,
@@ -903,6 +944,7 @@ class WorksScrapeService {
     }
 
     final saved = savedCount();
+    final review = reviewCount();
     final excluded = excludedCount();
     final failed = failedCount();
     final failedWorks = outcomes.values
@@ -938,6 +980,7 @@ class WorksScrapeService {
         saved,
         excluded,
         failed,
+        review: review,
         phase: WorksScrapePhase.completed,
         totalKnown: true,
       );
@@ -947,6 +990,7 @@ class WorksScrapeService {
       excluded: excluded,
       failed: failed,
       cancelled: cancelled,
+      review: review,
       actressImageStatus: actressImageStatus,
       partialSuccess: partial,
       sourceResults: Map.unmodifiable(sourceResults),
@@ -1346,6 +1390,35 @@ class WorksScrapeService {
       var stageGroups = unresolved;
 
       if (sourceIndex > firstStageIndex) {
+        final source = sources[sourceId];
+        final directLookup = source is ScrapeSourceWorkCodeLookup
+            ? source as ScrapeSourceWorkCodeLookup
+            : null;
+        if (source != null && directLookup != null) {
+          _supplementalEvidenceTotal += unresolved.length;
+          final directStage = await _runDirectSecondaryEvidence(
+            source: source,
+            lookup: directLookup,
+            groups: unresolved,
+            cancellationToken: cancellationToken,
+            onProgress: onProgress,
+          );
+          pipelineResults.add(directStage);
+          fetched.addAll(directStage.fetched);
+          failedCandidates.addAll(directStage.failedCandidates);
+          final nextUnresolved = <_GlobalWorkGroup>[];
+          for (final group in unresolved) {
+            final groupDetails = fetched
+                .where((item) => item.identityKey == group.identityKey)
+                .map((item) => item.details)
+                .toList(growable: false);
+            if (needsSecondaryEvidence(group, groupDetails)) {
+              nextUnresolved.add(group);
+            }
+          }
+          unresolved = nextUnresolved;
+          continue;
+        }
         final outcome = await ensureCollection(sourceId);
         if (!attemptedSourceIds.contains(sourceId)) {
           attemptedSourceIds.add(sourceId);
@@ -1381,7 +1454,7 @@ class WorksScrapeService {
       }
 
       if (sourceIndex > firstStageIndex) {
-        _detailTotal += stageGroups.length;
+        _supplementalEvidenceTotal += stageGroups.length;
       }
 
       final stageResult = await _runGlobalDetailPipelines(
@@ -1392,6 +1465,7 @@ class WorksScrapeService {
         },
         groups: stageGroups,
         cancellationToken: cancellationToken,
+        supplementalEvidence: sourceIndex > firstStageIndex,
         onProgress: onProgress,
       );
       pipelineResults.addAll(stageResult);
@@ -1435,6 +1509,119 @@ class WorksScrapeService {
     return List.unmodifiable(pipelineResults);
   }
 
+  Future<_SourcePipelineOutcome> _runDirectSecondaryEvidence({
+    required ScrapeSource source,
+    required ScrapeSourceWorkCodeLookup lookup,
+    required List<_GlobalWorkGroup> groups,
+    required WorksScrapeCancellationToken? cancellationToken,
+    void Function(WorksScrapeProgress progress)? onProgress,
+  }) async {
+    final scheduler = _SourceDetailScheduler(
+      delay:
+          source.id == ScrapeSourceId.javbus ||
+              source.id == ScrapeSourceId.avbase
+          ? javBusDetailDelay
+          : Duration.zero,
+    );
+    final fetched = <_FetchedWorkDetail>[];
+    final sourceCurrent = <ScrapeSourceId, int>{};
+
+    Future<void> lookupGroup(_GlobalWorkGroup group) async {
+      if (_isCancelled(cancellationToken)) return;
+      final primaryCandidate = group.candidates.first;
+      final code = group.storageCode.isEmpty
+          ? (primaryCandidate.summary.code ?? '').trim()
+          : group.storageCode;
+      if (code.isEmpty) return;
+      _observer?.onWorkAttemptStarted(code: code, source: source.id);
+      try {
+        final details = await scheduler.add(
+          () => lookup.fetchWorkDetailsByCode(code),
+        );
+        if (details == null) return;
+        final detailIdentity = parseScrapeWorkCodeIdentity(details.code);
+        if (detailIdentity == null ||
+            (group.identityCodeKey != null &&
+                detailIdentity.key != group.identityCodeKey)) {
+          _observer?.onError(
+            stage: WorksScrapePhase.fetchingDetails.name,
+            code: code,
+            error: 'Supplemental detail code does not match the selected work.',
+          );
+          return;
+        }
+        final summary = ScrapeWorkSummary(
+          source: source.id,
+          code: code,
+          rawCode: code,
+          title: primaryCandidate.summary.title,
+          detailUri: Uri(path: '/works/$code'),
+          releaseDate: primaryCandidate.summary.releaseDate,
+        );
+        final evidenced = details.copyWith(sourceUri: summary.detailUri);
+        fetched.add(
+          _FetchedWorkDetail(
+            candidate: _WorkCandidate(source: source, summary: summary),
+            identityKey: group.identityKey,
+            sourceId: source.id,
+            details: _withScrapeCode(
+              evidenced,
+              group.storageCode.isEmpty ? code : group.storageCode,
+              fallbackTitle: primaryCandidate.summary.title,
+              fallbackReleaseDate: primaryCandidate.summary.releaseDate,
+            ),
+          ),
+        );
+        _observer?.onWorkCompleted(
+          code: group.storageCode.isEmpty ? code : group.storageCode,
+          source: source.id,
+          state: 'details_ready',
+        );
+      } on Object catch (error) {
+        _observer?.onError(
+          stage: WorksScrapePhase.fetchingDetails.name,
+          code: code,
+          error: error,
+        );
+      } finally {
+        if (!_isCancelled(cancellationToken)) {
+          _supplementalEvidenceCompleted++;
+          final current = sourceCurrent.update(
+            source.id,
+            (value) => value + 1,
+            ifAbsent: () => 1,
+          );
+          _notify(
+            onProgress,
+            _detailCompleted,
+            _detailTotal,
+            0,
+            0,
+            0,
+            phase: WorksScrapePhase.fetchingDetails,
+            source: source.id,
+            workCode: code,
+            totalKnown: true,
+            sourceCurrent: current,
+            sourceTotal: groups.length,
+            sourceTotalKnown: true,
+          );
+        }
+      }
+    }
+
+    await Future.wait(groups.map(lookupGroup));
+    return _SourcePipelineOutcome(
+      sourceId: source.id,
+      result: ScrapeSourceRunResult(
+        source: source.id,
+        state: ScrapeSourceRunState.success,
+        discovered: groups.length,
+      ),
+      fetched: List.unmodifiable(fetched),
+    );
+  }
+
   String _summaryIdentityKey(
     ScrapeSourceId sourceId,
     ScrapeWorkSummary summary,
@@ -1452,6 +1639,7 @@ class WorksScrapeService {
     required Map<ScrapeSourceId, _CollectedSource> collectedById,
     required List<_GlobalWorkGroup> groups,
     required WorksScrapeCancellationToken? cancellationToken,
+    bool supplementalEvidence = false,
     void Function(WorksScrapeProgress progress)? onProgress,
   }) async {
     final schedulers = <ScrapeSourceId, _SourceDetailScheduler>{
@@ -1573,7 +1761,11 @@ class WorksScrapeService {
       if (fetched != null) {
         fetchedBySource.putIfAbsent(outcomeSource, () => []).add(fetched);
       }
-      _detailCompleted++;
+      if (supplementalEvidence) {
+        _supplementalEvidenceCompleted++;
+      } else {
+        _detailCompleted++;
+      }
       final sourceCurrent = sourceCompleted.update(
         group.candidates.first.source.id,
         (value) => value + 1,
@@ -2162,6 +2354,7 @@ class WorksScrapeService {
     int saved,
     int excluded,
     int failed, {
+    int review = 0,
     WorksScrapePhase phase = WorksScrapePhase.savingWorks,
     ScrapeSourceId? source,
     String? workCode,
@@ -2209,6 +2402,7 @@ class WorksScrapeService {
       saved: saved,
       excluded: excluded,
       failed: failed,
+      review: review,
       totalKnown: totalKnown || (!isCollection && _uniqueTotal > 0),
       source: source,
       workCode: workCode,
@@ -2219,6 +2413,8 @@ class WorksScrapeService {
       duplicateCount: _duplicateCount,
       detailCompleted: _detailCompleted,
       detailTotal: _detailTotal,
+      supplementalEvidenceCompleted: _supplementalEvidenceCompleted,
+      supplementalEvidenceTotal: _supplementalEvidenceTotal,
     );
     callback?.call(progress);
     _observer?.onProgress(progress);
@@ -2233,6 +2429,7 @@ class WorksScrapeService {
     Set<WorkImageVariant> imageFailures = const <WorkImageVariant>{},
     bool cancelled = false,
     bool review = false,
+    Map<String, Object?> metadata = const <String, Object?>{},
   }) {
     _observer?.onWorkOutcome(
       code: code,
@@ -2249,6 +2446,7 @@ class WorksScrapeService {
       error: failure?.error,
       reason: reason ?? failure?.reason.name,
       imageFailureVariants: imageFailures.map((variant) => variant.name),
+      metadata: metadata,
     );
   }
 }
@@ -2385,13 +2583,16 @@ final class _CanonicalWorkOutcome {
     Set<WorkImageVariant> imageFailures = const <WorkImageVariant>{},
     this.reason,
     this.review = false,
-  }) : imageFailures = {...imageFailures};
+    Map<String, Object?> metadata = const <String, Object?>{},
+  }) : imageFailures = {...imageFailures},
+       metadata = Map.unmodifiable(metadata);
 
   final String code;
   _CanonicalWorkStatus status;
   WorksScrapeFailure? failure;
   String? reason;
   bool review;
+  Map<String, Object?> metadata;
   final Set<WorkImageVariant> imageFailures;
 }
 

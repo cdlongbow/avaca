@@ -34,6 +34,13 @@ abstract interface class ScrapeSource {
   void close();
 }
 
+/// Optional capability for conditional provenance escalation.  A source that
+/// implements this interface can answer one exact canonical work code without
+/// collecting the actress catalog again.
+abstract interface class ScrapeSourceWorkCodeLookup {
+  Future<ScrapeWorkDetails?> fetchWorkDetailsByCode(String canonicalCode);
+}
+
 /// Optional source-owned diagnostics for partial pagination or access
 /// problems. Sources that do not need this remain compatible with the base
 /// interface.

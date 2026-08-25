@@ -4,6 +4,7 @@ import 'package:html/parser.dart' as html;
 import '../../models/scraped_actress_details.dart';
 import '../../models/work.dart';
 import '../scrape/scrape_models.dart';
+import '../scrape/provenance_semantics.dart';
 import 'javbus_models.dart';
 import 'work_code.dart';
 
@@ -62,6 +63,7 @@ class JavBusHtmlParser {
         .trim();
 
     final performers = _actressPerformers(document, pageUri);
+    final genres = _genreValues(document);
     return JavBusWorkDetails(
       code: code,
       rawCode: rawCode,
@@ -72,7 +74,7 @@ class JavBusHtmlParser {
       publisher: _field(fields, const ['發行商', '发行商', 'レーベル']),
       series: _field(fields, const ['系列', 'シリーズ']),
       performers: performers,
-      provenanceFacts: _provenanceFacts(document, fields, rawTitle),
+      provenanceFacts: _provenanceFacts(document, fields, rawTitle, genres),
       actressUris: _actressUris(document, pageUri),
       originalImageEvidenceUris: _originalImageEvidenceUris(
         document,
@@ -86,6 +88,7 @@ class JavBusHtmlParser {
     Document document,
     Map<String, String> fields,
     String title,
+    List<String> genres,
   ) {
     final description = _clean(
       document
@@ -105,7 +108,6 @@ class JavBusHtmlParser {
       '収録元',
       '原作品',
     ]);
-    final genres = _fieldValues(fields, const ['ジャンル', '類別', '類型']);
     final text = [
       title,
       description ?? '',
@@ -116,7 +118,7 @@ class JavBusHtmlParser {
         includedWorks.isNotEmpty ||
         parentWorks.isNotEmpty ||
         RegExp(
-          r'収録作品|収録タイトル|過去作品|既存作品|再収録|全\s*\d+\s*(?:作品|タイトル)|\d+\s*タイトル全部入り',
+          r'過去作品|既存作品|再収録|全\s*\d+\s*(?:作品|タイトル)|\d+\s*タイトル全部入り',
           caseSensitive: false,
         ).hasMatch(text);
     final isSplit = RegExp(
@@ -132,8 +134,7 @@ class JavBusHtmlParser {
       caseSensitive: false,
     ).hasMatch(text);
     final isOldWithBonus =
-        RegExp(r'未公開|bonus', caseSensitive: false).hasMatch(text) &&
-        RegExp(r'過去|既存|再収録|収録|old', caseSensitive: false).hasMatch(text);
+        ScrapeProvenanceSemantics.containsOldMaterialWithNewBonus(text);
     final shared = RegExp(
       r'共演|同時出演|同じ.*作品|同一.*作品|ストーリー|コラボ',
       caseSensitive: false,
@@ -146,6 +147,7 @@ class JavBusHtmlParser {
       includedWorks: includedWorks,
       parentWorks: parentWorks,
       genres: genres,
+      tags: genres,
       description: description,
       containsPriorWorks: hasPriorMarker ? true : null,
       extractedFromPriorWork: isExtract ? true : null,
@@ -162,7 +164,7 @@ class JavBusHtmlParser {
           ? true
           : null,
       explicitOriginalProduction:
-          RegExp(r'新撮|撮り下ろし|新作', caseSensitive: false).hasMatch(text)
+          ScrapeProvenanceSemantics.containsReliableOriginal(text)
           ? true
           : null,
       coPerformance: independent
@@ -178,6 +180,18 @@ class JavBusHtmlParser {
     for (final label in labels) {
       final value = _clean(fields[label]);
       if (value != null && !values.contains(value)) values.add(value);
+    }
+    return List.unmodifiable(values);
+  }
+
+  List<String> _genreValues(Document document) {
+    final values = <String>[];
+    final seen = <String>{};
+    for (final anchor in document.querySelectorAll(
+      '.info p a[href*="/genre/"]',
+    )) {
+      final value = _clean(anchor.text);
+      if (value != null && seen.add(value)) values.add(value);
     }
     return List.unmodifiable(values);
   }

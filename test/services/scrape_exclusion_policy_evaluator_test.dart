@@ -85,7 +85,7 @@ void main() {
   test('keeps explicit original work and excludes prior-work collections', () {
     final original = _evaluator().evaluate(
       code: 'MOON-001',
-      details: [_details('MOON-001', '完全ノーカット新作')],
+      details: [_details('MOON-001', '完全ノーカット撮り下ろし')],
     );
     final prior = _evaluator().evaluate(
       code: 'MOON-002',
@@ -128,12 +128,77 @@ void main() {
   test('uses review when source surfaces conflict', () {
     final decision = _evaluator().evaluate(
       code: 'MIX-002',
-      details: [_details('MIX-002', '総集編'), _details('MIX-002', '完全ノーカット新作')],
+      details: [
+        _details('MIX-002', '総集編'),
+        _details('MIX-002', '完全ノーカット撮り下ろし'),
+      ],
     );
 
     expect(decision.finalAction, ScrapeFinalAction.keepReview);
     expect(decision.hasConflict, isTrue);
     expect(decision.reasonCodes, ['source_evidence_conflict']);
+  });
+
+  test(
+    'requires high-confidence context around BEST and safe title tokens',
+    () {
+      for (final title in const [
+        'BEST',
+        'ベスト',
+        '完全版',
+        'マルチアングル',
+        '4K COLLECTION',
+        '新作',
+      ]) {
+        final decision = _evaluator().evaluate(
+          code: 'SAFE-${title.hashCode}',
+          details: [_details('SAFE-${title.hashCode}', title)],
+        );
+        expect(
+          decision.finalAction,
+          isNot(ScrapeFinalAction.exclude),
+          reason: title,
+        );
+      }
+
+      for (final title in const [
+        '100本番BEST！8時間！',
+        '制服限定BEST30 43時間',
+        'BEST11人',
+        'AIKA BEST',
+        'BEST COLLECTION',
+      ]) {
+        final decision = _evaluator().evaluate(
+          code: 'DERIVED-${title.hashCode}',
+          details: [_details('DERIVED-${title.hashCode}', title)],
+        );
+        expect(decision.finalAction, ScrapeFinalAction.exclude, reason: title);
+      }
+    },
+  );
+
+  test('excludes mixed old material with a new bonus but not new作 alone', () {
+    final mixed = _evaluator().evaluate(
+      code: 'MIXED-001',
+      details: [_details('MIXED-001', '過去作品収録・新作映像収録')],
+    );
+    final newOnly = _evaluator().evaluate(
+      code: 'NEW-001',
+      details: [_details('NEW-001', '新作映像')],
+    );
+    final newBonusWithoutReuse = _evaluator().evaluate(
+      code: 'NEW-002',
+      details: [_details('NEW-002', '新作映像収録')],
+    );
+    final bestWithBonus = _evaluator().evaluate(
+      code: 'MIXED-002',
+      details: [_details('MIXED-002', 'BEST・未公開新作映像')],
+    );
+
+    expect(mixed.finalAction, ScrapeFinalAction.exclude);
+    expect(newOnly.finalAction, ScrapeFinalAction.keepReview);
+    expect(newBonusWithoutReuse.finalAction, ScrapeFinalAction.keepReview);
+    expect(bestWithBonus.finalAction, ScrapeFinalAction.exclude);
   });
 
   test('a former prefix never excludes an otherwise unknown work', () {

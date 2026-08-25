@@ -1,6 +1,7 @@
 import '../models/scrape_exclusion_policy.dart';
 import '../models/scrape_source_settings.dart';
 import 'scrape/scrape_models.dart';
+import 'scrape/provenance_semantics.dart';
 
 class ScrapeEvidenceAtom {
   const ScrapeEvidenceAtom({
@@ -486,38 +487,35 @@ class ScrapeExclusionPolicyEvaluator {
       );
     }
 
-    final compilation = RegExp(
-      r'総集編|総集篇|総集成|オムニバス|アンソロジー|作品集|選集|傑作選|名場面',
-      caseSensitive: false,
-    ).firstMatch(text);
+    final compilation = ScrapeProvenanceSemantics.explicitCompilationLabel(
+      text,
+    );
     if (compilation != null) {
       strong(
-        kind: compilation.group(0)!.contains('オムニバス')
+        kind: compilation.contains('オムニバス')
             ? ScrapeEvidenceKind.omnibus
             : ScrapeEvidenceKind.explicitCompilation,
         polarity: ScrapeEvidencePolarity.supportsCompilation,
         ruleId: 'semantic_compilation_label',
-        observedText: compilation.group(0)!,
+        observedText: compilation,
         field: 'title_or_metadata',
       );
     }
 
-    final priorMarker = RegExp(
-      r'全\s*\d+\s*(?:作品|タイトル)|全出演作品|全作品|出演作品|\d+\s*タイトル全部入り|\d+\s*本収録|過去作品|既存作品|収録作品|収録タイトル|厳選収録|best\s*(?:of|collection)|ベスト.*(?:作品|タイトル|収録)|(?:作品|タイトル).*ベスト',
-      caseSensitive: false,
-    ).firstMatch(text);
-    final bestMarker = RegExp(
-      r'best|ベスト|コンプリート|complete',
-      caseSensitive: false,
-    ).firstMatch(text);
-    if (priorMarker != null && bestMarker != null) {
+    final reuseProposition = ScrapeProvenanceSemantics.strongReuseProposition([
+      text,
+      ...facts.tags,
+    ]);
+    if (reuseProposition != null) {
       strong(
-        kind: bestMarker.group(0)!.toLowerCase().contains('complete')
+        kind:
+            reuseProposition.toLowerCase().contains('complete') ||
+                reuseProposition.contains('コンプリート')
             ? ScrapeEvidenceKind.completePriorWorks
             : ScrapeEvidenceKind.bestOfPriorWorks,
         polarity: ScrapeEvidencePolarity.supportsCompilation,
         ruleId: 'semantic_prior_work_collection',
-        observedText: '${priorMarker.group(0)} ${bestMarker.group(0)}',
+        observedText: reuseProposition,
         field: 'title_or_metadata',
       );
     }
@@ -543,9 +541,9 @@ class ScrapeExclusionPolicyEvaluator {
       );
     }
 
-    final oldBonus =
-        RegExp(r'未公開|bonus', caseSensitive: false).hasMatch(text) &&
-        RegExp(r'過去|既存|収録|再収録|old', caseSensitive: false).hasMatch(text);
+    final oldBonus = ScrapeProvenanceSemantics.containsOldMaterialWithNewBonus(
+      text,
+    );
     if (oldBonus) {
       strong(
         kind: ScrapeEvidenceKind.mixedOldNew,
@@ -564,10 +562,12 @@ class ScrapeExclusionPolicyEvaluator {
         observedText: 'source says this is a new production',
       );
     }
-    final original = RegExp(
-      r'新撮|撮り下ろし|新作',
-      caseSensitive: false,
-    ).firstMatch(text);
+    final original = ScrapeProvenanceSemantics.containsReliableOriginal(text)
+        ? RegExp(
+            r'全編\s*(?:新撮|撮り下ろし)|完全\s*(?:新撮|撮り下ろし)|新撮|撮り下ろし',
+            caseSensitive: false,
+          ).firstMatch(ScrapeProvenanceSemantics.normalize(text))
+        : null;
     if (original != null) {
       strong(
         kind: ScrapeEvidenceKind.explicitOriginalWork,

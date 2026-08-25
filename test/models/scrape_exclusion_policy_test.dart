@@ -88,4 +88,21 @@ void main() {
     expect(recovered.exactAllows.single.normalizedCode, 'FALLBACK-001');
     expect(recovered.snapshotDigest, isNot(snapshot.snapshotDigest));
   });
+
+  test('pre-semantic classifier snapshots are not reused', () {
+    final snapshot = ScrapePolicySnapshot.current(
+      rules: ScrapeRules.builtin,
+      exactAllows: const [ScrapeExactAllowRule(code: 'OLD-002')],
+    );
+    final payload = jsonDecode(snapshot.encode()) as Map<String, dynamic>;
+    payload['classifierVersion'] = 'provenance-1';
+
+    final recovered = ScrapePolicySnapshot.fromEncoded(
+      encoded: jsonEncode(payload),
+      exactAllows: const [ScrapeExactAllowRule(code: 'FALLBACK-002')],
+    );
+
+    expect(recovered.exactAllows.single.normalizedCode, 'FALLBACK-002');
+    expect(recovered.snapshotDigest, isNot(snapshot.snapshotDigest));
+  });
 }
