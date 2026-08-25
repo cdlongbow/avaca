@@ -14,13 +14,18 @@ final class ScrapeProvenanceSemantics {
     caseSensitive: false,
   );
 
+  static final RegExp _bonusScopedNewMaterialPattern = RegExp(
+    r'(?:全編|完全)\s*(?:ノーカット\s*)?(?:新撮|撮り下ろし)(?:\s*(?:新作|作品|映像))?\s*(?:特典|ボーナス|bonus)(?:\s*(?:映像|作品|カット|footage|video))?|(?:特典|ボーナス)(?:\s*(?:映像|作品|カット))?[^\n。！？]{0,16}(?:全編|完全)\s*(?:ノーカット\s*)?(?:新撮|撮り下ろし)',
+    caseSensitive: false,
+  );
+
   static final RegExp _bonusOnlyNewMaterialPattern = RegExp(
     r'未公開|新作(?:映像|カット|特典)|撮り下ろし(?:\s*(?:特典|ボーナス|映像|カット))?|新撮(?:\s*(?:特典|ボーナス|映像|カット))?|bonus',
     caseSensitive: false,
   );
 
   static final RegExp _bestWithBonusPattern = RegExp(
-    r'(?:best(?!\s*(?:friend|partner|condition)\b)(?![a-z0-9])|ベスト(?![\s・･]*(?:フレンド|パートナー|コンディション)))[\s・･:：+＋,，、-]{0,8}(?:未公開|新作(?:映像|カット|特典)?|撮り下ろし|新撮|bonus)|(?:未公開|新作(?:映像|カット|特典)?|撮り下ろし|新撮|bonus)[^\n]{0,12}(?:best(?!\s*(?:friend|partner|condition)\b)(?![a-z0-9])|ベスト(?![\s・･]*(?:フレンド|パートナー|コンディション)))',
+    r'(?:best(?!\s*(?:friend|partner|condition)\b)(?![a-z0-9])|ベスト(?![\s・･]*(?:フレンド|パートナー|コンディション)))[\s・･:：+＋,，、-]{0,8}(?:全編|完全|ノーカット)?\s*(?:未公開|新作(?:映像|カット|特典)?|撮り下ろし|新撮|bonus)|(?:未公開|新作(?:映像|カット|特典)?|撮り下ろし|新撮|bonus)[^\n]{0,12}(?:best(?!\s*(?:friend|partner|condition)\b)(?![a-z0-9])|ベスト(?![\s・･]*(?:フレンド|パートナー|コンディション)))',
     caseSensitive: false,
   );
 
@@ -35,7 +40,12 @@ final class ScrapeProvenanceSemantics {
   );
 
   static final RegExp _explicitPriorWorkStatementPattern = RegExp(
-    r'(?:過去|既存|旧)(?:の)?作(?:品)?\s*(?:\d+\s*(?:本|作品|タイトル))?\s*(?:を|が)?\s*(?:再\s*)?(?:厳選|まとめて|すべて|全て)?\s*(?:収録|収録する|収録済み)|(?:old|previous)\s+(?:works?|titles?)\s+(?:included|collected|reissued|re-released)',
+    r'(?:過去|既存|旧)(?:の)?作(?:品)?\s*(?:\d+\s*(?:本|作品|タイトル))?\s*(?:を|が)?\s*(?:再\s*)?(?:(?:完全|厳選|まとめて|すべて|全て)(?:\s*して)?\s*)*(?:収録|収録する|収録済み)|(?:old|previous)\s+(?:works?|titles?)\s+(?:included|collected|reissued|re-released)',
+    caseSensitive: false,
+  );
+
+  static final RegExp _targetBestSuffixPattern = RegExp(
+    r'^\s*(?:\d+\s*(?:時間|分|hours?|minutes?|h|min)\s*)?(?:best(?!\s*(?:friend|partner|condition)\b)(?![a-z0-9])|ベスト(?![\s・･]*(?:フレンド|パートナー|コンディション))(?![ぁ-んァ-ン一-龯a-z0-9]))',
     caseSensitive: false,
   );
 
@@ -113,7 +123,7 @@ final class ScrapeProvenanceSemantics {
       ),
       (
         pattern: RegExp(
-          r'全\s*\d+\s*(?:作品|タイトル|作)|全\s*\d+\s*本(?=\s*(?:収録|全部入り))|全出演作品|全作品|出演作品(?:全部|すべて|全て)|\d+\s*(?:タイトル|作品|本)\s*(?:を\s*)?(?:完全\s*)?(?:全部入り|収録)',
+          r'全\s*\d+\s*(?:作品|タイトル|作)(?=$|[\s!！・:：,，、\-+＋/／()（）【】「」『』。．.,]|(?:を|が|は)?\s*(?:収録|完全収録|全部入り|厳選|セット|best|ベスト))|全\s*\d+\s*本(?=\s*(?:収録|全部入り))|全出演作品|全作品|出演作品(?:全部|すべて|全て)|\d+\s*(?:タイトル|作品|本)\s*(?:を\s*)?(?:完全\s*)?(?:全部入り|収録)',
           caseSensitive: false,
         ),
         ruleId: 'semantic_work_count_collection',
@@ -147,19 +157,41 @@ final class ScrapeProvenanceSemantics {
     for (final name in normalizedTargetNames) {
       final normalizedName = normalize(name);
       if (normalizedName.isEmpty) continue;
-      final escaped = RegExp.escape(normalizedName);
-      final match = RegExp(
-        '$escaped\\s*(?:\\d+\\s*(?:時間|分|hours?|minutes?|h|min)\\s*)?(?:best(?!\\s*(?:friend|partner|condition)\\b)(?![a-z0-9])|ベスト(?![\\s・･]*(?:フレンド|パートナー|コンディション))(?![ぁ-んァ-ン一-龯a-z0-9]))',
-        caseSensitive: false,
-      ).firstMatch(text);
-      if (match != null) {
-        return ScrapeSemanticProposition(
-          ruleId: 'semantic_target_actress_best',
-          observedText: match.group(0)!,
-        );
+      var searchStart = 0;
+      while (searchStart < text.length) {
+        final nameIndex = text.indexOf(normalizedName, searchStart);
+        if (nameIndex < 0) break;
+        final nameEnd = nameIndex + normalizedName.length;
+        final before = nameIndex == 0
+            ? null
+            : text.substring(0, nameIndex).runes.last;
+        final suffix = text.substring(nameEnd);
+        final after = suffix.isEmpty ? null : suffix.runes.first;
+        if (!_isNameAdjacentRune(before) && !_isNameAdjacentRune(after)) {
+          final match = _targetBestSuffixPattern.firstMatch(suffix);
+          if (match != null) {
+            return ScrapeSemanticProposition(
+              ruleId: 'semantic_target_actress_best',
+              observedText: text.substring(nameIndex, nameEnd + match.end),
+            );
+          }
+        }
+        searchStart = nameEnd;
       }
     }
     return null;
+  }
+
+  static bool _isNameAdjacentRune(int? rune) {
+    if (rune == null) return false;
+    return rune >= 0x30 && rune <= 0x39 ||
+        rune >= 0x41 && rune <= 0x5A ||
+        rune >= 0x61 && rune <= 0x7A ||
+        rune >= 0x3040 && rune <= 0x30FF ||
+        rune >= 0x3400 && rune <= 0x4DBF ||
+        rune >= 0x4E00 && rune <= 0x9FFF ||
+        rune >= 0xF900 && rune <= 0xFAFF ||
+        rune >= 0xFF66 && rune <= 0xFF9D;
   }
 
   static bool containsReliableOriginal(String value) {
@@ -168,6 +200,9 @@ final class ScrapeProvenanceSemantics {
 
   static ScrapeNewMaterialScope newMaterialScope(String value) {
     final text = normalize(value);
+    if (_bonusScopedNewMaterialPattern.hasMatch(text)) {
+      return ScrapeNewMaterialScope.bonusOnly;
+    }
     if (_wholeProductionPattern.hasMatch(text)) {
       return ScrapeNewMaterialScope.wholeProduction;
     }

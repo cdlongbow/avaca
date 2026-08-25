@@ -202,7 +202,7 @@ void main() {
         details: const ScrapeWorkDetails(
           source: ScrapeSourceId.javbus,
           code: 'BONUS-001',
-          title: '撮り下ろし特典映像付き',
+          title: '完全撮り下ろし特典映像',
         ),
       );
       final secondary = _EscalationSource(
@@ -284,7 +284,7 @@ void main() {
       details: const ScrapeWorkDetails(
         source: ScrapeSourceId.javbus,
         code: 'MIXED-001',
-        title: 'BEST11人・撮り下ろし特典映像付き',
+        title: 'BEST11人・完全撮り下ろし特典',
       ),
     );
     final secondary = _EscalationSource(

@@ -539,6 +539,16 @@ class ScrapeExclusionPolicyEvaluator {
         field: 'title_or_metadata',
       );
     }
+    if (reuseProposition == null &&
+        ScrapeProvenanceSemantics.containsExplicitPriorWorkStatement(text)) {
+      strong(
+        kind: ScrapeEvidenceKind.completePriorWorks,
+        polarity: ScrapeEvidencePolarity.supportsCompilation,
+        ruleId: 'semantic_explicit_prior_work_statement',
+        observedText: 'explicit prior-work collection statement',
+        field: 'title_or_metadata',
+      );
+    }
 
     final targetActressBest = classificationContext == null
         ? null

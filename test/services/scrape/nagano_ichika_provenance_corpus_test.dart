@@ -206,4 +206,14 @@ const _naganoIchikaCorpus = <_NaganoCorpusFixture>[
     title: 'BEST11人・撮り下ろし特典映像付き',
     expectedAction: ScrapeFinalAction.exclude,
   ),
+  _NaganoCorpusFixture(
+    code: 'CJOB-215',
+    title: 'BEST11人・完全撮り下ろし特典映像付き',
+    expectedAction: ScrapeFinalAction.exclude,
+  ),
+  _NaganoCorpusFixture(
+    code: 'CJOB-216',
+    title: '永野いち夏 BEST FRIEND',
+    expectedAction: ScrapeFinalAction.keepReview,
+  ),
 ];

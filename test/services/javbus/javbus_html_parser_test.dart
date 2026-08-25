@@ -126,6 +126,38 @@ void main() {
         reason: title,
       );
     }
+    for (final title in const [
+      '完全撮り下ろし特典映像',
+      '特典映像は全編撮り下ろし',
+      '完全新撮ボーナス映像',
+      '全編撮り下ろし特典',
+    ]) {
+      expect(
+        parse(title).provenanceFacts.explicitOriginalProduction,
+        isNull,
+        reason: title,
+      );
+    }
+    for (final title in const ['全編新撮の大型共演', '完全撮り下ろし作品', '全編撮り下ろし新作']) {
+      expect(
+        parse(title).provenanceFacts.explicitOriginalProduction,
+        isTrue,
+        reason: title,
+      );
+    }
+    for (final title in const [
+      '旧作を完全収録',
+      '過去作を完全収録',
+      '既存作品を完全収録',
+      '旧作品を厳選完全収録',
+      '過去作品を厳選して収録',
+    ]) {
+      expect(
+        parse(title).provenanceFacts.containsPriorWorks,
+        isTrue,
+        reason: title,
+      );
+    }
 
     for (final title in const ['個別', '各', '各作品', 'それぞれ', '分割', 'split']) {
       final facts = parse(title).provenanceFacts;

@@ -234,6 +234,11 @@ void main() {
       '名場面集',
       'BEST・未公開新作映像収録',
       'BEST・撮り下ろし特典映像付き',
+      'BEST11人・完全撮り下ろし特典映像付き',
+      'BEST・完全撮り下ろし特典映像',
+      '総集編・特典映像は全編撮り下ろし',
+      '過去作品収録＋完全新撮ボーナス映像',
+      'COMPLETE BEST＋全編撮り下ろし特典',
       '総集編＋新撮ボーナス映像',
       '過去作品収録＋新作カット',
       '全作品収録＋撮り下ろし映像',
@@ -257,6 +262,10 @@ void main() {
         '新撮ボーナス',
         '未公開新作映像',
         '撮り下ろし',
+        '完全撮り下ろし特典映像',
+        '特典映像は全編撮り下ろし',
+        '完全新撮ボーナス映像',
+        '全編撮り下ろし特典',
       ]) {
         expect(
           ScrapeProvenanceSemantics.newMaterialScope(title),
@@ -284,6 +293,7 @@ void main() {
       for (final title in const [
         '全編撮り下ろし',
         '全編新撮',
+        '全編新撮の大型共演',
         '完全撮り下ろし新作',
         '完全新撮の大型共演',
         '全編撮り下ろし大共演',
@@ -305,12 +315,34 @@ void main() {
         );
       }
 
-      final mixed = _evaluator().evaluate(
-        code: 'MIXED-BEST-WHOLE',
-        details: [_details('MIXED-BEST-WHOLE', 'BEST11人・全編撮り下ろし')],
-      );
-      expect(mixed.finalAction, ScrapeFinalAction.keepReview);
-      expect(mixed.hasConflict, isTrue);
+      for (final title in const [
+        'BEST11人・完全撮り下ろし特典映像付き',
+        'BEST・完全撮り下ろし特典映像',
+        '総集編・特典映像は全編撮り下ろし',
+        '過去作品収録＋完全新撮ボーナス映像',
+        'COMPLETE BEST＋全編撮り下ろし特典',
+      ]) {
+        final mixed = _evaluator().evaluate(
+          code: 'MIXED-BONUS-${title.hashCode}',
+          details: [_details('MIXED-BONUS-${title.hashCode}', title)],
+        );
+        expect(mixed.finalAction, ScrapeFinalAction.exclude, reason: title);
+        expect(
+          mixed.provenanceClass,
+          ScrapeProvenanceClass.mixedOldNew,
+          reason: title,
+        );
+        expect(mixed.hasConflict, isFalse, reason: title);
+        expect(
+          mixed.evidence.any(
+            (item) =>
+                item.kind == ScrapeEvidenceKind.mixedOldNew &&
+                item.polarity == ScrapeEvidencePolarity.supportsCompilation,
+          ),
+          isTrue,
+          reason: title,
+        );
+      }
     },
   );
 
@@ -330,6 +362,9 @@ void main() {
         '4本を収録',
         '4本を完全収録',
         '全12作',
+        '全12作収録',
+        '全12作・完全収録',
+        '全12作 BEST',
       ]) {
         final decision = _evaluator().evaluate(
           code: 'COLLECTION-${title.hashCode}',
@@ -338,7 +373,15 @@ void main() {
         expect(decision.finalAction, ScrapeFinalAction.exclude, reason: title);
       }
 
-      for (final title in const ['全4本番', '全3本番', '全5本番完全新撮']) {
+      for (final title in const [
+        '全4本番',
+        '全3本番',
+        '全5本番完全新撮',
+        '全12作戦',
+        '全12作業',
+        '全12作成',
+        '全12作品制作中',
+      ]) {
         final decision = _evaluator().evaluate(
           code: 'SAFE-COUNT-${title.hashCode}',
           details: [_details('SAFE-COUNT-${title.hashCode}', title)],
@@ -389,6 +432,41 @@ void main() {
           classificationContext: context,
         );
         expect(decision.finalAction, ScrapeFinalAction.exclude, reason: title);
+      }
+    },
+  );
+
+  test(
+    'requires explicit prior-work wording and contextual English markers',
+    () {
+      for (final title in const [
+        '旧作を完全収録',
+        '過去作を完全収録',
+        '既存作品を完全収録',
+        '旧作品を厳選完全収録',
+        '過去作品を厳選して収録',
+        'old works included',
+        'previous works collected',
+        'old titles reissued',
+      ]) {
+        expect(
+          ScrapeProvenanceSemantics.containsExplicitPriorWorkStatement(title),
+          isTrue,
+          reason: title,
+        );
+        final decision = _evaluator().evaluate(
+          code: 'PRIOR-MODIFIER-${title.hashCode}',
+          details: [_details('PRIOR-MODIFIER-${title.hashCode}', title)],
+        );
+        expect(decision.finalAction, ScrapeFinalAction.exclude, reason: title);
+        expect(
+          decision.evidence.any(
+            (item) =>
+                item.polarity == ScrapeEvidencePolarity.supportsCompilation,
+          ),
+          isTrue,
+          reason: title,
+        );
       }
     },
   );
@@ -473,6 +551,51 @@ void main() {
           )
           .finalAction,
       ScrapeFinalAction.exclude,
+    );
+    expect(
+      _evaluator()
+          .evaluate(
+            code: 'TARGET-AIKA-RUNTIME',
+            details: [_details('TARGET-AIKA-RUNTIME', 'AIKA 12時間BEST')],
+            classificationContext: const ScrapeClassificationContext(
+              targetActressName: 'AIKA',
+            ),
+          )
+          .finalAction,
+      ScrapeFinalAction.exclude,
+    );
+    for (final title in const ['MAIKA BEST', 'XAIKA BEST', 'SAIKA BEST']) {
+      final decision = _evaluator().evaluate(
+        code: 'TARGET-AIKA-BOUNDARY-${title.hashCode}',
+        details: [_details('TARGET-AIKA-BOUNDARY-${title.hashCode}', title)],
+        classificationContext: const ScrapeClassificationContext(
+          targetActressName: 'AIKA',
+        ),
+      );
+      expect(
+        decision.finalAction,
+        isNot(ScrapeFinalAction.exclude),
+        reason: title,
+      );
+      expect(
+        decision.evidence.where(
+          (item) => item.ruleId == 'semantic_target_actress_best',
+        ),
+        isEmpty,
+        reason: title,
+      );
+    }
+    final prefixedNagano = _evaluator().evaluate(
+      code: 'TARGET-NAGANO-BOUNDARY',
+      details: [_details('TARGET-NAGANO-BOUNDARY', '新永野いち夏 BEST')],
+      classificationContext: naganoContext,
+    );
+    expect(prefixedNagano.finalAction, isNot(ScrapeFinalAction.exclude));
+    expect(
+      prefixedNagano.evidence.where(
+        (item) => item.ruleId == 'semantic_target_actress_best',
+      ),
+      isEmpty,
     );
     expect(
       _evaluator()
