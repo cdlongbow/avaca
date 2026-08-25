@@ -104,10 +104,8 @@ final class AvBaseHtmlParser {
     final hasPriorMarker =
         includedWorks.isNotEmpty ||
         parentWorks.isNotEmpty ||
-        RegExp(
-          r'過去作品|既存作品|再収録|全\s*\d+\s*(?:作品|タイトル)|\d+\s*タイトル全部入り',
-          caseSensitive: false,
-        ).hasMatch(text);
+        ScrapeProvenanceSemantics.explicitCompilationLabel(text) != null ||
+        ScrapeProvenanceSemantics.strongReuseProposition([text]) != null;
     final isSplit = RegExp(
       r'分割|個別版|単独版|split',
       caseSensitive: false,
@@ -122,10 +120,11 @@ final class AvBaseHtmlParser {
     ).hasMatch(text);
     final isOldWithBonus =
         ScrapeProvenanceSemantics.containsOldMaterialWithNewBonus(text);
-    final shared = RegExp(
-      r'共演|同時出演|同じ.*作品|同一.*作品|ストーリー|コラボ',
-      caseSensitive: false,
-    ).hasMatch(text);
+    final provenShared =
+        ScrapeProvenanceSemantics.containsProvenSharedProduction(text);
+    final sharedHint = ScrapeProvenanceSemantics.containsSharedProductionHint(
+      text,
+    );
     final independent = RegExp(
       r'個別|各作品|別作品|それぞれ|独立.*(?:セグメント|作品)',
       caseSensitive: false,
@@ -156,8 +155,10 @@ final class AvBaseHtmlParser {
           : null,
       coPerformance: independent
           ? ScrapeCoPerformance.independentSegments
-          : shared
+          : provenShared
           ? ScrapeCoPerformance.sharedProduction
+          : sharedHint
+          ? ScrapeCoPerformance.possibleSharedProduction
           : ScrapeCoPerformance.unknown,
     );
   }
@@ -184,7 +185,13 @@ final class AvBaseHtmlParser {
   }
 
   String? _sectionDescription(Document document) {
-    final section = _sectionForHeading(document, const ['タグ・説明文']);
+    final section = _sectionForHeading(document, const ['紹介文']);
+    final fallback = _sectionForHeading(document, const ['タグ・説明文']);
+    return _descriptionFromSection(section) ??
+        _descriptionFromSection(fallback);
+  }
+
+  String? _descriptionFromSection(Element? section) {
     if (section == null) return null;
     for (final element in section.querySelectorAll(
       'p, article, [data-description], .prose, [class*="prose"]',
@@ -235,8 +242,33 @@ final class AvBaseHtmlParser {
         final parent = current.parent;
         current = parent is Element ? parent : null;
       }
+      final parent = heading.parent;
+      if (parent is Element &&
+          parent.querySelectorAll('h2, h3').length == 1 &&
+          _isControlledHeadingContainer(parent)) {
+        return parent;
+      }
+      final ancestor = parent is Element ? parent.parent : null;
+      if (ancestor is Element &&
+          ancestor.querySelectorAll('h2, h3').length == 1 &&
+          (ancestor.localName == 'article' ||
+              ancestor.localName == 'div' &&
+                  (ancestor.attributes.containsKey('data-slot') ||
+                      ancestor.classes.any(
+                        (value) => value.toLowerCase().contains('card'),
+                      )))) {
+        return ancestor;
+      }
     }
     return null;
+  }
+
+  bool _isControlledHeadingContainer(Element element) {
+    if (element.localName != 'div' && element.localName != 'article') {
+      return false;
+    }
+    if (element.children.length > 12) return false;
+    return element.querySelector('nav, footer, header, main, aside') == null;
   }
 
   ScrapeActressSearchResult? parseActressSearchResult(

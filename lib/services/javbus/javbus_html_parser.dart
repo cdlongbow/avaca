@@ -117,10 +117,8 @@ class JavBusHtmlParser {
     final hasPriorMarker =
         includedWorks.isNotEmpty ||
         parentWorks.isNotEmpty ||
-        RegExp(
-          r'過去作品|既存作品|再収録|全\s*\d+\s*(?:作品|タイトル)|\d+\s*タイトル全部入り',
-          caseSensitive: false,
-        ).hasMatch(text);
+        ScrapeProvenanceSemantics.explicitCompilationLabel(text) != null ||
+        ScrapeProvenanceSemantics.strongReuseProposition([text]) != null;
     final isSplit = RegExp(
       r'分割|個別版|単独版|split',
       caseSensitive: false,
@@ -135,10 +133,11 @@ class JavBusHtmlParser {
     ).hasMatch(text);
     final isOldWithBonus =
         ScrapeProvenanceSemantics.containsOldMaterialWithNewBonus(text);
-    final shared = RegExp(
-      r'共演|同時出演|同じ.*作品|同一.*作品|ストーリー|コラボ',
-      caseSensitive: false,
-    ).hasMatch(text);
+    final provenShared =
+        ScrapeProvenanceSemantics.containsProvenSharedProduction(text);
+    final sharedHint = ScrapeProvenanceSemantics.containsSharedProductionHint(
+      text,
+    );
     final independent = RegExp(
       r'個別|各作品|別作品|それぞれ|独立.*(?:セグメント|作品)',
       caseSensitive: false,
@@ -169,8 +168,10 @@ class JavBusHtmlParser {
           : null,
       coPerformance: independent
           ? ScrapeCoPerformance.independentSegments
-          : shared
+          : provenShared
           ? ScrapeCoPerformance.sharedProduction
+          : sharedHint
+          ? ScrapeCoPerformance.possibleSharedProduction
           : ScrapeCoPerformance.unknown,
     );
   }

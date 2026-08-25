@@ -52,6 +52,7 @@ enum ScrapeEvidenceKind {
   mixedOldNew,
   independentSegments,
   genuineCoPerformance,
+  possibleCoPerformance,
   priorWorkCollection,
   editedPresentation,
   viewpointSelection,

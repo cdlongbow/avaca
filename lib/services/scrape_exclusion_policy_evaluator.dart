@@ -2,6 +2,7 @@ import '../models/scrape_exclusion_policy.dart';
 import '../models/scrape_source_settings.dart';
 import 'scrape/scrape_models.dart';
 import 'scrape/provenance_semantics.dart';
+import 'scrape/scrape_classification_context.dart';
 
 class ScrapeEvidenceAtom {
   const ScrapeEvidenceAtom({
@@ -120,6 +121,7 @@ class ScrapeExclusionPolicyEvaluator {
   ScrapePolicyDecision evaluate({
     required String code,
     required List<ScrapeWorkDetails> details,
+    ScrapeClassificationContext? classificationContext,
   }) {
     final surfaces = details.isEmpty
         ? <_PolicySurface>[
@@ -163,7 +165,11 @@ class ScrapeExclusionPolicyEvaluator {
     }
 
     for (final surface in surfaces) {
-      _classifySurface(surface, addEvidence);
+      _classifySurface(
+        surface,
+        addEvidence,
+        classificationContext: classificationContext,
+      );
     }
 
     final strongCompilation = evidence.any(
@@ -178,6 +184,9 @@ class ScrapeExclusionPolicyEvaluator {
     );
     final hasReviewEvidence = evidence.any(
       (item) => item.strength != ScrapeEvidenceStrength.weak,
+    );
+    final hasCoPerformanceHint = evidence.any(
+      (item) => item.kind == ScrapeEvidenceKind.possibleCoPerformance,
     );
     final hasConflict = strongCompilation && strongOriginal;
     final automaticClass = _classForEvidence(evidence, surfaces);
@@ -209,6 +218,9 @@ class ScrapeExclusionPolicyEvaluator {
       automaticAction = ScrapeFinalAction.keep;
       automaticReasons = const ['safe_presentation_context'];
       automaticLevel = ScrapeEvidenceLevel.none;
+    } else if (hasCoPerformanceHint) {
+      automaticReasons = const ['production_shared_hint'];
+      automaticLevel = ScrapeEvidenceLevel.review;
     } else if (hasReviewEvidence) {
       automaticReasons = ['review_evidence'];
       automaticLevel = ScrapeEvidenceLevel.review;
@@ -369,8 +381,9 @@ class ScrapeExclusionPolicyEvaluator {
       required String ruleId,
       required String observedText,
     })
-    addEvidence,
-  ) {
+    addEvidence, {
+    ScrapeClassificationContext? classificationContext,
+  }) {
     final details = surface.details;
     if (details == null) return;
     final facts = details.provenanceFacts;
@@ -509,13 +522,32 @@ class ScrapeExclusionPolicyEvaluator {
     if (reuseProposition != null) {
       strong(
         kind:
-            reuseProposition.toLowerCase().contains('complete') ||
-                reuseProposition.contains('コンプリート')
+            reuseProposition.ruleId == 'semantic_best_collection' ||
+                reuseProposition.observedText.toLowerCase().contains(
+                  'complete',
+                ) ||
+                reuseProposition.observedText.contains('コンプリート')
             ? ScrapeEvidenceKind.completePriorWorks
             : ScrapeEvidenceKind.bestOfPriorWorks,
         polarity: ScrapeEvidencePolarity.supportsCompilation,
-        ruleId: 'semantic_prior_work_collection',
-        observedText: reuseProposition,
+        ruleId: reuseProposition.ruleId,
+        observedText: reuseProposition.observedText,
+        field: 'title_or_metadata',
+      );
+    }
+
+    final targetActressBest = classificationContext == null
+        ? null
+        : ScrapeProvenanceSemantics.targetActressBestProposition(
+            text,
+            classificationContext.normalizedTargetNames,
+          );
+    if (targetActressBest != null) {
+      strong(
+        kind: ScrapeEvidenceKind.bestOfPriorWorks,
+        polarity: ScrapeEvidencePolarity.supportsCompilation,
+        ruleId: targetActressBest.ruleId,
+        observedText: targetActressBest.observedText,
         field: 'title_or_metadata',
       );
     }
@@ -554,6 +586,21 @@ class ScrapeExclusionPolicyEvaluator {
       );
     }
 
+    final hasStrongDerivedSurfaceEvidence =
+        includedWorks.isNotEmpty ||
+        parentWorks.isNotEmpty ||
+        facts.containsPriorWorks == true ||
+        facts.extractedFromPriorWork == true ||
+        facts.splitFromPriorWork == true ||
+        facts.packageOfIndependentWorks == true ||
+        facts.oldMaterialWithNewBonus == true ||
+        facts.reissue == true ||
+        facts.remaster == true ||
+        facts.reedited == true ||
+        compilation != null ||
+        reuseProposition != null ||
+        oldBonus;
+
     if (facts.explicitOriginalProduction == true) {
       strong(
         kind: ScrapeEvidenceKind.explicitOriginalWork,
@@ -577,13 +624,27 @@ class ScrapeExclusionPolicyEvaluator {
         field: 'title_or_metadata',
       );
     }
-    if (facts.coPerformance == ScrapeCoPerformance.sharedProduction ||
-        details.coPerformance == ScrapeCoPerformance.sharedProduction) {
+    if (!hasStrongDerivedSurfaceEvidence &&
+        (facts.coPerformance == ScrapeCoPerformance.sharedProduction ||
+            details.coPerformance == ScrapeCoPerformance.sharedProduction)) {
       strong(
         kind: ScrapeEvidenceKind.genuineCoPerformance,
         polarity: ScrapeEvidencePolarity.supportsOriginalWork,
-        ruleId: 'production_shared_co_performance',
+        ruleId: 'production_verified_shared',
         observedText: 'performers participate in one shared production',
+      );
+    }
+    if (facts.coPerformance == ScrapeCoPerformance.possibleSharedProduction ||
+        details.coPerformance == ScrapeCoPerformance.possibleSharedProduction) {
+      addEvidence(
+        surface: surface,
+        field: 'title_or_metadata',
+        kind: ScrapeEvidenceKind.possibleCoPerformance,
+        strength: ScrapeEvidenceStrength.weak,
+        polarity: ScrapeEvidencePolarity.neutral,
+        ruleId: 'production_shared_hint',
+        observedText:
+            'source wording suggests co-performance without proving one production',
       );
     }
 

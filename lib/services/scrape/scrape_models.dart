@@ -9,7 +9,12 @@ final class WorkFieldSourceEvidence {
   final Uri? sourceUri;
 }
 
-enum ScrapeCoPerformance { unknown, sharedProduction, independentSegments }
+enum ScrapeCoPerformance {
+  unknown,
+  possibleSharedProduction,
+  sharedProduction,
+  independentSegments,
+}
 
 /// Optional facts exposed by a source adapter for provenance classification.
 /// Empty lists and null booleans mean that the source did not provide the

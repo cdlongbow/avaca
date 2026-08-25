@@ -1,5 +1,6 @@
 import 'package:avaca/models/scrape_source_settings.dart';
 import 'package:avaca/services/avbase/avbase_html_parser.dart';
+import 'package:avaca/services/scrape/scrape_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -65,8 +66,12 @@ void main() {
           <a href="/talents/%E7%9F%B3%E5%B7%9D%E6%BE%AA">石川澪</a>
         </section>
         <section class="p-3">
+          <h2>紹介文</h2>
+          <p>真実の紹介文。旧作一覧ではなく、この作品そのものの説明です。</p>
+        </section>
+        <section class="p-3">
           <h2>タグ・説明文</h2>
-          <p>過去作品を厳選収録した作品紹介ではなく、実際の説明文です。</p>
+          <p>タグ側の補足説明です。</p>
           <a href="/tags/best">ベスト・総集編</a>
           <a href="/tags/vr">ハイクオリティVR</a>
         </section>
@@ -94,7 +99,8 @@ void main() {
     expect(details.series, 'テストシリーズ');
     expect(details.performerCount, 1);
     expect(details.performers?.single.name, '石川澪');
-    expect(details.provenanceFacts.description, contains('実際の説明文'));
+    expect(details.provenanceFacts.description, contains('真実の紹介文'));
+    expect(details.provenanceFacts.description, isNot(contains('タグ側の補足説明')));
     expect(details.provenanceFacts.tags, ['ベスト・総集編', 'ハイクオリティVR']);
     expect(details.provenanceFacts.includedWorks, ['OLD-001', 'OLD-002']);
     expect(details.provenanceFacts.containsPriorWorks, isTrue);
@@ -109,6 +115,44 @@ void main() {
     );
 
     expect(details.provenanceFacts.packageOfIndependentWorks, isNull);
+  });
+
+  test('supports controlled non-section AvBase heading containers', () {
+    final details = parser.parseWorkPage(
+      '''
+      <html><body>
+        <h1>FALLBACK-001 作品</h1>
+        <div class="card"><h2>紹介文</h2><p>制御された紹介文の本文です。</p></div>
+        <div data-slot="card"><h2>タグ・説明文</h2><a href="/tags/vr">VR専用</a></div>
+        <div class="card"><h2>収録作品</h2><a href="/works/OLD-001">旧作品</a></div>
+      </body></html>
+      ''',
+      pageUri: Uri.parse('https://www.avbase.net/works/test:FALLBACK-001'),
+    );
+
+    expect(details.provenanceFacts.description, '制御された紹介文の本文です。');
+    expect(details.provenanceFacts.tags, ['VR専用']);
+    expect(details.provenanceFacts.includedWorks, ['OLD-001']);
+  });
+
+  test('distinguishes proven and weak AvBase co-performance wording', () {
+    final hint = parser.parseWorkPage(
+      '<html><body><h1>HINT-001 豪華共演ストーリー</h1></body></html>',
+      pageUri: Uri.parse('https://www.avbase.net/works/test:HINT-001'),
+    );
+    final proven = parser.parseWorkPage(
+      '<html><body><h1>PROVEN-001 全員同時出演・全編撮り下ろし新作</h1></body></html>',
+      pageUri: Uri.parse('https://www.avbase.net/works/test:PROVEN-001'),
+    );
+
+    expect(
+      hint.provenanceFacts.coPerformance,
+      ScrapeCoPerformance.possibleSharedProduction,
+    );
+    expect(
+      proven.provenanceFacts.coPerformance,
+      ScrapeCoPerformance.sharedProduction,
+    );
   });
 
   test('parses direct talent route as a single AvBase search result', () {

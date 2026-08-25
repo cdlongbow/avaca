@@ -1,4 +1,5 @@
 import 'package:avaca/services/javbus/javbus_html_parser.dart';
+import 'package:avaca/services/scrape/scrape_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -85,6 +86,26 @@ void main() {
 
     expect(page.works.single.code, 'SIVR00303');
     expect(page.works.single.rawCode, 'SIVR00303');
+  });
+
+  test('does not promote weak JavBus co-performance wording', () {
+    final hint = parser.parseWorkPage(
+      '<h3>HINT-001 豪華共演コラボ</h3>',
+      pageUri: Uri.parse('https://www.javbus.com/HINT-001'),
+    );
+    final proven = parser.parseWorkPage(
+      '<h3>PROVEN-001 全員同時出演・全編撮り下ろし新作</h3>',
+      pageUri: Uri.parse('https://www.javbus.com/PROVEN-001'),
+    );
+
+    expect(
+      hint.provenanceFacts.coPerformance,
+      ScrapeCoPerformance.possibleSharedProduction,
+    );
+    expect(
+      proven.provenanceFacts.coPerformance,
+      ScrapeCoPerformance.sharedProduction,
+    );
   });
 
   test('parses unique actresses only from the work actress section', () {

@@ -2,6 +2,7 @@ import 'package:avaca/models/scrape_exclusion_policy.dart';
 import 'package:avaca/models/scrape_rules.dart';
 import 'package:avaca/models/scrape_source_settings.dart';
 import 'package:avaca/models/work.dart';
+import 'package:avaca/services/scrape/scrape_classification_context.dart';
 import 'package:avaca/services/scrape/scrape_models.dart';
 import 'package:avaca/services/scrape_exclusion_policy_evaluator.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -165,7 +166,6 @@ void main() {
         '100本番BEST！8時間！',
         '制服限定BEST30 43時間',
         'BEST11人',
-        'AIKA BEST',
         'BEST COLLECTION',
       ]) {
         final decision = _evaluator().evaluate(
@@ -174,6 +174,241 @@ void main() {
         );
         expect(decision.finalAction, ScrapeFinalAction.exclude, reason: title);
       }
+    },
+  );
+
+  test('covers the adversarial semantic safety matrix', () {
+    for (final title in const [
+      '全4本番',
+      '全3本番ぶっ通しSEX',
+      '全5本番完全新撮',
+      'BEST',
+      'ベスト',
+      'BEST FRIEND',
+      '彼女は僕のベストフレンド',
+      '最高のベストコンディションSEX',
+      'デビュー作から1年、さらに進化した彼女',
+      'デビュー作から半年ぶりの再会',
+      '大共演',
+      '豪華大共演',
+      '20人大共演',
+      '共演スペシャル',
+      'コラボ',
+      'ストーリー作品',
+      '完全版',
+      '4K COLLECTION',
+      'マルチアングル編集',
+    ]) {
+      final decision = _evaluator().evaluate(
+        code: 'SAFE-${title.hashCode}',
+        details: [_details('SAFE-${title.hashCode}', title)],
+      );
+      expect(
+        decision.finalAction,
+        isNot(ScrapeFinalAction.exclude),
+        reason: title,
+      );
+    }
+  });
+
+  test('covers the high-confidence derived semantic matrix', () {
+    for (final title in const [
+      '8時間BEST',
+      'BEST11人',
+      '永久保存版 8時間ベスト',
+      '制服限定BEST30 43時間',
+      '100本番BEST！8時間！',
+      'BEST COLLECTION',
+      'COMPLETE BEST',
+      '全12作品',
+      '全12タイトル',
+      '全12タイトル全部入り',
+      '全4本収録',
+      '12作品収録',
+      '4タイトル全部入り',
+      'デビュー作から現在まで',
+      'デビュー作から全出演作品を収録',
+      '過去作品を厳選収録',
+      '総集編',
+      '名場面集',
+      'BEST・未公開新作映像収録',
+      'BEST・撮り下ろし特典映像付き',
+      '総集編＋新撮ボーナス映像',
+      '過去作品収録＋新作カット',
+      '全作品収録＋撮り下ろし映像',
+      'COMPLETE BEST＋新撮特典',
+    ]) {
+      final decision = _evaluator().evaluate(
+        code: 'DERIVED-MATRIX-${title.hashCode}',
+        details: [_details('DERIVED-MATRIX-${title.hashCode}', title)],
+      );
+      expect(decision.finalAction, ScrapeFinalAction.exclude, reason: title);
+      expect(decision.evidence, isNotEmpty, reason: title);
+    }
+  });
+
+  test('uses explicit target identity for actress BEST semantics', () {
+    final naganoContext = const ScrapeClassificationContext(
+      targetActressName: '永野いち夏',
+    );
+    final aliasContext = const ScrapeClassificationContext(
+      targetActressName: 'A',
+      targetAliases: ['B'],
+    );
+    final genericNameContext = const ScrapeClassificationContext(
+      targetActressName: '女優名',
+    );
+
+    expect(
+      _evaluator()
+          .evaluate(
+            code: 'TARGET-NAGANO',
+            details: [_details('TARGET-NAGANO', '永野いち夏 BEST')],
+            classificationContext: naganoContext,
+          )
+          .finalAction,
+      ScrapeFinalAction.exclude,
+    );
+    expect(
+      _evaluator()
+          .evaluate(
+            code: 'TARGET-GENERIC-NAME',
+            details: [_details('TARGET-GENERIC-NAME', '女優名 BEST')],
+            classificationContext: genericNameContext,
+          )
+          .finalAction,
+      ScrapeFinalAction.exclude,
+    );
+    expect(
+      _evaluator()
+          .evaluate(
+            code: 'TARGET-NAGANO-RUNTIME',
+            details: [_details('TARGET-NAGANO-RUNTIME', '永野いち夏 12時間BEST')],
+            classificationContext: naganoContext,
+          )
+          .finalAction,
+      ScrapeFinalAction.exclude,
+    );
+    expect(
+      _evaluator()
+          .evaluate(
+            code: 'TARGET-AIKA-WRONG',
+            details: [_details('TARGET-AIKA-WRONG', 'AIKA BEST')],
+            classificationContext: naganoContext,
+          )
+          .finalAction,
+      isNot(ScrapeFinalAction.exclude),
+    );
+    expect(
+      _evaluator()
+          .evaluate(
+            code: 'TARGET-AIKA',
+            details: [_details('TARGET-AIKA', 'AIKA BEST')],
+            classificationContext: const ScrapeClassificationContext(
+              targetActressName: 'AIKA',
+            ),
+          )
+          .finalAction,
+      ScrapeFinalAction.exclude,
+    );
+    expect(
+      _evaluator()
+          .evaluate(
+            code: 'TARGET-ALIAS',
+            details: [_details('TARGET-ALIAS', 'B 8時間BEST')],
+            classificationContext: aliasContext,
+          )
+          .finalAction,
+      ScrapeFinalAction.exclude,
+    );
+    expect(
+      _evaluator()
+          .evaluate(
+            code: 'TARGET-SAFE-FRIEND',
+            details: [_details('TARGET-SAFE-FRIEND', '彼女は僕のベストフレンド')],
+            classificationContext: naganoContext,
+          )
+          .finalAction,
+      ScrapeFinalAction.keepReview,
+    );
+  });
+
+  test(
+    'keeps proven shared new productions but not weak co-performance hints',
+    () {
+      final weak = _evaluator().evaluate(
+        code: 'SHARED-HINT',
+        details: [
+          _details(
+            'SHARED-HINT',
+            '大共演',
+            provenanceFacts: const ScrapeWorkProvenanceFacts(
+              coPerformance: ScrapeCoPerformance.possibleSharedProduction,
+            ),
+          ),
+        ],
+      );
+      final proven = _evaluator().evaluate(
+        code: 'SHARED-PROVEN',
+        details: [
+          _details(
+            'SHARED-PROVEN',
+            '20人大共演・全員同時出演・全編撮り下ろし新作',
+            provenanceFacts: const ScrapeWorkProvenanceFacts(
+              coPerformance: ScrapeCoPerformance.sharedProduction,
+            ),
+          ),
+        ],
+      );
+      final concreteLineage = _evaluator().evaluate(
+        code: 'SHARED-LINEAGE',
+        details: [
+          _details(
+            'SHARED-LINEAGE',
+            '豪華大共演',
+            provenanceFacts: const ScrapeWorkProvenanceFacts(
+              includedWorks: ['OLD-001', 'OLD-002', 'OLD-003'],
+              coPerformance: ScrapeCoPerformance.possibleSharedProduction,
+            ),
+          ),
+        ],
+      );
+      final bestWithHint = _evaluator().evaluate(
+        code: 'SHARED-BEST',
+        details: [
+          _details(
+            'SHARED-BEST',
+            '豪華共演BEST11人',
+            provenanceFacts: const ScrapeWorkProvenanceFacts(
+              coPerformance: ScrapeCoPerformance.possibleSharedProduction,
+            ),
+          ),
+        ],
+      );
+      final concreteProvenShared = _evaluator().evaluate(
+        code: 'SHARED-LINEAGE-PROVEN',
+        details: [
+          _details(
+            'SHARED-LINEAGE-PROVEN',
+            '豪華大共演',
+            provenanceFacts: const ScrapeWorkProvenanceFacts(
+              includedWorks: ['OLD-004', 'OLD-005'],
+              coPerformance: ScrapeCoPerformance.sharedProduction,
+            ),
+          ),
+        ],
+      );
+
+      expect(weak.finalAction, ScrapeFinalAction.keepReview);
+      expect(weak.reasonCodes, contains('production_shared_hint'));
+      expect(proven.finalAction, ScrapeFinalAction.keep);
+      expect(proven.provenanceClass, ScrapeProvenanceClass.originalCostar);
+      expect(concreteLineage.finalAction, ScrapeFinalAction.exclude);
+      expect(concreteLineage.hasConflict, isFalse);
+      expect(bestWithHint.finalAction, ScrapeFinalAction.exclude);
+      expect(bestWithHint.hasConflict, isFalse);
+      expect(concreteProvenShared.finalAction, ScrapeFinalAction.exclude);
+      expect(concreteProvenShared.hasConflict, isFalse);
     },
   );
 

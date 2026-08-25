@@ -19,6 +19,7 @@ import 'javbus/work_image_downloader.dart';
 import 'javbus/work_image_policy.dart';
 import 'safe_image.dart';
 import 'scrape/scrape_image_downloader.dart';
+import 'scrape/scrape_classification_context.dart';
 import 'scrape/scrape_models.dart';
 import 'scrape_run_observer.dart';
 import 'scrape/scrape_source.dart';
@@ -381,6 +382,10 @@ class WorksScrapeService {
           exactDenies: options.exactDenies,
         );
     final policyEvaluator = ScrapeExclusionPolicyEvaluator(effectivePolicy);
+    final classificationContext = ScrapeClassificationContext(
+      targetActressName: name,
+      targetAliases: aliases,
+    );
     final queries = _queries(name, aliases);
     final requestedWorkIds = ScrapeSourceRegistry.resolveWorksSources(
       settings.worksSources,
@@ -496,6 +501,7 @@ class WorksScrapeService {
       collectedById: collectedById,
       retryWorkCodes: options.retryWorkCodes,
       policyEvaluator: policyEvaluator,
+      classificationContext: classificationContext,
       ensureCollection: ensureCollection,
       cancellationToken: cancellationToken,
       onProgress: onProgress,
@@ -832,6 +838,7 @@ class WorksScrapeService {
         final decision = policyEvaluator.evaluate(
           code: code,
           details: resolved.details,
+          classificationContext: classificationContext,
         );
         final decisionMetadata = <String, Object?>{
           'canonicalCode': code,
@@ -1296,6 +1303,7 @@ class WorksScrapeService {
     required Map<ScrapeSourceId, _CollectedSource> collectedById,
     required List<String> retryWorkCodes,
     required ScrapeExclusionPolicyEvaluator policyEvaluator,
+    required ScrapeClassificationContext classificationContext,
     required Future<_SourceCollectionOutcome> Function(ScrapeSourceId)
     ensureCollection,
     required WorksScrapeCancellationToken? cancellationToken,
@@ -1364,6 +1372,7 @@ class WorksScrapeService {
       final decision = policyEvaluator.evaluate(
         code: group.storageCode,
         details: groupDetails,
+        classificationContext: classificationContext,
       );
       if (!decision.reviewRequired) return false;
       // A disabled automatic filter is an intentional user choice, not a
