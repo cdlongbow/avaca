@@ -733,6 +733,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get scrapeSourceAvBase => 'AvBase';
 
   @override
+  String get scrapeSourceAvWiki => 'AV-Wiki';
+
+  @override
   String get scrapeSourceAll => '所有來源（依番號整合並去重複）';
 
   @override
@@ -1132,6 +1135,27 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get scrapeJobNoItems => '尚無作品檢查點。';
+
+  @override
+  String get scrapeJobFilterAll => '全部';
+
+  @override
+  String get scrapeJobFilterReview => '待檢視';
+
+  @override
+  String get scrapeJobFilterKeep => '保留';
+
+  @override
+  String get scrapeJobFilterExclude => '排除';
+
+  @override
+  String get scrapeJobFilterFailed => '失敗';
+
+  @override
+  String get scrapeJobNoFilteredItems => '沒有符合此篩選條件的檢查點。';
+
+  @override
+  String get scrapeJobStateReview => '待檢視';
 
   @override
   String get scrapeJobStateQueued => '排隊中';
@@ -1950,6 +1974,9 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get scrapeSourceAvBase => 'AvBase';
 
   @override
+  String get scrapeSourceAvWiki => 'AV-Wiki';
+
+  @override
   String get scrapeSourceAll => '所有来源（按番号整合并去重）';
 
   @override
@@ -2349,6 +2376,27 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get scrapeJobNoItems => '尚无作品检查点。';
+
+  @override
+  String get scrapeJobFilterAll => '全部';
+
+  @override
+  String get scrapeJobFilterReview => '待检查';
+
+  @override
+  String get scrapeJobFilterKeep => '保留';
+
+  @override
+  String get scrapeJobFilterExclude => '排除';
+
+  @override
+  String get scrapeJobFilterFailed => '失败';
+
+  @override
+  String get scrapeJobNoFilteredItems => '没有符合此筛选条件的检查点。';
+
+  @override
+  String get scrapeJobStateReview => '待审核';
 
   @override
   String get scrapeJobStateQueued => '排队中';
@@ -3167,6 +3215,9 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get scrapeSourceAvBase => 'AvBase';
 
   @override
+  String get scrapeSourceAvWiki => 'AV-Wiki';
+
+  @override
   String get scrapeSourceAll => '所有來源（依番號整合並去重複）';
 
   @override
@@ -3566,6 +3617,27 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get scrapeJobNoItems => '尚無作品檢查點。';
+
+  @override
+  String get scrapeJobFilterAll => '全部';
+
+  @override
+  String get scrapeJobFilterReview => '待檢視';
+
+  @override
+  String get scrapeJobFilterKeep => '保留';
+
+  @override
+  String get scrapeJobFilterExclude => '排除';
+
+  @override
+  String get scrapeJobFilterFailed => '失敗';
+
+  @override
+  String get scrapeJobNoFilteredItems => '沒有符合此篩選條件的檢查點。';
+
+  @override
+  String get scrapeJobStateReview => '待檢視';
 
   @override
   String get scrapeJobStateQueued => '排隊中';

@@ -76,7 +76,7 @@ const _naganoIchikaCorpus = <_NaganoCorpusFixture>[
   _NaganoCorpusFixture(
     code: 'MIZD-498',
     title: '美少女J系のマンマン食い込み無自覚パンチラ眺めて爆射したい',
-    expectedAction: ScrapeFinalAction.keepReview,
+    expectedAction: ScrapeFinalAction.keep,
   ),
   _NaganoCorpusFixture(
     code: 'CJOB-213',
@@ -110,7 +110,7 @@ const _naganoIchikaCorpus = <_NaganoCorpusFixture>[
     code: 'UMSO-643',
     title: '折れそうなくらい華奢なスレンダーボディ美少女12人',
     durationMinutes: 243,
-    expectedAction: ScrapeFinalAction.keepReview,
+    expectedAction: ScrapeFinalAction.keep,
   ),
   _NaganoCorpusFixture(
     code: 'HNVR-153',
@@ -214,6 +214,6 @@ const _naganoIchikaCorpus = <_NaganoCorpusFixture>[
   _NaganoCorpusFixture(
     code: 'CJOB-216',
     title: '永野いち夏 BEST FRIEND',
-    expectedAction: ScrapeFinalAction.keepReview,
+    expectedAction: ScrapeFinalAction.keep,
   ),
 ];

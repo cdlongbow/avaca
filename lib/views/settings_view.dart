@@ -23,6 +23,8 @@ import '../services/data_transfer_service.dart';
 import '../services/scrape_job_coordinator.dart';
 import '../services/avbase/avbase_client.dart';
 import '../services/avbase/avbase_transport.dart';
+import '../services/avwiki/avwiki_client.dart';
+import '../services/avwiki/avwiki_transport.dart';
 import '../services/javbus/javbus_client.dart';
 import '../services/javbus/javbus_verification.dart';
 import '../services/javbus/prefix_route_repository.dart';
@@ -661,6 +663,13 @@ class _SettingsViewState extends State<SettingsView> {
         }
       case ScrapeSourceId.avbase:
         final client = AvBaseClient(transport: HttpAvBaseTransport());
+        try {
+          await client.checkConnection();
+        } finally {
+          client.close();
+        }
+      case ScrapeSourceId.avwiki:
+        final client = AvWikiClient(transport: HttpAvWikiTransport());
         try {
           await client.checkConnection();
         } finally {
@@ -1556,6 +1565,7 @@ class _ScrapeSourcesSettingsBodyState
       ScrapeSourceId.minnanoAv => localizations.scrapeSourceMinnanoAv,
       ScrapeSourceId.javbus => localizations.scrapeSourceJavBus,
       ScrapeSourceId.avbase => localizations.scrapeSourceAvBase,
+      ScrapeSourceId.avwiki => localizations.scrapeSourceAvWiki,
     };
   }
 

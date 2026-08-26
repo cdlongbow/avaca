@@ -140,6 +140,8 @@ final class AvBaseHtmlParser {
       extractedFromPriorWork: isExtract ? true : null,
       splitFromPriorWork: isSplit ? true : null,
       packageOfIndependentWorks: isPackage ? true : null,
+      packageOfPriorWorks: isPackage && hasPriorMarker ? true : null,
+      reusedIndependentSegments: independent && hasPriorMarker ? true : null,
       oldMaterialWithNewBonus: isOldWithBonus ? true : null,
       reissue:
           ScrapeProvenanceSemantics.containsStrongReissueEvidence(text) ||

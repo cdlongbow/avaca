@@ -8,8 +8,8 @@ import 'scrape_rules.dart';
 /// parser failures.  A review decision is still a successful scrape.
 enum ScrapeFinalAction { keep, keepReview, exclude }
 
-/// Diagnostic provenance classes. Unknown evidence is intentionally mapped to
-/// [ScrapeFinalAction.keepReview] by the evaluator.
+/// Diagnostic provenance classes. Unknown evidence is a neutral, keep-safe
+/// result; it is not proof that a product reuses prior material.
 enum ScrapeProvenanceClass {
   originalSolo,
   originalCostar,
@@ -59,6 +59,7 @@ enum ScrapeEvidenceKind {
   viewpointSelection,
   highVolumePresentation,
   explicitOriginalWork,
+  productFamilySuspicion,
 }
 
 enum ScrapePolicyOrigin { builtin, remote, user }
@@ -177,7 +178,7 @@ class ScrapePolicySnapshot {
 
   static const currentSchemaVersion = 4;
   static const currentPolicyVersion = 'provenance-v4';
-  static const currentClassifierVersion = 'semantic-1';
+  static const currentClassifierVersion = 'semantic-v4';
 
   final int schemaVersion;
   final String policyVersion;

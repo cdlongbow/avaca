@@ -757,6 +757,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get scrapeSourceAvBase => 'AvBase';
 
   @override
+  String get scrapeSourceAvWiki => 'AV-Wiki';
+
+  @override
   String get scrapeSourceAll => 'All sources (merge and deduplicate by code)';
 
   @override
@@ -1179,6 +1182,27 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get scrapeJobNoItems => 'No work checkpoints have been recorded.';
+
+  @override
+  String get scrapeJobFilterAll => 'All';
+
+  @override
+  String get scrapeJobFilterReview => 'Review';
+
+  @override
+  String get scrapeJobFilterKeep => 'Keep';
+
+  @override
+  String get scrapeJobFilterExclude => 'Exclude';
+
+  @override
+  String get scrapeJobFilterFailed => 'Failed';
+
+  @override
+  String get scrapeJobNoFilteredItems => 'No checkpoints match this filter.';
+
+  @override
+  String get scrapeJobStateReview => 'Review';
 
   @override
   String get scrapeJobStateQueued => 'Queued';

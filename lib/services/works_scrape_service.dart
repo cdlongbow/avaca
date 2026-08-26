@@ -11,6 +11,7 @@ import '../models/scrape_rules.dart';
 import '../models/scraped_actress_details.dart';
 import '../models/work_scrape_options.dart';
 import 'avbase/avbase_models.dart';
+import 'avwiki/avwiki_models.dart';
 import 'javbus/javbus_client.dart';
 import 'javbus/javbus_scrape_source.dart';
 import 'javbus/javbus_verification.dart';
@@ -478,18 +479,20 @@ class WorksScrapeService {
       return outcome;
     }
 
-    // The first configured works source is the primary.  Actress details and
-    // aliases may run in parallel, but later works sources are started only
-    // when primary coverage or provenance evidence is insufficient.
-    collectionFutures[requestedWorkIds.first] = startCollection(
-      requestedWorkIds.first,
-      includeWorks: true,
-    );
+    // Start every enabled works catalog before identity resolution. This
+    // makes coverage the union of all configured catalogs; source priority is
+    // used later for canonical/primary selection and evidence order only.
+    for (final sourceId in requestedWorkIds) {
+      collectionFutures[sourceId] = startCollection(
+        sourceId,
+        includeWorks: true,
+      );
+    }
     for (final sourceId in <ScrapeSourceId>{
       settings.actressDetailsSource,
       ?aliasSourceId,
     }) {
-      if (sourceId == requestedWorkIds.first) continue;
+      if (collectionFutures.containsKey(sourceId)) continue;
       auxiliaryCollectionFutures[sourceId] = startCollection(
         sourceId,
         includeWorks: false,
@@ -804,7 +807,7 @@ class WorksScrapeService {
         sourceTotal: totalForSource,
         sourceTotalKnown: true,
       );
-      final code = scrapeWorkStorageCode(resolved.code);
+      final code = scrapeWorkCanonicalStorageCode(resolved.code);
       if (code == null) {
         final failureCode = resolved.code.isEmpty ? '未知番號：來源候選' : resolved.code;
         recordOutcome(
@@ -1056,9 +1059,9 @@ class WorksScrapeService {
       if (_isCancelled(cancellationToken)) {
         break;
       }
-      final queryKey = query.trim().toLowerCase();
+      final queryKey = _actressNameKey(query);
       for (final actress in results.where(
-        (result) => result.name.trim().toLowerCase() == queryKey,
+        (result) => _actressNameKey(result.name) == queryKey,
       )) {
         if (_isCancelled(cancellationToken)) {
           break;
@@ -1116,7 +1119,9 @@ class WorksScrapeService {
                         : ScrapeSourceRunState.partial)
                   : matched
                   ? _sourceStateForError(lastError)
-                  : ScrapeSourceRunState.unavailable);
+                  : lastSearchError == null
+                  ? ScrapeSourceRunState.unavailable
+                  : _sourceStateForError(lastSearchError));
     return _CollectedSource(
       source: source,
       pages: pages,
@@ -1195,7 +1200,26 @@ class WorksScrapeService {
         AvBaseFailureKind.transientTransport => ScrapeSourceRunState.failed,
       };
     }
+    if (error is AvWikiRequestException) {
+      return switch (error.kind) {
+        AvWikiFailureKind.blocked => ScrapeSourceRunState.blocked,
+        AvWikiFailureKind.rateLimited => ScrapeSourceRunState.rateLimited,
+        AvWikiFailureKind.timeout => ScrapeSourceRunState.timedOut,
+        AvWikiFailureKind.cancelled => ScrapeSourceRunState.cancelled,
+        AvWikiFailureKind.notFound ||
+        AvWikiFailureKind.parserInvalid ||
+        AvWikiFailureKind.transport ||
+        AvWikiFailureKind.transientTransport => ScrapeSourceRunState.failed,
+      };
+    }
+    if (error is AvWikiPageLimitException) {
+      return ScrapeSourceRunState.failed;
+    }
     return ScrapeSourceRunState.failed;
+  }
+
+  String _actressNameKey(String value) {
+    return value.trim().toLowerCase().replaceAll(RegExp(r'[\s　]+'), '');
   }
 
   _GlobalCandidateSelection _selectGlobalWorkCandidates({
@@ -1212,9 +1236,11 @@ class WorksScrapeService {
         rawDiscovered++;
         final rawCode = summary.rawCode ?? summary.code;
         final identity = parseScrapeWorkCodeIdentity(rawCode);
-        final key = identity == null
-            ? 'uri:${sourceId.storageValue}:${summary.detailUri}'
-            : 'code:${identity.key}';
+        final key =
+            scrapeWorkIdentityKeyForSummary(summary) ??
+            (identity == null
+                ? 'uri:${sourceId.storageValue}:${summary.detailUri}'
+                : 'code:${identity.key}');
         final candidates = grouped.putIfAbsent(key, () => <_WorkCandidate>[]);
         if (candidates.every(
           (candidate) =>
@@ -1231,6 +1257,7 @@ class WorksScrapeService {
     final retryKeys = retryWorkCodes
         .map(scrapeWorkCodeIdentityKey)
         .whereType<String>()
+        .map((key) => 'code:$key')
         .toSet();
     final groups = <_GlobalWorkGroup>[];
     var ordinal = 0;
@@ -1255,10 +1282,27 @@ class WorksScrapeService {
       });
       final first = retained.first;
       final rawCode = first.summary.rawCode ?? first.summary.code;
-      final storageCode = scrapeWorkStorageCode(rawCode) ?? '';
-      final identityKey = scrapeWorkCodeIdentityKey(rawCode);
-      if (retryKeys.isNotEmpty &&
-          (identityKey == null || !retryKeys.contains(identityKey))) {
+      final identity = parseScrapeWorkCodeIdentity(rawCode);
+      final declaredCanonical = retained
+          .map((candidate) => candidate.summary.externalIdentity?.canonicalCode)
+          .whereType<String>()
+          .map((value) => value.trim())
+          .firstWhere((value) => value.isNotEmpty, orElse: () => '');
+      final declaredIdentity = retained
+          .map((candidate) => candidate.summary.externalIdentity)
+          .whereType<ScrapeExternalWorkIdentity>()
+          .firstOrNull;
+      final storageCode =
+          scrapeWorkCanonicalStorageCode(
+            declaredCanonical.isEmpty ? rawCode : declaredCanonical,
+            externalIdentity:
+                declaredIdentity ?? first.summary.externalIdentity,
+          ) ??
+          '';
+      final identityCodeKey = entry.key.startsWith('code:')
+          ? entry.key.substring('code:'.length)
+          : identity?.key;
+      if (retryKeys.isNotEmpty && !retryKeys.contains(entry.key)) {
         continue;
       }
       if (storageCode.isNotEmpty) {
@@ -1271,7 +1315,7 @@ class WorksScrapeService {
       groups.add(
         _GlobalWorkGroup(
           identityKey: entry.key,
-          identityCodeKey: identityKey,
+          identityCodeKey: identityCodeKey,
           storageCode: storageCode,
           candidates: List.unmodifiable(retained),
           ordinal: ordinal++,
@@ -1313,10 +1357,9 @@ class WorksScrapeService {
 
     final attemptedSourceIds = <ScrapeSourceId>[];
     final resultsBySource = <ScrapeSourceId, ScrapeSourceRunResult>{};
-    _GlobalCandidateSelection? selection;
-
-    // First obtain coverage from the primary source.  If it cannot produce
-    // any usable candidate, move to the next source one at a time.
+    // All catalog futures have already been started by the caller. Await the
+    // complete enabled union before selecting identities, so a later source
+    // can add missing works even when the first source is healthy.
     for (final sourceId in requestedWorkIds) {
       if (_isCancelled(cancellationToken)) break;
       final outcome = await ensureCollection(sourceId);
@@ -1324,20 +1367,14 @@ class WorksScrapeService {
       resultsBySource[sourceId] = outcome.result;
       final collected = outcome.collected;
       if (collected != null) collectedById[sourceId] = collected;
-      if (!outcome.result.succeeded) continue;
-
-      final candidateSelection = _selectGlobalWorkCandidates(
-        requestedWorkIds: requestedWorkIds,
-        collectedById: collectedById,
-        retryWorkCodes: retryWorkCodes,
-      );
-      if (candidateSelection.groups.isNotEmpty) {
-        selection = candidateSelection;
-        break;
-      }
     }
 
-    if (selection == null) {
+    final selection = _selectGlobalWorkCandidates(
+      requestedWorkIds: requestedWorkIds,
+      collectedById: collectedById,
+      retryWorkCodes: retryWorkCodes,
+    );
+    if (selection.groups.isEmpty) {
       return [
         for (final sourceId in attemptedSourceIds)
           _SourcePipelineOutcome(
@@ -1397,6 +1434,29 @@ class WorksScrapeService {
       if (_isCancelled(cancellationToken)) break;
       final sourceId = requestedWorkIds[sourceIndex];
       var stageGroups = unresolved;
+
+      // At the first detail stage only ask the highest-priority source that
+      // actually owns each group. Groups discovered solely by a lower
+      // priority catalog are carried forward to that source's stage.
+      if (sourceIndex == firstStageIndex) {
+        stageGroups = unresolved
+            .where((group) => group.candidates.first.source.id == sourceId)
+            .map(
+              (group) => _GlobalWorkGroup(
+                identityKey: group.identityKey,
+                identityCodeKey: group.identityCodeKey,
+                storageCode: group.storageCode,
+                candidates: List.unmodifiable(
+                  group.candidates.where(
+                    (candidate) => candidate.source.id == sourceId,
+                  ),
+                ),
+                ordinal: group.ordinal,
+              ),
+            )
+            .toList(growable: false);
+        if (stageGroups.isEmpty) continue;
+      }
 
       if (sourceIndex > firstStageIndex) {
         final source = sources[sourceId];
@@ -1538,9 +1598,15 @@ class WorksScrapeService {
     Future<void> lookupGroup(_GlobalWorkGroup group) async {
       if (_isCancelled(cancellationToken)) return;
       final primaryCandidate = group.candidates.first;
-      final code = group.storageCode.isEmpty
-          ? (primaryCandidate.summary.code ?? '').trim()
-          : group.storageCode;
+      final sourceCandidate = group.candidates.firstWhere(
+        (candidate) => candidate.source.id == source.id,
+        orElse: () => primaryCandidate,
+      );
+      final candidateCode =
+          sourceCandidate.summary.rawCode ?? sourceCandidate.summary.code;
+      final code = candidateCode == null || candidateCode.trim().isEmpty
+          ? group.storageCode
+          : candidateCode.trim();
       if (code.isEmpty) return;
       _observer?.onWorkAttemptStarted(code: code, source: source.id);
       try {
@@ -1548,10 +1614,7 @@ class WorksScrapeService {
           () => lookup.fetchWorkDetailsByCode(code),
         );
         if (details == null) return;
-        final detailIdentity = parseScrapeWorkCodeIdentity(details.code);
-        if (detailIdentity == null ||
-            (group.identityCodeKey != null &&
-                detailIdentity.key != group.identityCodeKey)) {
+        if (!_detailsMatchGroup(group, details)) {
           _observer?.onError(
             stage: WorksScrapePhase.fetchingDetails.name,
             code: code,
@@ -1619,7 +1682,17 @@ class WorksScrapeService {
       }
     }
 
-    await Future.wait(groups.map(lookupGroup));
+    var nextIndex = 0;
+    Future<void> worker() async {
+      while (true) {
+        final index = nextIndex++;
+        if (index >= groups.length) return;
+        await lookupGroup(groups[index]);
+      }
+    }
+
+    final workerCount = groups.length < 4 ? groups.length : 4;
+    await Future.wait(List.generate(workerCount, (_) => worker()));
     return _SourcePipelineOutcome(
       sourceId: source.id,
       result: ScrapeSourceRunResult(
@@ -1635,12 +1708,31 @@ class WorksScrapeService {
     ScrapeSourceId sourceId,
     ScrapeWorkSummary summary,
   ) {
-    final identity = parseScrapeWorkCodeIdentity(
-      summary.rawCode ?? summary.code,
-    );
-    return identity == null
-        ? 'uri:${sourceId.storageValue}:${summary.detailUri}'
-        : 'code:${identity.key}';
+    return scrapeWorkIdentityKeyForSummary(summary) ??
+        'uri:${sourceId.storageValue}:${summary.detailUri}';
+  }
+
+  bool _detailsMatchGroup(_GlobalWorkGroup group, ScrapeWorkDetails details) {
+    if (group.identityCodeKey == null) return true;
+    final resolved = scrapeWorkIdentityKeyForDetails(details);
+    if (resolved == group.identityKey) return true;
+    final identity = parseScrapeWorkCodeIdentity(details.code);
+    if (identity?.key == group.identityCodeKey) return true;
+
+    // A catalog source may declare the bridge while its detail adapter only
+    // returns the maker/platform surface. Reuse the typed identity from the
+    // selected catalog candidate, never a global prefix normalizer, to test
+    // that alternate detail surface against the same group.
+    return group.candidates.any((candidate) {
+      final declared = candidate.summary.externalIdentity;
+      if (declared == null) return false;
+      return scrapeWorkResolvedIdentityKey(
+            rawCode: details.rawCode ?? details.code,
+            externalIdentity: declared,
+            fallback: 'detail:${details.source.storageValue}:${details.code}',
+          ) ==
+          group.identityKey;
+    });
   }
 
   Future<List<_SourcePipelineOutcome>> _runGlobalDetailPipelines({
@@ -1694,10 +1786,7 @@ class WorksScrapeService {
           final details = await schedulers[sourceId]!.add(
             () => candidate.source.fetchWorkDetails(candidate.summary),
           );
-          final detailIdentity = parseScrapeWorkCodeIdentity(details.code);
-          if (detailIdentity == null ||
-              (group.identityCodeKey != null &&
-                  detailIdentity.key != group.identityCodeKey)) {
+          if (!_detailsMatchGroup(group, details)) {
             lastFailure = _FailedWorkCandidate(
               candidate: candidate,
               identityKey: group.identityKey,
@@ -1713,7 +1802,11 @@ class WorksScrapeService {
           }
           final storageCode = group.storageCode.isNotEmpty
               ? group.storageCode
-              : scrapeWorkStorageCode(details.rawCode ?? details.code) ?? '';
+              : scrapeWorkCanonicalStorageCode(
+                      details.rawCode ?? details.code,
+                      externalIdentity: details.externalIdentity,
+                    ) ??
+                    '';
           if (storageCode.isEmpty) {
             lastFailure = _FailedWorkCandidate(
               candidate: candidate,
@@ -1797,7 +1890,17 @@ class WorksScrapeService {
       );
     }
 
-    await Future.wait(groups.map(fetchGroup));
+    var nextIndex = 0;
+    Future<void> worker() async {
+      while (true) {
+        final index = nextIndex++;
+        if (index >= groups.length) return;
+        await fetchGroup(groups[index]);
+      }
+    }
+
+    final workerCount = groups.length < 4 ? groups.length : 4;
+    await Future.wait(List.generate(workerCount, (_) => worker()));
     return [
       for (var index = 0; index < requestedWorkIds.length; index++)
         _SourcePipelineOutcome(
@@ -1830,8 +1933,13 @@ class WorksScrapeService {
       return priority < 0 ? _worksSources.length : priority;
     }
 
-    String canonicalCode(String? rawCode) {
-      return scrapeWorkStorageCode(rawCode)?.trim() ?? '';
+    String canonicalCode(ScrapeWorkDetails details) {
+      final declared = details.externalIdentity?.canonicalCode?.trim();
+      return scrapeWorkCanonicalStorageCode(
+            declared == null || declared.isEmpty ? details.code : declared,
+            externalIdentity: details.externalIdentity,
+          )?.trim() ??
+          '';
     }
 
     int compareSourceAndCode(
@@ -1861,20 +1969,22 @@ class WorksScrapeService {
       ..sort(
         (left, right) => compareSourceAndCode(
           left.sourceId,
-          canonicalCode(left.details.code),
+          canonicalCode(left.details),
           left.candidate.summary.detailUri,
           right.sourceId,
-          canonicalCode(right.details.code),
+          canonicalCode(right.details),
           right.candidate.summary.detailUri,
         ),
       );
     for (final detail in sortedFetched) {
-      final code = canonicalCode(detail.details.code);
+      final code = canonicalCode(detail.details);
       final sourceUri = detail.candidate.summary.detailUri.toString();
-      final codeKey = scrapeWorkCodeIdentityKey(detail.details.code);
-      final identityKey = codeKey == null
-          ? 'resolved:${detail.sourceId.storageValue}:$sourceUri'
-          : 'resolved:$codeKey';
+      // The catalog union already resolved this detail to a family. Keep
+      // that key while merging detail evidence so a lower source's raw alias
+      // cannot reopen an already-resolved family into a second DB row.
+      final identityKey = detail.identityKey.isNotEmpty
+          ? detail.identityKey
+          : 'resolved:${detail.sourceId.storageValue}:$sourceUri';
       final group = groups.putIfAbsent(
         identityKey,
         () => _ResolvedWorkGroup(
@@ -1895,20 +2005,36 @@ class WorksScrapeService {
       ..sort(
         (left, right) => compareSourceAndCode(
           left.candidate.source.id,
-          canonicalCode(left.candidate.summary.code),
+          scrapeWorkCanonicalStorageCode(
+                left.candidate.summary.rawCode ?? left.candidate.summary.code,
+                externalIdentity: left.candidate.summary.externalIdentity,
+              ) ??
+              '',
           left.candidate.summary.detailUri,
           right.candidate.source.id,
-          canonicalCode(right.candidate.summary.code),
+          scrapeWorkCanonicalStorageCode(
+                right.candidate.summary.rawCode ?? right.candidate.summary.code,
+                externalIdentity: right.candidate.summary.externalIdentity,
+              ) ??
+              '',
           right.candidate.summary.detailUri,
         ),
       );
     for (final failed in sortedFailures) {
-      final rawCode = failed.candidate.summary.code?.trim() ?? '';
-      final code = canonicalCode(rawCode);
-      final codeKey = scrapeWorkCodeIdentityKey(rawCode);
-      final identityKey = codeKey == null
-          ? 'failed:${failed.candidate.source.id.storageValue}:${failed.candidate.summary.detailUri}'
-          : 'resolved:$codeKey';
+      final rawCode =
+          failed.candidate.summary.rawCode ??
+          failed.candidate.summary.code?.trim() ??
+          '';
+      final declared = failed.candidate.summary.externalIdentity?.canonicalCode;
+      final code =
+          scrapeWorkCanonicalStorageCode(
+            declared == null || declared.trim().isEmpty ? rawCode : declared,
+            externalIdentity: failed.candidate.summary.externalIdentity,
+          )?.trim() ??
+          '';
+      final identityKey = failed.identityKey.isNotEmpty
+          ? failed.identityKey
+          : 'failed:${failed.candidate.source.id.storageValue}:${failed.candidate.summary.detailUri}';
       final group = groups.putIfAbsent(
         identityKey,
         () => _ResolvedWorkGroup(
@@ -2183,7 +2309,10 @@ class WorksScrapeService {
     if (_isCancelled(cancellationToken)) {
       throw const _ScrapeCancelled();
     }
-    final code = scrapeWorkStorageCode(details.code);
+    final code = scrapeWorkCanonicalStorageCode(
+      details.code,
+      externalIdentity: details.externalIdentity,
+    );
     if (code == null) {
       throw ArgumentError('Work code must not be empty.');
     }
@@ -2341,6 +2470,7 @@ class WorksScrapeService {
       genres: details.genres,
       coPerformance: details.coPerformance,
       provenanceFacts: details.provenanceFacts,
+      externalIdentity: details.externalIdentity,
     );
   }
 

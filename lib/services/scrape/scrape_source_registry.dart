@@ -7,11 +7,13 @@ class ScrapeSourceRegistry {
     ScrapeSourceId.minnanoAv,
     ScrapeSourceId.javbus,
     ScrapeSourceId.avbase,
+    ScrapeSourceId.avwiki,
   ];
 
   static const List<ScrapeSourceId> worksSources = [
     ScrapeSourceId.javbus,
     ScrapeSourceId.avbase,
+    ScrapeSourceId.avwiki,
   ];
 
   static List<ScrapeSourceId> resolveWorksSources(

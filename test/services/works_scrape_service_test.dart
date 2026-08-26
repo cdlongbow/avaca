@@ -139,7 +139,7 @@ void main() {
       expect(result.actressImageStatus, ActressImageSyncStatus.replaced);
       expect(
         observer.outcomes,
-        contains(const (code: 'ABF-367', state: ScrapeWorkOutcomeState.review)),
+        contains(const (code: 'ABF-367', state: ScrapeWorkOutcomeState.saved)),
       );
     },
   );

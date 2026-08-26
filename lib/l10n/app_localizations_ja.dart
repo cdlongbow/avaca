@@ -735,6 +735,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get scrapeSourceAvBase => 'AvBase';
 
   @override
+  String get scrapeSourceAvWiki => 'AV-Wiki';
+
+  @override
   String get scrapeSourceAll => 'すべての取得元（品番で統合・重複排除）';
 
   @override
@@ -1143,6 +1146,27 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get scrapeJobNoItems => '作品チェックポイントはまだありません。';
+
+  @override
+  String get scrapeJobFilterAll => 'すべて';
+
+  @override
+  String get scrapeJobFilterReview => '要確認';
+
+  @override
+  String get scrapeJobFilterKeep => '保持';
+
+  @override
+  String get scrapeJobFilterExclude => '除外';
+
+  @override
+  String get scrapeJobFilterFailed => '失敗';
+
+  @override
+  String get scrapeJobNoFilteredItems => 'このフィルターに一致するチェックポイントはありません。';
+
+  @override
+  String get scrapeJobStateReview => '要確認';
 
   @override
   String get scrapeJobStateQueued => '待機中';
@@ -1963,6 +1987,9 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
   String get scrapeSourceAvBase => 'AvBase';
 
   @override
+  String get scrapeSourceAvWiki => 'AV-Wiki';
+
+  @override
   String get scrapeSourceAll => 'すべての取得元（品番で統合・重複排除）';
 
   @override
@@ -2371,6 +2398,27 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
 
   @override
   String get scrapeJobNoItems => '作品チェックポイントはまだありません。';
+
+  @override
+  String get scrapeJobFilterAll => 'すべて';
+
+  @override
+  String get scrapeJobFilterReview => '要確認';
+
+  @override
+  String get scrapeJobFilterKeep => '保持';
+
+  @override
+  String get scrapeJobFilterExclude => '除外';
+
+  @override
+  String get scrapeJobFilterFailed => '失敗';
+
+  @override
+  String get scrapeJobNoFilteredItems => 'このフィルターに一致するチェックポイントはありません。';
+
+  @override
+  String get scrapeJobStateReview => '要確認';
 
   @override
   String get scrapeJobStateQueued => '待機中';

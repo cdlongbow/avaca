@@ -5,6 +5,8 @@
 // by a few presentation/image consumers, but it must not decide whether two
 // newly scraped works are the same work.
 
+import 'scrape_models.dart';
+
 final class ScrapeTitleIdentity {
   const ScrapeTitleIdentity({
     required this.key,
@@ -37,6 +39,41 @@ final class ScrapeWorkCodeIdentity {
   final String displayCode;
   final bool isStructured;
   final bool isSpecialEdition;
+}
+
+/// Optional source-declared context for edition and cross-platform identity
+/// resolution. It is intentionally not a generic prefix/number grammar.
+final class ScrapeWorkIdentityEvidence {
+  const ScrapeWorkIdentityEvidence({
+    this.canonicalCode,
+    this.makerCode,
+    this.manufacturer,
+    this.label,
+    this.series,
+    this.aliases = const [],
+    this.platformIds = const {},
+  });
+
+  final String? canonicalCode;
+  final String? makerCode;
+  final String? manufacturer;
+  final String? label;
+  final String? series;
+  final List<String> aliases;
+  final Map<String, String> platformIds;
+
+  Iterable<String> get declaredCodes sync* {
+    for (final value in <String?>[canonicalCode, makerCode]) {
+      final trimmed = value?.trim();
+      if (trimmed != null && trimmed.isNotEmpty) yield trimmed;
+    }
+    yield* aliases
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty);
+    yield* platformIds.values
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty);
+  }
 }
 
 const _specialEditionMarkers = <String>['【特典版】', '[特典版]'];
@@ -83,19 +120,22 @@ String? normalizeScrapeWorkCodeSurface(String? raw) {
 /// source-specific padding rule is the observed START separatorless
 /// representation (START00023 == START-023). It is deliberately not a
 /// global zero-trimming rule, so SIVR00303 remains different from SIVR-303.
-ScrapeWorkCodeIdentity? parseScrapeWorkCodeIdentity(String? raw) {
+ScrapeWorkCodeIdentity? parseScrapeWorkCodeIdentity(
+  String? raw, {
+  ScrapeWorkIdentityEvidence? evidence,
+}) {
   final surface = normalizeScrapeWorkCodeSurface(raw);
   if (surface == null) {
     return null;
   }
 
-  // Sources use both START-276V and STARS-859-T spellings. Only strip a
-  // terminal edition marker, then require the remaining surface to be a
-  // structured work code before treating it as the ordinary identity.
-  final editionMatch = RegExp(r'^(.+?)-?(VT|T|V)$').firstMatch(surface);
-  final baseSurface = editionMatch?.group(1) ?? surface;
+  // V/T/VT/VT2/EC and BD are edition markers only inside the explicitly
+  // supported SOD product-line grammar. A code such as FOO-123-EC remains a
+  // distinct surface; no global suffix or prefix rule changes its identity.
+  final edition = _scopedSodEdition(surface, evidence);
+  final baseSurface = edition?.baseSurface ?? surface;
   final parsed = _parseScrapeWorkCodeIdentitySurface(baseSurface);
-  if (editionMatch != null && parsed.isStructured) {
+  if (edition != null && parsed.isStructured) {
     return ScrapeWorkCodeIdentity(
       surface: surface,
       key: parsed.key,
@@ -105,6 +145,47 @@ ScrapeWorkCodeIdentity? parseScrapeWorkCodeIdentity(String? raw) {
     );
   }
   return parsed;
+}
+
+({String baseSurface, bool isSpecial})? _scopedSodEdition(
+  String surface,
+  ScrapeWorkIdentityEvidence? evidence,
+) {
+  final terminalEdition = RegExp(
+    r'^(.+?)-?(VT2|VT|V|T)(?:-?EC)?$',
+  ).firstMatch(surface);
+  if (terminalEdition != null && _isScopedSodBase(terminalEdition.group(1)!)) {
+    return (baseSurface: terminalEdition.group(1)!, isSpecial: true);
+  }
+  final ecEdition = RegExp(r'^(.+?)-EC$').firstMatch(surface);
+  if (ecEdition != null && _isScopedSodBase(ecEdition.group(1)!)) {
+    return (baseSurface: ecEdition.group(1)!, isSpecial: true);
+  }
+
+  // STARSBD-859 is accepted only when the same source also identifies the
+  // product line as SOD. Without that evidence it remains STARSBD-859.
+  final bdVariant = RegExp(r'^(STARS)BD-(\d+)$').firstMatch(surface);
+  if (bdVariant != null && _hasSodContext(evidence)) {
+    return (
+      baseSurface: '${bdVariant.group(1)}-${bdVariant.group(2)}',
+      isSpecial: true,
+    );
+  }
+  return null;
+}
+
+bool _isScopedSodBase(String surface) {
+  return RegExp(r'^(START|STARS)-\d+$').hasMatch(surface);
+}
+
+bool _hasSodContext(ScrapeWorkIdentityEvidence? evidence) {
+  if (evidence == null) return false;
+  final text = [
+    evidence.manufacturer,
+    evidence.label,
+    evidence.series,
+  ].whereType<String>().join(' ').toLowerCase();
+  return RegExp(r'\bsod\b|sodクリエイト|sod create').hasMatch(text);
 }
 
 ScrapeWorkCodeIdentity _parseScrapeWorkCodeIdentitySurface(String surface) {
@@ -159,10 +240,95 @@ String? scrapeWorkCodeIdentityKey(String? raw) =>
 bool scrapeWorkCodeIsSpecialEdition(String? raw) =>
     parseScrapeWorkCodeIdentity(raw)?.isSpecialEdition ?? false;
 
-bool scrapeWorkCodesEqual(String? left, String? right) {
-  final leftKey = scrapeWorkCodeIdentityKey(left);
-  final rightKey = scrapeWorkCodeIdentityKey(right);
+bool scrapeWorkCodesEqual(
+  String? left,
+  String? right, {
+  ScrapeWorkIdentityEvidence? evidence,
+}) {
+  final leftKey = parseScrapeWorkCodeIdentity(left, evidence: evidence)?.key;
+  final rightKey = parseScrapeWorkCodeIdentity(right, evidence: evidence)?.key;
   return leftKey != null && leftKey == rightKey;
+}
+
+/// Resolves one summary to a grouping key for the aggregate pipeline.
+///
+/// A typed external identity may explicitly bridge a maker code and platform
+/// aliases. The START/107START/1start bridge is therefore applied only when
+/// those aliases are declared on the same source record; the bare code parser
+/// never performs that collapse.
+String? scrapeWorkIdentityKeyForSummary(ScrapeWorkSummary summary) {
+  return scrapeWorkResolvedIdentityKey(
+    rawCode: summary.rawCode ?? summary.code,
+    externalIdentity: summary.externalIdentity,
+    fallback: 'uri:${summary.source.storageValue}:${summary.detailUri}',
+  );
+}
+
+String? scrapeWorkIdentityKeyForDetails(ScrapeWorkDetails details) {
+  return scrapeWorkResolvedIdentityKey(
+    rawCode: details.rawCode ?? details.code,
+    externalIdentity: details.externalIdentity,
+    fallback:
+        'uri:${details.source.storageValue}:${details.sourceUri ?? details.code}',
+  );
+}
+
+String? scrapeWorkResolvedIdentityKey({
+  required String? rawCode,
+  ScrapeExternalWorkIdentity? externalIdentity,
+  required String fallback,
+}) {
+  final evidence = _identityEvidence(externalIdentity);
+  final bridgeKey = _declaredScopedBridgeKey(externalIdentity);
+  if (bridgeKey != null) return 'code:$bridgeKey';
+  final identity = parseScrapeWorkCodeIdentity(rawCode, evidence: evidence);
+  if (identity != null) return 'code:${identity.key}';
+  final canonical =
+      externalIdentity?.canonicalCode ?? externalIdentity?.makerCode;
+  final canonicalIdentity = parseScrapeWorkCodeIdentity(
+    canonical,
+    evidence: evidence,
+  );
+  if (canonicalIdentity != null) return 'code:${canonicalIdentity.key}';
+  return fallback;
+}
+
+ScrapeWorkIdentityEvidence? _identityEvidence(
+  ScrapeExternalWorkIdentity? identity,
+) {
+  if (identity == null || identity.isEmpty) return null;
+  return ScrapeWorkIdentityEvidence(
+    canonicalCode: identity.canonicalCode,
+    makerCode: identity.makerCode,
+    manufacturer: identity.manufacturer,
+    label: identity.label,
+    series: identity.series,
+    aliases: identity.aliases,
+    platformIds: identity.platformIds,
+  );
+}
+
+String? _declaredScopedBridgeKey(ScrapeExternalWorkIdentity? identity) {
+  if (identity == null) return null;
+  final declared = identity.declaredCodes.toList(growable: false);
+  final startNumbers = <String>{};
+  final starsNumbers = <String>{};
+  for (final raw in declared) {
+    final normalized = normalizeScrapeWorkCodeSurface(raw);
+    if (normalized == null) continue;
+    final compact = normalized.replaceAll('-', '');
+    final start = RegExp(r'^(?:107|1)?START0*(\d+)$').firstMatch(compact);
+    if (start != null) startNumbers.add(start.group(1)!);
+    final stars = RegExp(r'^STARS(?:BD)?0*(\d+)$').firstMatch(compact);
+    if (stars != null) starsNumbers.add(stars.group(1)!);
+  }
+  if (startNumbers.length == 1 && starsNumbers.isEmpty) {
+    return 'start${startNumbers.single}';
+  }
+  if (starsNumbers.length == 1 && startNumbers.isEmpty) {
+    return 'stars${starsNumbers.single}';
+  }
+  return null;
 }
 
 /// Returns the canonical display spelling without using the legacy alias
@@ -200,6 +366,37 @@ String? scrapeWorkStorageCode(String? rawCode) {
   final identity = parseScrapeWorkCodeIdentity(rawCode);
   if (identity == null) return null;
   return identity.isSpecialEdition ? identity.surface : identity.displayCode;
+}
+
+/// Returns the clean canonical storage spelling for the new works pipeline.
+///
+/// Unlike the legacy storage helper above, a trusted SOD edition context is
+/// allowed to collapse a V/T/VT/EC/BD surface even when that edition is the
+/// only catalog record. Cross-platform aliases are considered only when the
+/// source declared them on the same record.
+String? scrapeWorkCanonicalStorageCode(
+  String? rawCode, {
+  ScrapeExternalWorkIdentity? externalIdentity,
+}) {
+  final evidence = _identityEvidence(externalIdentity);
+  final declared = <String?>[
+    externalIdentity?.canonicalCode,
+    externalIdentity?.makerCode,
+    ...?externalIdentity?.aliases,
+    ...?externalIdentity?.platformIds.values,
+    rawCode,
+  ];
+  final bridgeKey = _declaredScopedBridgeKey(externalIdentity);
+  if (bridgeKey != null) {
+    final prefix = bridgeKey.startsWith('start') ? 'START' : 'STARS';
+    return '$prefix-${bridgeKey.substring(prefix.toLowerCase().length)}';
+  }
+  for (final candidate in declared) {
+    final identity = parseScrapeWorkCodeIdentity(candidate, evidence: evidence);
+    if (identity == null || !identity.isStructured) continue;
+    return identity.displayCode;
+  }
+  return scrapeWorkStorageCode(rawCode);
 }
 
 /// Compares metadata only when one side lacks a code. The actress is already

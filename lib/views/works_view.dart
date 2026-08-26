@@ -18,6 +18,9 @@ import '../models/work_storage.dart';
 import '../services/avbase/avbase_client.dart';
 import '../services/avbase/avbase_scrape_source.dart';
 import '../services/avbase/avbase_transport.dart';
+import '../services/avwiki/avwiki_client.dart';
+import '../services/avwiki/avwiki_scrape_source.dart';
+import '../services/avwiki/avwiki_transport.dart';
 import '../services/javbus/javbus_client.dart';
 import '../services/javbus/javbus_scrape_source.dart';
 import '../services/javbus/javbus_verification.dart';
@@ -960,6 +963,11 @@ class _WorksViewState extends State<WorksView> {
         maxBytes: 5 * 1024 * 1024,
       );
     }
+    if (requestedSourceIds.contains(ScrapeSourceId.avwiki)) {
+      final transport = HttpAvWikiTransport();
+      final client = AvWikiClient(transport: transport);
+      configuredSources[ScrapeSourceId.avwiki] = AvWikiScrapeSource(client);
+    }
 
     final detailsImageDownloader =
         switch (sourceSettings.actressDetailsSource) {
@@ -971,6 +979,12 @@ class _WorksViewState extends State<WorksView> {
           ),
           ScrapeSourceId.javbus => HttpActressImageDownloader(
             authenticatedTransport: javBusTransport,
+          ),
+          ScrapeSourceId.avwiki => HttpActressImageDownloader(
+            transport: HttpBinaryTransport(
+              allowedHosts: const {'av-wiki.net', 'www.av-wiki.net'},
+              maxBytes: 5 * 1024 * 1024,
+            ),
           ),
         };
     final service = WorksScrapeService(
@@ -2101,6 +2115,7 @@ String _scrapeSourceLabel(AppLocalizations l10n, ScrapeSourceId source) {
     ScrapeSourceId.javbus => l10n.scrapeSourceJavBus,
     ScrapeSourceId.minnanoAv => l10n.scrapeSourceMinnanoAv,
     ScrapeSourceId.avbase => l10n.scrapeSourceAvBase,
+    ScrapeSourceId.avwiki => l10n.scrapeSourceAvWiki,
   };
 }
 

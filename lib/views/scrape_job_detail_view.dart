@@ -13,6 +13,22 @@ import '../models/scrape_source_settings.dart';
 import '../services/javbus/javbus_verification.dart';
 import '../services/scrape_job_coordinator.dart';
 
+enum _ScrapeJobItemFilter {
+  all,
+  review,
+  keep,
+  exclude,
+  failed;
+
+  bool matches(ScrapeJobItemState state) => switch (this) {
+    _ScrapeJobItemFilter.all => true,
+    _ScrapeJobItemFilter.review => state == ScrapeJobItemState.review,
+    _ScrapeJobItemFilter.keep => state == ScrapeJobItemState.succeeded,
+    _ScrapeJobItemFilter.exclude => state == ScrapeJobItemState.excluded,
+    _ScrapeJobItemFilter.failed => state == ScrapeJobItemState.failed,
+  };
+}
+
 class ScrapeJobDetailView extends StatefulWidget {
   const ScrapeJobDetailView({
     super.key,
@@ -34,6 +50,7 @@ class _ScrapeJobDetailViewState extends State<ScrapeJobDetailView> {
   bool _loading = true;
   Object? _loadError;
   bool _actionBusy = false;
+  _ScrapeJobItemFilter _itemFilter = _ScrapeJobItemFilter.all;
   int _loadGeneration = 0;
   late final ScrollController _itemsScrollController;
   late final JavBusVerificationHandler? _previousVerificationHandler;
@@ -250,29 +267,76 @@ class _ScrapeJobDetailViewState extends State<ScrapeJobDetailView> {
       return Text(AppLocalizations.of(context).scrapeJobNoItems);
     }
 
+    final filteredItems = items
+        .where((item) => _itemFilter.matches(item.state))
+        .toList(growable: false);
+    final l10n = AppLocalizations.of(context);
+    final filterLabels = <_ScrapeJobItemFilter, String>{
+      _ScrapeJobItemFilter.all: l10n.scrapeJobFilterAll,
+      _ScrapeJobItemFilter.review: l10n.scrapeJobFilterReview,
+      _ScrapeJobItemFilter.keep: l10n.scrapeJobFilterKeep,
+      _ScrapeJobItemFilter.exclude: l10n.scrapeJobFilterExclude,
+      _ScrapeJobItemFilter.failed: l10n.scrapeJobFilterFailed,
+    };
+    final filters = SingleChildScrollView(
+      key: const Key('scrape-job-item-filters'),
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final entry in filterLabels.entries) ...[
+            ChoiceChip(
+              key: ValueKey('scrape-job-item-filter-${entry.key.name}'),
+              label: Text(entry.value),
+              selected: _itemFilter == entry.key,
+              onSelected: (_) => setState(() => _itemFilter = entry.key),
+            ),
+            const SizedBox(width: 8),
+          ],
+        ],
+      ),
+    );
+    if (filteredItems.isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          filters,
+          const SizedBox(height: 8),
+          Text(l10n.scrapeJobNoFilteredItems),
+        ],
+      );
+    }
+
     final screenHeight = MediaQuery.of(context).size.height;
     final maxHeight = (screenHeight * 0.42).clamp(180.0, 480.0).toDouble();
-    final estimatedContentHeight = (items.length * 56.0 + 8)
+    final estimatedContentHeight = (filteredItems.length * 56.0 + 8)
         .clamp(56.0, maxHeight)
         .toDouble();
 
-    return SizedBox(
-      key: const Key('scrape-job-items-viewport'),
-      height: estimatedContentHeight,
-      child: Scrollbar(
-        controller: _itemsScrollController,
-        thumbVisibility: items.length > 2,
-        child: ListView.separated(
-          key: const Key('scrape-job-items-list'),
-          controller: _itemsScrollController,
-          primary: false,
-          shrinkWrap: false,
-          padding: const EdgeInsets.only(right: 8),
-          itemCount: items.length,
-          itemBuilder: (context, index) => _itemTile(context, items[index]),
-          separatorBuilder: (_, _) => const Divider(height: 1),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        filters,
+        const SizedBox(height: 8),
+        SizedBox(
+          key: const Key('scrape-job-items-viewport'),
+          height: estimatedContentHeight,
+          child: Scrollbar(
+            controller: _itemsScrollController,
+            thumbVisibility: filteredItems.length > 2,
+            child: ListView.separated(
+              key: const Key('scrape-job-items-list'),
+              controller: _itemsScrollController,
+              primary: false,
+              shrinkWrap: false,
+              padding: const EdgeInsets.only(right: 8),
+              itemCount: filteredItems.length,
+              itemBuilder: (context, index) =>
+                  _itemTile(context, filteredItems[index]),
+              separatorBuilder: (_, _) => const Divider(height: 1),
+            ),
+          ),
         ),
-      ),
+      ],
     );
   }
 
@@ -372,6 +436,7 @@ class _ScrapeJobDetailViewState extends State<ScrapeJobDetailView> {
       ScrapeSourceId.javbus => l10n.scrapeSourceJavBus,
       ScrapeSourceId.avbase => l10n.scrapeSourceAvBase,
       ScrapeSourceId.minnanoAv => l10n.scrapeSourceMinnanoAv,
+      ScrapeSourceId.avwiki => l10n.scrapeSourceAvWiki,
     };
     final pages = progress.totalKnown
         ? '${progress.current}/${progress.total}'
@@ -466,7 +531,7 @@ class _ScrapeJobDetailViewState extends State<ScrapeJobDetailView> {
       ScrapeJobItemState.queued => l10n.scrapeJobStateQueued,
       ScrapeJobItemState.running => l10n.scrapeJobStateRunning,
       ScrapeJobItemState.succeeded => l10n.scrapeJobStateSucceeded,
-      ScrapeJobItemState.review => '待檢視',
+      ScrapeJobItemState.review => l10n.scrapeJobStateReview,
       ScrapeJobItemState.excluded => l10n.scrapeJobStateExcluded,
       ScrapeJobItemState.failed => l10n.scrapeJobStateFailed,
       ScrapeJobItemState.cancelled => l10n.scrapeJobStateCancelled,

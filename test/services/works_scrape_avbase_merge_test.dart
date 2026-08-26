@@ -199,7 +199,7 @@ void main() {
     expect(work['series'], 'AvBase 系列');
   });
 
-  test('starts primary details before waiting for secondary coverage', () async {
+  test('waits for enabled catalog union before resolving details', () async {
     final directory = await Directory.systemTemp.createTemp(
       'avaca_list_barrier_test_',
     );
@@ -254,7 +254,7 @@ void main() {
     );
     await started.future;
     await Future<void>.delayed(Duration.zero);
-    expect(javbus.detailRequests, 1);
+    expect(javbus.detailRequests, 0);
     expect(avbase.detailRequests, 0);
     gate.complete();
     expect((await scrape).saved, 1);
@@ -307,7 +307,7 @@ void main() {
       expect(result.saved, 1);
       expect(
         (await database.getWorksForActress(actressId)).single['code'],
-        'START-276V',
+        'START-276',
       );
     },
   );

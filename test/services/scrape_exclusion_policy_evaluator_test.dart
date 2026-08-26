@@ -9,7 +9,7 @@ import 'package:avaca/services/scrape_exclusion_policy_evaluator.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('keeps edited and viewpoint presentations for review-safe handling', () {
+  test('keeps edited and viewpoint presentations without reuse evidence', () {
     final evaluator = _evaluator();
 
     expect(
@@ -19,7 +19,7 @@ void main() {
             details: [_details('3DSVR-485', 'マルチアングル編集')],
           )
           .finalAction,
-      ScrapeFinalAction.keepReview,
+      ScrapeFinalAction.keep,
     );
     expect(
       evaluator
@@ -64,8 +64,8 @@ void main() {
         details: [_details('MIZD-605', '普通の單體作品')],
       );
 
-      expect(ofje.finalAction, ScrapeFinalAction.keepReview);
-      expect(ofje.reasonCodes, ['unknown_provenance']);
+      expect(ofje.finalAction, ScrapeFinalAction.keep);
+      expect(ofje.reasonCodes, ['no_reuse_signal']);
       expect(ofje.policyMatches, isEmpty);
       expect(unknownFamily.reasonCodes, ofje.reasonCodes);
       expect(unknownFamily.finalAction, ofje.finalAction);
@@ -104,8 +104,8 @@ void main() {
       details: [_details('MIX-001', '単体作品', performerCount: 30)],
     );
 
-    expect(decision.finalAction, ScrapeFinalAction.keepReview);
-    expect(decision.verdict, ScrapeProvenanceVerdict.keepUncertain);
+    expect(decision.finalAction, ScrapeFinalAction.keep);
+    expect(decision.verdict, ScrapeProvenanceVerdict.keep);
   });
 
   test('does not infer shared production from cast count', () {
@@ -123,8 +123,95 @@ void main() {
       ],
     );
 
-    expect(decision.finalAction, ScrapeFinalAction.keepReview);
+    expect(decision.finalAction, ScrapeFinalAction.keep);
     expect(decision.provenanceClass, ScrapeProvenanceClass.unknown);
+  });
+
+  test('separates new independent segments from reused segments and hints', () {
+    final independent = _evaluator().evaluate(
+      code: 'PASN-029',
+      details: [
+        _details(
+          'PASN-029',
+          '三段独立新拍作品',
+          performers: const [
+            WorkPerformer(name: '女優一'),
+            WorkPerformer(name: '女優二'),
+            WorkPerformer(name: '女優三'),
+          ],
+          provenanceFacts: const ScrapeWorkProvenanceFacts(
+            coPerformance: ScrapeCoPerformance.independentSegments,
+          ),
+        ),
+      ],
+    );
+    final reused = _evaluator().evaluate(
+      code: 'PASN-030',
+      details: [
+        _details(
+          'PASN-030',
+          '三段作品',
+          provenanceFacts: const ScrapeWorkProvenanceFacts(
+            reusedIndependentSegments: true,
+          ),
+        ),
+      ],
+    );
+    final priorPackage = _evaluator().evaluate(
+      code: 'PASN-031',
+      details: [
+        _details(
+          'PASN-031',
+          '作品パッケージ',
+          provenanceFacts: const ScrapeWorkProvenanceFacts(
+            packageOfPriorWorks: true,
+          ),
+        ),
+      ],
+    );
+    final familyHint = _evaluator().evaluate(
+      code: 'OFJE-605',
+      details: [_details('OFJE-605', '普通の単体作品', studio: 'S1 NO.1 STYLE')],
+    );
+    final highVolumeHint = _evaluator().evaluate(
+      code: 'SAFE-VOLUME-001',
+      details: [_details('SAFE-VOLUME-001', '100人8時間2枚組')],
+    );
+
+    expect(independent.finalAction, ScrapeFinalAction.keep);
+    expect(reused.finalAction, ScrapeFinalAction.exclude);
+    expect(priorPackage.finalAction, ScrapeFinalAction.exclude);
+    expect(familyHint.finalAction, ScrapeFinalAction.keepReview);
+    expect(
+      familyHint.evidence.any(
+        (item) =>
+            item.kind == ScrapeEvidenceKind.productFamilySuspicion &&
+            item.strength == ScrapeEvidenceStrength.medium,
+      ),
+      isTrue,
+    );
+    final safeFamilyTitle = _evaluator().evaluate(
+      code: 'OFJE-606',
+      details: [_details('OFJE-606', 'BEST FRIEND', studio: 'S1 NO.1 STYLE')],
+    );
+    final collectionFamilyTitle = _evaluator().evaluate(
+      code: 'OFJE-607',
+      details: [
+        _details('OFJE-607', 'BEST COLLECTION', studio: 'S1 NO.1 STYLE'),
+      ],
+    );
+    expect(safeFamilyTitle.finalAction, ScrapeFinalAction.keepReview);
+    expect(collectionFamilyTitle.finalAction, ScrapeFinalAction.exclude);
+    expect(
+      collectionFamilyTitle.evidence.any(
+        (item) =>
+            item.kind == ScrapeEvidenceKind.productFamilySuspicion &&
+            item.strength == ScrapeEvidenceStrength.strong,
+      ),
+      isTrue,
+    );
+    expect(highVolumeHint.finalAction, ScrapeFinalAction.keepReview);
+    expect(highVolumeHint.finalAction, isNot(ScrapeFinalAction.exclude));
   });
 
   test('uses review when source surfaces conflict', () {
@@ -282,11 +369,7 @@ void main() {
           code: 'BONUS-${title.hashCode}',
           details: [_details('BONUS-${title.hashCode}', title)],
         );
-        expect(
-          decision.finalAction,
-          ScrapeFinalAction.keepReview,
-          reason: title,
-        );
+        expect(decision.finalAction, ScrapeFinalAction.keep, reason: title);
         expect(
           decision.evidence.any(
             (item) => item.kind == ScrapeEvidenceKind.bonusNewMaterial,
@@ -537,7 +620,7 @@ void main() {
         code: 'META-COUNT-${title.hashCode}',
         details: [_details('META-COUNT-${title.hashCode}', title)],
       );
-      expect(decision.finalAction, ScrapeFinalAction.keepReview, reason: title);
+      expect(decision.finalAction, ScrapeFinalAction.keep, reason: title);
     }
   });
 
@@ -711,7 +794,7 @@ void main() {
             classificationContext: naganoContext,
           )
           .finalAction,
-      ScrapeFinalAction.keepReview,
+      ScrapeFinalAction.keep,
     );
   });
 
@@ -781,8 +864,8 @@ void main() {
         ],
       );
 
-      expect(weak.finalAction, ScrapeFinalAction.keepReview);
-      expect(weak.reasonCodes, contains('production_shared_hint'));
+      expect(weak.finalAction, ScrapeFinalAction.keep);
+      expect(weak.reasonCodes, contains('no_reuse_signal'));
       expect(proven.finalAction, ScrapeFinalAction.keep);
       expect(proven.provenanceClass, ScrapeProvenanceClass.originalCostar);
       expect(concreteLineage.finalAction, ScrapeFinalAction.exclude);
@@ -813,8 +896,8 @@ void main() {
     );
 
     expect(mixed.finalAction, ScrapeFinalAction.exclude);
-    expect(newOnly.finalAction, ScrapeFinalAction.keepReview);
-    expect(newBonusWithoutReuse.finalAction, ScrapeFinalAction.keepReview);
+    expect(newOnly.finalAction, ScrapeFinalAction.keep);
+    expect(newBonusWithoutReuse.finalAction, ScrapeFinalAction.keep);
     expect(bestWithBonus.finalAction, ScrapeFinalAction.exclude);
   });
 
@@ -919,8 +1002,8 @@ void main() {
       details: [_details('FC2-001', '普通作品')],
     );
 
-    expect(decision.finalAction, ScrapeFinalAction.keepReview);
-    expect(decision.reasonCodes, ['unknown_provenance']);
+    expect(decision.finalAction, ScrapeFinalAction.keep);
+    expect(decision.reasonCodes, ['no_reuse_signal']);
   });
 
   test('unions source-scoped exact allows across all resolved surfaces', () {
@@ -1069,6 +1152,9 @@ ScrapeWorkDetails _details(
   ScrapeSourceId source = ScrapeSourceId.javbus,
   ScrapeWorkProvenanceFacts provenanceFacts = const ScrapeWorkProvenanceFacts(),
   List<WorkPerformer>? performers,
+  String? studio,
+  String? publisher,
+  String? series,
 }) {
   return ScrapeWorkDetails(
     source: source,
@@ -1076,6 +1162,9 @@ ScrapeWorkDetails _details(
     title: title,
     performerCount: performerCount,
     performers: performers,
+    studio: studio,
+    publisher: publisher,
+    series: series,
     provenanceFacts: provenanceFacts,
   );
 }

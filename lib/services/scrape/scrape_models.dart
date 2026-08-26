@@ -9,6 +9,51 @@ final class WorkFieldSourceEvidence {
   final Uri? sourceUri;
 }
 
+/// Typed identity evidence supplied by a metadata source.
+///
+/// These values are identifiers and provenance, not image URLs.  A source may
+/// provide a canonical maker code together with platform-specific aliases so
+/// that the aggregate scrape can reconcile records without applying a global
+/// number/prefix normalizer.
+final class ScrapeExternalWorkIdentity {
+  const ScrapeExternalWorkIdentity({
+    this.canonicalCode,
+    this.makerCode,
+    this.manufacturer,
+    this.label,
+    this.series,
+    this.platformIds = const {},
+    this.aliases = const [],
+  });
+
+  final String? canonicalCode;
+  final String? makerCode;
+  final String? manufacturer;
+  final String? label;
+  final String? series;
+  final Map<String, String> platformIds;
+  final List<String> aliases;
+
+  bool get isEmpty =>
+      (canonicalCode == null || canonicalCode!.trim().isEmpty) &&
+      (makerCode == null || makerCode!.trim().isEmpty) &&
+      platformIds.isEmpty &&
+      aliases.isEmpty;
+
+  Iterable<String> get declaredCodes sync* {
+    for (final value in <String?>[canonicalCode, makerCode]) {
+      final trimmed = value?.trim();
+      if (trimmed != null && trimmed.isNotEmpty) yield trimmed;
+    }
+    yield* aliases
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty);
+    yield* platformIds.values
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty);
+  }
+}
+
 enum ScrapeCoPerformance {
   unknown,
   possibleSharedProduction,
@@ -30,6 +75,8 @@ final class ScrapeWorkProvenanceFacts {
     this.extractedFromPriorWork,
     this.splitFromPriorWork,
     this.packageOfIndependentWorks,
+    this.packageOfPriorWorks,
+    this.reusedIndependentSegments,
     this.oldMaterialWithNewBonus,
     this.reissue,
     this.remaster,
@@ -47,6 +94,8 @@ final class ScrapeWorkProvenanceFacts {
   final bool? extractedFromPriorWork;
   final bool? splitFromPriorWork;
   final bool? packageOfIndependentWorks;
+  final bool? packageOfPriorWorks;
+  final bool? reusedIndependentSegments;
   final bool? oldMaterialWithNewBonus;
   final bool? reissue;
   final bool? remaster;
@@ -94,6 +143,7 @@ final class ScrapeWorkSummary {
     required this.title,
     required this.detailUri,
     this.releaseDate,
+    this.externalIdentity,
   });
 
   final ScrapeSourceId source;
@@ -102,6 +152,7 @@ final class ScrapeWorkSummary {
   final String title;
   final Uri detailUri;
   final String? releaseDate;
+  final ScrapeExternalWorkIdentity? externalIdentity;
 }
 
 final class ScrapeWorkDetails {
@@ -127,6 +178,7 @@ final class ScrapeWorkDetails {
     this.originalImageEvidenceUris = const [],
     this.fieldSources = const {},
     this.sourceUri,
+    this.externalIdentity,
   });
 
   final ScrapeSourceId source;
@@ -150,6 +202,7 @@ final class ScrapeWorkDetails {
   final List<Uri> originalImageEvidenceUris;
   final Map<String, WorkFieldSourceEvidence> fieldSources;
   final Uri? sourceUri;
+  final ScrapeExternalWorkIdentity? externalIdentity;
 
   ScrapeWorkDetails copyWith({Uri? sourceUri}) => ScrapeWorkDetails(
     source: source,
@@ -173,6 +226,7 @@ final class ScrapeWorkDetails {
     originalImageEvidenceUris: originalImageEvidenceUris,
     fieldSources: fieldSources,
     sourceUri: sourceUri ?? this.sourceUri,
+    externalIdentity: externalIdentity,
   );
 
   Work toWork({String? cardImagePath, String? detailImagePath}) {

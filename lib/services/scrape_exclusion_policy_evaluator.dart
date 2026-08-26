@@ -3,6 +3,7 @@ import '../models/scrape_source_settings.dart';
 import 'scrape/scrape_models.dart';
 import 'scrape/provenance_semantics.dart';
 import 'scrape/scrape_classification_context.dart';
+import 'scrape/scrape_product_family_registry.dart';
 
 class ScrapeEvidenceAtom {
   const ScrapeEvidenceAtom({
@@ -112,7 +113,7 @@ class ScrapePolicyDecision {
 ///
 /// Prefixes and performer counts are intentionally not part of the automatic
 /// decision. If the available facts cannot establish reuse, the evaluator
-/// returns [ScrapeFinalAction.keepReview].
+/// returns [ScrapeFinalAction.keep].
 class ScrapeExclusionPolicyEvaluator {
   ScrapeExclusionPolicyEvaluator(this.snapshot);
 
@@ -185,16 +186,14 @@ class ScrapeExclusionPolicyEvaluator {
     final hasReviewEvidence = evidence.any(
       (item) => item.strength != ScrapeEvidenceStrength.weak,
     );
-    final hasCoPerformanceHint = evidence.any(
-      (item) => item.kind == ScrapeEvidenceKind.possibleCoPerformance,
-    );
     final hasConflict = strongCompilation && strongOriginal;
     final automaticClass = _classForEvidence(evidence, surfaces);
 
-    var automaticAction = ScrapeFinalAction.keepReview;
-    var automaticReasons = <String>[];
+    var automaticAction = ScrapeFinalAction.keep;
+    var automaticReasons = <String>['no_reuse_signal'];
     var automaticLevel = ScrapeEvidenceLevel.none;
     if (hasConflict) {
+      automaticAction = ScrapeFinalAction.keepReview;
       automaticReasons = ['source_evidence_conflict'];
       automaticLevel = ScrapeEvidenceLevel.strong;
     } else if (strongCompilation) {
@@ -218,14 +217,10 @@ class ScrapeExclusionPolicyEvaluator {
       automaticAction = ScrapeFinalAction.keep;
       automaticReasons = const ['safe_presentation_context'];
       automaticLevel = ScrapeEvidenceLevel.none;
-    } else if (hasCoPerformanceHint) {
-      automaticReasons = const ['production_shared_hint'];
-      automaticLevel = ScrapeEvidenceLevel.review;
     } else if (hasReviewEvidence) {
+      automaticAction = ScrapeFinalAction.keepReview;
       automaticReasons = ['review_evidence'];
       automaticLevel = ScrapeEvidenceLevel.review;
-    } else {
-      automaticReasons = const ['unknown_provenance'];
     }
 
     final exactAllows = _exactAllowsFor(surfaces);
@@ -454,12 +449,30 @@ class ScrapeExclusionPolicyEvaluator {
         observedText: 'split or individual-performer edition',
       );
     }
-    if (facts.packageOfIndependentWorks == true) {
+    if (facts.splitFromPriorWork != true &&
+        ScrapeProvenanceSemantics.containsStrongSplitEvidence(text)) {
+      strong(
+        kind: ScrapeEvidenceKind.splitFromPriorWork,
+        polarity: ScrapeEvidencePolarity.supportsCompilation,
+        ruleId: 'semantic_split_from_prior_work',
+        observedText: 'source wording identifies a split or individual edition',
+        field: 'title_or_metadata',
+      );
+    }
+    if (facts.packageOfPriorWorks == true) {
       strong(
         kind: ScrapeEvidenceKind.packageEdition,
         polarity: ScrapeEvidencePolarity.supportsCompilation,
-        ruleId: 'lineage_independent_package',
-        observedText: 'independent works packaged together',
+        ruleId: 'lineage_prior_work_package',
+        observedText: 'prior works packaged together',
+      );
+    }
+    if (facts.reusedIndependentSegments == true) {
+      strong(
+        kind: ScrapeEvidenceKind.includedPriorWorks,
+        polarity: ScrapeEvidencePolarity.supportsCompilation,
+        ruleId: 'lineage_reused_independent_segments',
+        observedText: 'independent segments reuse prior works',
       );
     }
     if (facts.oldMaterialWithNewBonus == true) {
@@ -496,9 +509,15 @@ class ScrapeExclusionPolicyEvaluator {
     }
     if (facts.coPerformance == ScrapeCoPerformance.independentSegments ||
         details.coPerformance == ScrapeCoPerformance.independentSegments) {
-      strong(
+      // Multiple independent segments are not the same as reusing prior
+      // works. Keep the fact as neutral context for diagnostics, but never
+      // promote it to compilation evidence on its own.
+      addEvidence(
+        surface: surface,
+        field: 'production',
         kind: ScrapeEvidenceKind.independentSegments,
-        polarity: ScrapeEvidencePolarity.supportsCompilation,
+        strength: ScrapeEvidenceStrength.weak,
+        polarity: ScrapeEvidencePolarity.neutral,
         ruleId: 'production_independent_segments',
         observedText: 'independent performer segments',
       );
@@ -641,6 +660,46 @@ class ScrapeExclusionPolicyEvaluator {
         observedText: 'source says this is a new production',
       );
     }
+
+    final productFamily = ScrapeProductFamilyRegistry.match(
+      code: surface.code,
+      manufacturer: details.studio,
+      label: details.publisher,
+      series: details.series,
+      title: details.title,
+    );
+    if (productFamily != null) {
+      if (productFamily.hasCollectionMarker) {
+        strong(
+          field: 'product_identity',
+          kind: ScrapeEvidenceKind.productFamilySuspicion,
+          polarity: ScrapeEvidencePolarity.supportsCompilation,
+          ruleId: productFamily.ruleId,
+          observedText: productFamily.observedText,
+        );
+      } else {
+        addEvidence(
+          surface: surface,
+          field: 'product_identity',
+          kind: ScrapeEvidenceKind.productFamilySuspicion,
+          strength: ScrapeEvidenceStrength.medium,
+          polarity: ScrapeEvidencePolarity.supportsCompilation,
+          ruleId: productFamily.ruleId,
+          observedText: productFamily.observedText,
+        );
+      }
+    }
+    if (ScrapeProvenanceSemantics.containsCollectionStructureSuspicion(text)) {
+      addEvidence(
+        surface: surface,
+        field: 'title_or_metadata',
+        kind: ScrapeEvidenceKind.highVolumePresentation,
+        strength: ScrapeEvidenceStrength.medium,
+        polarity: ScrapeEvidencePolarity.supportsCompilation,
+        ruleId: 'semantic_collection_structure_suspicion',
+        observedText: 'large cast, long runtime, and collection structure',
+      );
+    }
     final newMaterialScope = ScrapeProvenanceSemantics.newMaterialScope(text);
     if (newMaterialScope == ScrapeNewMaterialScope.wholeProduction) {
       strong(
@@ -726,7 +785,9 @@ class ScrapeExclusionPolicyEvaluator {
   ) {
     final kinds = evidence
         .where(
-          (item) => item.polarity == ScrapeEvidencePolarity.supportsCompilation,
+          (item) =>
+              item.polarity == ScrapeEvidencePolarity.supportsCompilation &&
+              item.strength == ScrapeEvidenceStrength.strong,
         )
         .map((item) => item.kind)
         .toSet();
@@ -749,9 +810,7 @@ class ScrapeExclusionPolicyEvaluator {
       return ScrapeProvenanceClass.mixedOldNew;
     }
     if (kinds.isNotEmpty) {
-      return kinds.contains(ScrapeEvidenceKind.independentSegments)
-          ? ScrapeProvenanceClass.derivedBundle
-          : ScrapeProvenanceClass.derivedOmnibus;
+      return ScrapeProvenanceClass.derivedOmnibus;
     }
     final hasOriginal = evidence.any(
       (item) => item.polarity == ScrapeEvidencePolarity.supportsOriginalWork,

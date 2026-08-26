@@ -59,7 +59,7 @@ void main() {
       expect(result.saved, 1);
       expect(primary.worksCalls, 1);
       expect(primary.detailCalls, 1);
-      expect(secondary.worksCalls, 0);
+      expect(secondary.worksCalls, 1);
       expect(secondary.detailCalls, 0);
     },
   );
@@ -87,7 +87,7 @@ void main() {
           'UNKNOWN-002': const ScrapeWorkDetails(
             source: ScrapeSourceId.javbus,
             code: 'UNKNOWN-002',
-            title: '普通作品',
+            title: '100人8時間2枚組',
           ),
         },
       );
@@ -131,7 +131,7 @@ void main() {
   );
 
   test(
-    'uses exact-code secondary lookup without collecting the secondary catalog',
+    'uses exact-code secondary lookup after the enabled catalog union',
     () async {
       final fixture = await _Fixture.create();
       addTearDown(fixture.dispose);
@@ -141,7 +141,7 @@ void main() {
         details: const ScrapeWorkDetails(
           source: ScrapeSourceId.javbus,
           code: 'UNKNOWN-003',
-          title: '普通作品',
+          title: '100人8時間2枚組',
         ),
       );
       final secondary = _DirectEscalationSource(
@@ -175,7 +175,7 @@ void main() {
 
       expect(result.saved, 0);
       expect(result.excluded, 1);
-      expect(secondary.worksCalls, 0);
+      expect(secondary.worksCalls, 1);
       expect(secondary.detailCalls, 0);
       expect(secondary.directRequests, ['UNKNOWN-003']);
       expect(
@@ -192,7 +192,7 @@ void main() {
   );
 
   test(
-    'escalates primary bonus-only material for secondary evidence',
+    'keeps standalone bonus-only material without secondary detail escalation',
     () async {
       final fixture = await _Fixture.create();
       addTearDown(fixture.dispose);
@@ -231,7 +231,7 @@ void main() {
       expect(result.excluded, 0);
       expect(primary.detailCalls, 1);
       expect(secondary.worksCalls, 1);
-      expect(secondary.detailRequests, ['BONUS-001']);
+      expect(secondary.detailRequests, isEmpty);
     },
   );
 
@@ -275,7 +275,7 @@ void main() {
       expect(result.saved, 0);
       expect(result.excluded, 1);
       expect(primary.detailCalls, 1);
-      expect(secondary.worksCalls, 0);
+      expect(secondary.worksCalls, 1);
       expect(secondary.detailCalls, 0);
     },
   );
@@ -316,7 +316,7 @@ void main() {
 
     expect(result.saved, 1);
     expect(primary.detailCalls, 1);
-    expect(secondary.worksCalls, 0);
+    expect(secondary.worksCalls, 1);
     expect(secondary.detailCalls, 0);
   });
 
@@ -357,7 +357,7 @@ void main() {
     expect(result.saved, 0);
     expect(result.excluded, 1);
     expect(primary.detailCalls, 1);
-    expect(secondary.worksCalls, 0);
+    expect(secondary.worksCalls, 1);
     expect(secondary.detailCalls, 0);
   });
 }

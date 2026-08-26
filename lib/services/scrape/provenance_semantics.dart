@@ -294,6 +294,23 @@ final class ScrapeProvenanceSemantics {
     return _independentSegmentsPattern.hasMatch(normalize(value));
   }
 
+  /// A large cast plus a long runtime is only a secondary-source suspicion
+  /// when the same record also describes a package/collection structure. The
+  /// numbers by themselves are ordinary product metadata and remain neutral.
+  static bool containsCollectionStructureSuspicion(String value) {
+    final text = normalize(value);
+    final hasLargeCast = RegExp(r'\d{2,}\s*(?:人|名)').hasMatch(text);
+    final hasRuntime = RegExp(
+      r'\d+\s*(?:時間|分|hours?|minutes?|h|min)',
+      caseSensitive: false,
+    ).hasMatch(text);
+    final hasPackageShape = RegExp(
+      r'枚組|disc|collection|作品集|総集編|best|ベスト|全部入り',
+      caseSensitive: false,
+    ).hasMatch(text);
+    return hasLargeCast && hasRuntime && hasPackageShape;
+  }
+
   static bool containsProvenSharedProduction(String value) {
     return _provenSharedProductionPattern.hasMatch(normalize(value));
   }

@@ -5,7 +5,8 @@ const String scrapeSourceSettingsKey = 'scrape_source_settings';
 enum ScrapeSourceId {
   javbus('javbus'),
   minnanoAv('minnanoAv'),
-  avbase('avbase');
+  avbase('avbase'),
+  avwiki('avwiki');
 
   const ScrapeSourceId(this.storageValue);
 
@@ -64,13 +65,15 @@ final class ScrapeSourceSettings {
       if (decoded is! Map) {
         return const ScrapeSourceSettings();
       }
-      final details = ScrapeSourceId.fromStorage(
+      final decodedDetails = ScrapeSourceId.fromStorage(
         decoded['actressDetailsSource']?.toString(),
       );
+      final details = _isDetailsSource(decodedDetails) ? decodedDetails : null;
       final works = _decodeWorksSources(decoded);
-      final aliases = ScrapeSourceId.fromStorage(
+      final decodedAliases = ScrapeSourceId.fromStorage(
         decoded['aliasSource']?.toString(),
       );
+      final aliases = _isAliasSource(decodedAliases) ? decodedAliases : null;
       return ScrapeSourceSettings(
         actressDetailsSource: details ?? ScrapeSourceId.minnanoAv,
         worksSources: works,
@@ -104,5 +107,15 @@ final class ScrapeSourceSettings {
   }
 
   static bool _isWorksSource(ScrapeSourceId? source) =>
-      source == ScrapeSourceId.javbus || source == ScrapeSourceId.avbase;
+      source == ScrapeSourceId.javbus ||
+      source == ScrapeSourceId.avbase ||
+      source == ScrapeSourceId.avwiki;
+
+  static bool _isDetailsSource(ScrapeSourceId? source) =>
+      source == ScrapeSourceId.minnanoAv ||
+      source == ScrapeSourceId.javbus ||
+      source == ScrapeSourceId.avbase;
+
+  static bool _isAliasSource(ScrapeSourceId? source) =>
+      source == ScrapeSourceId.avbase;
 }

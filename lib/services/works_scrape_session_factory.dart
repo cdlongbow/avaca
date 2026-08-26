@@ -6,6 +6,9 @@ import '../models/work_scrape_options.dart';
 import 'avbase/avbase_client.dart';
 import 'avbase/avbase_scrape_source.dart';
 import 'avbase/avbase_transport.dart';
+import 'avwiki/avwiki_client.dart';
+import 'avwiki/avwiki_scrape_source.dart';
+import 'avwiki/avwiki_transport.dart';
 import 'javbus/javbus_client.dart';
 import 'javbus/javbus_scrape_source.dart';
 import 'javbus/javbus_verification.dart';
@@ -104,6 +107,11 @@ class WorksScrapeSessionFactory {
         maxBytes: 5 * 1024 * 1024,
       );
     }
+    if (requestedSourceIds.contains(ScrapeSourceId.avwiki)) {
+      final transport = HttpAvWikiTransport();
+      final client = AvWikiClient(transport: transport);
+      configuredSources[ScrapeSourceId.avwiki] = AvWikiScrapeSource(client);
+    }
 
     final detailsImageDownloader =
         switch (sourceSettings.actressDetailsSource) {
@@ -115,6 +123,12 @@ class WorksScrapeSessionFactory {
           ),
           ScrapeSourceId.javbus => HttpActressImageDownloader(
             authenticatedTransport: javBusTransport,
+          ),
+          ScrapeSourceId.avwiki => HttpActressImageDownloader(
+            transport: HttpBinaryTransport(
+              allowedHosts: const {'av-wiki.net', 'www.av-wiki.net'},
+              maxBytes: 5 * 1024 * 1024,
+            ),
           ),
         };
     final service = WorksScrapeService(

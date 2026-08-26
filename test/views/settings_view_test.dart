@@ -219,6 +219,17 @@ void main() {
       const Offset(0, -180),
     );
     await tester.pumpAndSettle();
+    final availableAvWiki = find.byKey(
+      const ValueKey('scrape-works-source-available-avwiki'),
+    );
+    await tester.ensureVisible(availableAvWiki);
+    await tester.pumpAndSettle();
+    await tester.tap(availableAvWiki);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('scrape-works-source-selected-avwiki')),
+      findsOneWidget,
+    );
 
     final database = tester
         .state<_SettingsHarnessState>(find.byType(_SettingsHarness))
@@ -230,6 +241,7 @@ void main() {
     expect(settings.worksSources, [
       ScrapeSourceId.avbase,
       ScrapeSourceId.javbus,
+      ScrapeSourceId.avwiki,
     ]);
     expect(settings.aliasSource, ScrapeSourceId.avbase);
 
@@ -254,6 +266,7 @@ void main() {
     expect(reopenedSettings.worksSources, [
       ScrapeSourceId.avbase,
       ScrapeSourceId.javbus,
+      ScrapeSourceId.avwiki,
     ]);
     expect(reopenedSettings.aliasSource, ScrapeSourceId.avbase);
   });
@@ -300,7 +313,11 @@ void main() {
       find.byKey(const ValueKey('scrape-source-status-avbase')),
       findsOneWidget,
     );
-    expect(find.text('Not tested'), findsNWidgets(3));
+    expect(
+      find.byKey(const ValueKey('scrape-source-status-avwiki')),
+      findsOneWidget,
+    );
+    expect(find.text('Not tested'), findsNWidgets(4));
 
     await tester.tap(find.byKey(const ValueKey('scrape-source-retest-button')));
     await tester.pumpAndSettle();
@@ -309,8 +326,9 @@ void main() {
       ScrapeSourceId.minnanoAv,
       ScrapeSourceId.javbus,
       ScrapeSourceId.avbase,
+      ScrapeSourceId.avwiki,
     ]);
-    expect(find.text('Connected'), findsNWidgets(2));
+    expect(find.text('Connected'), findsNWidgets(3));
     expect(find.text('Verification required'), findsOneWidget);
   });
 

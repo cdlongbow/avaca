@@ -1,4 +1,6 @@
 import 'package:avaca/services/scrape/work_identity.dart';
+import 'package:avaca/services/scrape/scrape_models.dart';
+import 'package:avaca/models/scrape_source_settings.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -37,6 +39,57 @@ void main() {
     expect(scrapeWorkCodesEqual('3DSVR-1947', 'DSVR-1947'), isFalse);
     expect(scrapeWorkCodesEqual('H_346REBD00975', 'REBD-975'), isFalse);
   });
+
+  test(
+    'scopes SOD edition collapse and canonicalizes trusted bridge aliases',
+    () {
+      final sodEvidence = const ScrapeWorkIdentityEvidence(
+        manufacturer: 'SODクリエイト',
+        label: 'SOD create',
+      );
+      for (final code in const [
+        'STARS-859',
+        'STARS-859-V',
+        'STARS-859-VT',
+        'STARS-859-VT-EC',
+        'STARS-859-VT2-EC',
+        'STARSBD-859',
+      ]) {
+        final identity = parseScrapeWorkCodeIdentity(
+          code,
+          evidence: sodEvidence,
+        );
+        expect(identity?.key, 'stars859', reason: code);
+        expect(identity?.displayCode, 'STARS-859', reason: code);
+      }
+
+      expect(
+        parseScrapeWorkCodeIdentity('STARSBD-859')?.key,
+        isNot('stars859'),
+      );
+      expect(scrapeWorkCodesEqual('FOO-123-EC', 'FOO-123'), isFalse);
+
+      final bridge = const ScrapeExternalWorkIdentity(
+        canonicalCode: 'START-164',
+        makerCode: '107START-164',
+        aliases: ['1start00164'],
+        platformIds: {'fanza': 'START-164'},
+      );
+      final summary = ScrapeWorkSummary(
+        source: ScrapeSourceId.avwiki,
+        code: '1start00164',
+        rawCode: '1start00164',
+        title: 'cross-platform identity',
+        detailUri: Uri.parse('https://av-wiki.net/start-164/'),
+        externalIdentity: bridge,
+      );
+      expect(scrapeWorkIdentityKeyForSummary(summary), 'code:start164');
+      expect(
+        scrapeWorkCanonicalStorageCode('1start00164', externalIdentity: bridge),
+        'START-164',
+      );
+    },
+  );
 
   test(
     'treats V, T, and VT edition suffixes as the ordinary work identity',

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.9.16 - 2026-08-27
+
+- Added AV-Wiki as an optional works catalog with exact search, pagination,
+  metadata parsing, platform identity evidence, health checks, and safe
+  transport failure handling.
+- Reworked the works pipeline to union all enabled catalogs before selecting
+  details, resolve typed cross-source identities, deduplicate canonical saves,
+  and preserve source-scoped evidence and progress.
+- Cleaned up reuse classification so concrete provenance drives decisions,
+  uncertainty stays reviewable, and legacy prefix, managed-family, performer
+  count, and generic edition heuristics no longer decide new works.
+- Added the V4 classifier corpus, AV-Wiki fixtures, identity/provenance
+  regressions, catalog-union coverage, and localized source/settings updates.
+
 ## 0.9.6 - 2026-08-23
 
 - Added persistent scrape jobs with resumable progress, cancellation, retry

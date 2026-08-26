@@ -41,15 +41,26 @@ void main() {
       final now = DateTime.now().toUtc();
       final items = List<ScrapeJobItem>.generate(31, (index) {
         final failed = index == 30;
+        final review = index == 29;
         return ScrapeJobItem(
           id: index + 1,
           jobId: job.id,
-          canonicalCode: failed ? 'BAD-001' : 'OK-${index + 1}',
+          canonicalCode: failed
+              ? 'BAD-001'
+              : review
+              ? 'REVIEW-030'
+              : 'OK-${index + 1}',
           state: failed
               ? ScrapeJobItemState.failed
+              : review
+              ? ScrapeJobItemState.review
               : ScrapeJobItemState.succeeded,
           stage: ScrapeJobPhase.completed,
-          lastError: failed ? 'detailsUnavailable' : null,
+          lastError: failed
+              ? 'detailsUnavailable'
+              : review
+              ? 'review_evidence · 已檢查來源：JavBus、AV-Wiki'
+              : null,
           createdAt: now,
           updatedAt: now,
         );
@@ -91,6 +102,16 @@ void main() {
         find.byKey(const Key('scrape-job-items-viewport')),
       );
       expect(viewport.height, lessThanOrEqualTo(480));
+      await tester.tap(
+        find.byKey(const ValueKey('scrape-job-item-filter-review')),
+      );
+      await tester.pump();
+      expect(find.text('REVIEW-030'), findsOneWidget);
+      expect(find.textContaining('已檢查來源：JavBus'), findsOneWidget);
+      expect(find.text('OK-1'), findsNothing);
+      await tester.tap(
+        find.byKey(const ValueKey('scrape-job-item-filter-all')),
+      );
     },
   );
 

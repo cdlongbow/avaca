@@ -1489,6 +1489,12 @@ abstract class AppLocalizations {
   /// **'AvBase'**
   String get scrapeSourceAvBase;
 
+  /// No description provided for @scrapeSourceAvWiki.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'AV-Wiki'**
+  String get scrapeSourceAvWiki;
+
   /// No description provided for @scrapeSourceAll.
   ///
   /// In zh_TW, this message translates to:
@@ -2244,6 +2250,48 @@ abstract class AppLocalizations {
   /// In zh_TW, this message translates to:
   /// **'尚無作品檢查點。'**
   String get scrapeJobNoItems;
+
+  /// No description provided for @scrapeJobFilterAll.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'全部'**
+  String get scrapeJobFilterAll;
+
+  /// No description provided for @scrapeJobFilterReview.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'待檢視'**
+  String get scrapeJobFilterReview;
+
+  /// No description provided for @scrapeJobFilterKeep.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'保留'**
+  String get scrapeJobFilterKeep;
+
+  /// No description provided for @scrapeJobFilterExclude.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'排除'**
+  String get scrapeJobFilterExclude;
+
+  /// No description provided for @scrapeJobFilterFailed.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'失敗'**
+  String get scrapeJobFilterFailed;
+
+  /// No description provided for @scrapeJobNoFilteredItems.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'沒有符合此篩選條件的檢查點。'**
+  String get scrapeJobNoFilteredItems;
+
+  /// No description provided for @scrapeJobStateReview.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'待檢視'**
+  String get scrapeJobStateReview;
 
   /// No description provided for @scrapeJobStateQueued.
   ///

@@ -929,11 +929,17 @@ class _JobObserver extends ScrapeRunObserver {
     Map<String, Object?> metadata = const <String, Object?>{},
   }) {
     final imageVariants = imageFailureVariants.toList(growable: false);
-    final diagnostic = error == null && reason == null && imageVariants.isEmpty
+    final baseDiagnostic = error == null && reason == null && imageVariants.isEmpty
         ? null
         : error == null
         ? reason ?? '圖片下載失敗（${imageVariants.join('、')}）'
         : ScrapeEventSanitizer.message(error);
+    final checkedSources = outcome == ScrapeWorkOutcomeState.review
+        ? _checkedSourceLabels(metadata['evidenceSources'])
+        : const <String>[];
+    final diagnostic = baseDiagnostic == null || checkedSources.isEmpty
+        ? baseDiagnostic
+        : '$baseDiagnostic · 已檢查來源：${checkedSources.join('、')}';
     final itemState = switch (outcome) {
       ScrapeWorkOutcomeState.saved => ScrapeJobItemState.succeeded,
       ScrapeWorkOutcomeState.review => ScrapeJobItemState.review,
@@ -975,6 +981,25 @@ class _JobObserver extends ScrapeRunObserver {
         );
       }
     });
+  }
+
+  List<String> _checkedSourceLabels(Object? rawSources) {
+    if (rawSources is! Iterable) return const [];
+    return rawSources
+        .map((value) => _sourceLabel(value.toString()))
+        .where((value) => value.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+  }
+
+  String _sourceLabel(String source) {
+    return switch (source) {
+      'javbus' => 'JavBus',
+      'avbase' => 'AVBase',
+      'avwiki' => 'AV-Wiki',
+      'minnanoAv' => 'Minnano AV',
+      _ => source,
+    };
   }
 
   Future<void> complete(
