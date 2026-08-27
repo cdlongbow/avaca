@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.18 - 2026-08-27
+
+- Extended advanced scrape rules to support complete work codes and safe
+  structured work-code prefixes, with explicit boundary checks that avoid
+  unrelated code matches.
+- Updated English, Traditional Chinese, Simplified Chinese, Japanese, and
+  Japanese-region Settings copy to explain code/prefix allow and deny rules.
+- Refreshed Settings compact and expanded goldens and added policy/evaluator
+  regressions covering every work matched by an allowed or denied prefix.
+
 ## 0.9.17 - 2026-08-27
 
 - Finalized provenance-driven reuse classification with neutral mixed-family

@@ -416,16 +416,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get scrapeAdvancedRulesDescription =>
-      'Manual exact allow/deny rules for works.';
+      'Enter a full work code or prefix, e.g. KCKC or KCKC-212.';
 
   @override
-  String get scrapeExactAllows => 'Exact allows';
+  String get scrapeExactAllows => 'Code/prefix allows';
 
   @override
-  String get scrapeExactDenies => 'Exact denies';
+  String get scrapeExactDenies => 'Code/prefix denies';
 
   @override
-  String get scrapeRuleHint => 'Enter a work code';
+  String get scrapeRuleHint => 'Enter a code or prefix';
 
   @override
   String get scrapeNoRules => 'No rules configured';

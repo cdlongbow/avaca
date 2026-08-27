@@ -410,16 +410,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get scrapeAdvancedRules => '進階規則';
 
   @override
-  String get scrapeAdvancedRulesDescription => '手動精確允許／排除作品。';
+  String get scrapeAdvancedRulesDescription => '可輸入完整番號或前綴，例如 KCKC 或 KCKC-212。';
 
   @override
-  String get scrapeExactAllows => '精確允許';
+  String get scrapeExactAllows => '番號／前綴允許';
 
   @override
-  String get scrapeExactDenies => '精確排除';
+  String get scrapeExactDenies => '番號／前綴排除';
 
   @override
-  String get scrapeRuleHint => '輸入番號';
+  String get scrapeRuleHint => '輸入番號或前綴';
 
   @override
   String get scrapeNoRules => '尚未設定規則';
@@ -1651,16 +1651,16 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get scrapeAdvancedRules => '高级规则';
 
   @override
-  String get scrapeAdvancedRulesDescription => '手动精确允许／排除作品。';
+  String get scrapeAdvancedRulesDescription => '可输入完整番号或前缀，例如 KCKC 或 KCKC-212。';
 
   @override
-  String get scrapeExactAllows => '精确允许';
+  String get scrapeExactAllows => '番号／前缀允许';
 
   @override
-  String get scrapeExactDenies => '精确排除';
+  String get scrapeExactDenies => '番号／前缀排除';
 
   @override
-  String get scrapeRuleHint => '输入番号';
+  String get scrapeRuleHint => '输入番号或前缀';
 
   @override
   String get scrapeNoRules => '尚未设置规则';
@@ -2892,16 +2892,16 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get scrapeAdvancedRules => '進階規則';
 
   @override
-  String get scrapeAdvancedRulesDescription => '手動精確允許／排除作品。';
+  String get scrapeAdvancedRulesDescription => '可輸入完整番號或前綴，例如 KCKC 或 KCKC-212。';
 
   @override
-  String get scrapeExactAllows => '精確允許';
+  String get scrapeExactAllows => '番號／前綴允許';
 
   @override
-  String get scrapeExactDenies => '精確排除';
+  String get scrapeExactDenies => '番號／前綴排除';
 
   @override
-  String get scrapeRuleHint => '輸入番號';
+  String get scrapeRuleHint => '輸入番號或前綴';
 
   @override
   String get scrapeNoRules => '尚未設定規則';

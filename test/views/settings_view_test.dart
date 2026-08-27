@@ -404,7 +404,7 @@ void main() {
     expect(find.byKey(const Key('scrape-ofje-policy-dropdown')), findsNothing);
     expect(find.text('Compatibility prefixes'), findsNothing);
     expect(
-      find.text('Manual exact allow/deny rules for works.'),
+      find.text('Enter a full work code or prefix, e.g. KCKC or KCKC-212.'),
       findsOneWidget,
     );
   });

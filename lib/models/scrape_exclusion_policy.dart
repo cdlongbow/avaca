@@ -104,8 +104,7 @@ class ScrapeExactAllowRule {
         expectedSource != sourceId?.trim().toLowerCase()) {
       return false;
     }
-    return normalizedCode.isNotEmpty &&
-        normalizedCode == normalizeScrapePolicyCode(candidateCode);
+    return manualRuleMatches(normalizedCode, candidateCode);
   }
 
   Map<String, Object?> toJson() => {
@@ -147,8 +146,7 @@ class ScrapeExactDenyRule {
         expectedSource != sourceId?.trim().toLowerCase()) {
       return false;
     }
-    return normalizedCode.isNotEmpty &&
-        normalizedCode == normalizeScrapePolicyCode(candidateCode);
+    return manualRuleMatches(normalizedCode, candidateCode);
   }
 
   Map<String, Object?> toJson() => {
@@ -351,6 +349,36 @@ class ScrapePolicySnapshot {
 
 String normalizeScrapePolicyCode(String value) {
   return value.replaceAll(RegExp(r'\s+'), '').trim().toUpperCase();
+}
+
+/// Matches a manual work rule against a scraped work-code surface.
+///
+/// Manual rules support either a complete work code or the family prefix at
+/// the start of a structured work code.  The existing work-code grammar uses
+/// a hyphen between that prefix and its numeric code, so the hyphen is the
+/// only prefix boundary accepted here.  This intentionally does not call the
+/// legacy work-code canonicalizer or infer any cross-source identity alias.
+bool manualRuleMatches(String rule, String workCode) {
+  final normalizedRule = normalizeScrapePolicyCode(rule);
+  final normalizedWorkCode = normalizeScrapePolicyCode(workCode);
+  if (normalizedRule.isEmpty || normalizedWorkCode.isEmpty) {
+    return false;
+  }
+  if (normalizedRule == normalizedWorkCode) {
+    return true;
+  }
+
+  if (!RegExp(r'^[A-Z0-9]+$').hasMatch(normalizedRule)) {
+    return false;
+  }
+  final boundary = '$normalizedRule-';
+  if (!normalizedWorkCode.startsWith(boundary) ||
+      normalizedWorkCode.length == boundary.length) {
+    return false;
+  }
+
+  final nextCodeUnit = normalizedWorkCode.codeUnitAt(boundary.length);
+  return nextCodeUnit >= 0x30 && nextCodeUnit <= 0x39;
 }
 
 String _digest(Object value) =>

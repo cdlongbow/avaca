@@ -411,16 +411,17 @@ class AppLocalizationsJa extends AppLocalizations {
   String get scrapeAdvancedRules => '詳細ルール';
 
   @override
-  String get scrapeAdvancedRulesDescription => '作品番号単位で許可・除外。';
+  String get scrapeAdvancedRulesDescription =>
+      '完全な作品番号またはPrefixを入力（例：KCKC、KCKC-212）。';
 
   @override
-  String get scrapeExactAllows => '番号単位で許可';
+  String get scrapeExactAllows => '番号／Prefixで許可';
 
   @override
-  String get scrapeExactDenies => '番号単位で除外';
+  String get scrapeExactDenies => '番号／Prefixで除外';
 
   @override
-  String get scrapeRuleHint => '品番を入力';
+  String get scrapeRuleHint => '作品番号またはPrefixを入力';
 
   @override
   String get scrapeNoRules => 'ルールは未設定です';
@@ -1663,16 +1664,17 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
   String get scrapeAdvancedRules => '詳細ルール';
 
   @override
-  String get scrapeAdvancedRulesDescription => '作品番号単位で許可・除外。';
+  String get scrapeAdvancedRulesDescription =>
+      '完全な作品番号またはPrefixを入力（例：KCKC、KCKC-212）。';
 
   @override
-  String get scrapeExactAllows => '番号単位で許可';
+  String get scrapeExactAllows => '番号／Prefixで許可';
 
   @override
-  String get scrapeExactDenies => '番号単位で除外';
+  String get scrapeExactDenies => '番号／Prefixで除外';
 
   @override
-  String get scrapeRuleHint => '品番を入力';
+  String get scrapeRuleHint => '作品番号またはPrefixを入力';
 
   @override
   String get scrapeNoRules => 'ルールは未設定です';

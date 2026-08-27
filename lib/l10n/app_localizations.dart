@@ -886,25 +886,25 @@ abstract class AppLocalizations {
   /// No description provided for @scrapeAdvancedRulesDescription.
   ///
   /// In zh_TW, this message translates to:
-  /// **'手動精確允許／排除作品。'**
+  /// **'可輸入完整番號或前綴，例如 KCKC 或 KCKC-212。'**
   String get scrapeAdvancedRulesDescription;
 
   /// No description provided for @scrapeExactAllows.
   ///
   /// In zh_TW, this message translates to:
-  /// **'精確允許'**
+  /// **'番號／前綴允許'**
   String get scrapeExactAllows;
 
   /// No description provided for @scrapeExactDenies.
   ///
   /// In zh_TW, this message translates to:
-  /// **'精確排除'**
+  /// **'番號／前綴排除'**
   String get scrapeExactDenies;
 
   /// No description provided for @scrapeRuleHint.
   ///
   /// In zh_TW, this message translates to:
-  /// **'輸入番號'**
+  /// **'輸入番號或前綴'**
   String get scrapeRuleHint;
 
   /// No description provided for @scrapeNoRules.

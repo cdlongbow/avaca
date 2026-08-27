@@ -84,6 +84,17 @@ void main() {
     },
   );
 
+  test('allows every work in a manually allowed prefix', () {
+    for (final code in const ['KCKC-212', 'TSC-015']) {
+      final decision = _evaluator(
+        exactAllows: [ScrapeExactAllowRule(code: code.split('-').first)],
+      ).evaluate(code: code, details: [_details(code, '普通作品')]);
+
+      expect(decision.finalAction, ScrapeFinalAction.keep, reason: code);
+      expect(decision.reasonCodes, ['exact_allow'], reason: code);
+    }
+  });
+
   test('keeps explicit original work and excludes prior-work collections', () {
     final original = _evaluator().evaluate(
       code: 'MOON-001',
@@ -1164,6 +1175,17 @@ void main() {
 
     expect(decision.finalAction, ScrapeFinalAction.exclude);
     expect(decision.reasonCodes, ['exact_deny']);
+  });
+
+  test('excludes every work in a manually denied prefix', () {
+    for (final code in const ['KCKC-212', 'TSC-028']) {
+      final decision = _evaluator(
+        exactDenies: [ScrapeExactDenyRule(code: code.split('-').first)],
+      ).evaluate(code: code, details: [_details(code, '普通作品')]);
+
+      expect(decision.finalAction, ScrapeFinalAction.exclude, reason: code);
+      expect(decision.reasonCodes, ['exact_deny'], reason: code);
+    }
   });
 
   test('conflicting exact allow and deny rules fail open to review', () {

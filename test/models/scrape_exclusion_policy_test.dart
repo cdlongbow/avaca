@@ -5,6 +5,27 @@ import 'package:avaca/models/scrape_rules.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('matches complete work codes and safe work-code prefixes', () {
+    for (final code in const ['KCKC-212', 'KCKC-211']) {
+      expect(manualRuleMatches('KCKC', code), isTrue, reason: code);
+    }
+    for (final code in const [
+      'TSC-028',
+      'TSC-027',
+      'TSC-026',
+      'TSC-025',
+      'TSC-016',
+      'TSC-015',
+    ]) {
+      expect(manualRuleMatches('TSC', code), isTrue, reason: code);
+    }
+
+    expect(manualRuleMatches('KCKC-212', 'KCKC-212'), isTrue);
+    expect(manualRuleMatches('kckc', 'KCKC-212'), isTrue);
+    expect(manualRuleMatches('KCKC', 'ABC-KCKC-212'), isFalse);
+    expect(manualRuleMatches('KCKC', 'KCKCC-001'), isFalse);
+  });
+
   test('round-trips a current provenance policy snapshot', () {
     final original = ScrapePolicySnapshot.current(
       rules: ScrapeRules.builtin,
