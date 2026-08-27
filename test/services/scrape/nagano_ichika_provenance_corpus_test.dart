@@ -28,6 +28,9 @@ void main() {
             title: fixture.title,
             releaseDate: fixture.releaseDate,
             durationMinutes: fixture.durationMinutes,
+            studio: fixture.studio,
+            publisher: fixture.publisher,
+            description: fixture.description,
             provenanceFacts: ScrapeWorkProvenanceFacts(
               includedWorks: fixture.includedWorks,
               tags: fixture.tags,
@@ -56,6 +59,9 @@ final class _NaganoCorpusFixture {
     this.releaseDate,
     required this.expectedAction,
     this.durationMinutes,
+    this.studio,
+    this.publisher,
+    this.description,
     this.tags = const [],
     this.includedWorks = const [],
   });
@@ -64,6 +70,9 @@ final class _NaganoCorpusFixture {
   final String title;
   final String? releaseDate;
   final int? durationMinutes;
+  final String? studio;
+  final String? publisher;
+  final String? description;
   final List<String> tags;
   final List<String> includedWorks;
   final ScrapeFinalAction expectedAction;
@@ -76,7 +85,12 @@ const _naganoIchikaCorpus = <_NaganoCorpusFixture>[
   _NaganoCorpusFixture(
     code: 'MIZD-498',
     title: '美少女J系のマンマン食い込み無自覚パンチラ眺めて爆射したい',
-    expectedAction: ScrapeFinalAction.keep,
+    studio: 'ムーディーズ',
+    publisher: 'MOODYZ Best',
+    description:
+        'パンチラ、それは性の目覚めの出発点。美少女J系の無自覚なパンチラを眺めてオナニーしたいアナタに送るベスト。スカートひらり、ぷにマン食い込むピタパンに目が釘付けになる100コーナー以上を厳選収録。',
+    tags: ['パンチラ', 'パンスト・タイツ', '女子校生', '制服', '独占配信'],
+    expectedAction: ScrapeFinalAction.exclude,
   ),
   _NaganoCorpusFixture(
     code: 'CJOB-213',

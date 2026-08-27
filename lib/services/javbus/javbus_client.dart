@@ -356,6 +356,13 @@ class JavBusClient {
       try {
         append((await fetchActressPage(pageUri)).works);
       } catch (error) {
+        // A verification challenge is a session-level control flow event,
+        // not a missing page. Let the caller pause or cancel the job instead
+        // of silently continuing with later pagination pages.
+        if (error is JavBusVerificationRequiredException ||
+            error is JavBusVerificationCancelledException) {
+          rethrow;
+        }
         issues.add(
           JavBusPageIssue(
             uri: pageUri,

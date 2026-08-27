@@ -91,6 +91,74 @@ void main() {
     },
   );
 
+  test('pads trusted SOD STARS identities without global zero trimming', () {
+    const sodEvidence = ScrapeWorkIdentityEvidence(manufacturer: 'SODクリエイト');
+    for (final code in const [
+      'STARS-087',
+      'STARS-87',
+      'STARS-087-V',
+      'STARS-087-VT',
+      'STARS-087-VT2-EC',
+      'STARSBD-087',
+    ]) {
+      final identity = parseScrapeWorkCodeIdentity(code, evidence: sodEvidence);
+      expect(identity?.key, 'stars87', reason: code);
+      expect(identity?.displayCode, 'STARS-087', reason: code);
+    }
+    expect(
+      scrapeWorkCodesEqual('STARS-87', 'STARS-087', evidence: sodEvidence),
+      isTrue,
+    );
+    expect(scrapeWorkCodesEqual('STARS-87', 'STARS-087'), isFalse);
+    expect(
+      scrapeWorkCodesEqual('SIVR00303', 'SIVR-303', evidence: sodEvidence),
+      isFalse,
+    );
+  });
+
+  test('uses only same-source catalog metadata for scoped identity', () {
+    final contextual = ScrapeWorkSummary(
+      source: ScrapeSourceId.avbase,
+      code: 'STARS-087-V',
+      rawCode: 'STARS-087-V',
+      title: 'SOD catalog entry',
+      detailUri: Uri.parse('https://www.avbase.net/works/STARS-087-V'),
+      catalogEvidence: const [
+        ScrapeCatalogWorkEvidence(
+          source: ScrapeSourceId.avbase,
+          code: 'STARS-087-V',
+          manufacturer: 'SODクリエイト',
+        ),
+      ],
+    );
+    final unscoped = ScrapeWorkSummary(
+      source: ScrapeSourceId.avbase,
+      code: 'STARS-087',
+      rawCode: 'STARS-087',
+      title: 'Unscoped entry',
+      detailUri: Uri.parse('https://www.avbase.net/works/STARS-087'),
+    );
+    final foreign = ScrapeWorkSummary(
+      source: ScrapeSourceId.avbase,
+      code: 'STARS-087-V',
+      rawCode: 'STARS-087-V',
+      title: 'Foreign catalog metadata',
+      detailUri: Uri.parse('https://www.avbase.net/works/STARS-087-V-foreign'),
+      catalogEvidence: const [
+        ScrapeCatalogWorkEvidence(
+          source: ScrapeSourceId.javbus,
+          code: 'STARS-087-V',
+          manufacturer: 'SODクリエイト',
+        ),
+      ],
+    );
+
+    expect(scrapeWorkIdentityKeyForSummary(contextual), 'code:stars87');
+    expect(scrapeWorkIdentityKeyForSummary(unscoped), 'code:stars087');
+    expect(scrapeWorkIdentityKeyForSummary(foreign), 'code:opaque:stars-087-v');
+    expect(scrapeWorkIdentityKeyForSummary(contextual), isNot('code:stars087'));
+  });
+
   test(
     'treats V, T, and VT edition suffixes as the ordinary work identity',
     () {
@@ -102,33 +170,67 @@ void main() {
         'START-053VT': 'START-053',
       };
       for (final entry in specialCodes.entries) {
-        final special = parseScrapeWorkCodeIdentity(entry.key);
-        final ordinary = parseScrapeWorkCodeIdentity(entry.value);
+        const sodEvidence = ScrapeWorkIdentityEvidence(
+          manufacturer: 'SODクリエイト',
+        );
+        final special = parseScrapeWorkCodeIdentity(
+          entry.key,
+          evidence: sodEvidence,
+        );
+        final ordinary = parseScrapeWorkCodeIdentity(
+          entry.value,
+          evidence: sodEvidence,
+        );
         expect(special?.key, ordinary?.key);
         expect(special?.displayCode, entry.value);
         expect(special?.isSpecialEdition, isTrue);
-        expect(scrapeWorkCodesEqual(entry.key, entry.value), isTrue);
+        expect(
+          scrapeWorkCodesEqual(entry.key, entry.value, evidence: sodEvidence),
+          isTrue,
+        );
       }
 
-      final hyphenated = parseScrapeWorkCodeIdentity('START-053-V');
-      expect(hyphenated?.key, 'start053');
+      const sodEvidence = ScrapeWorkIdentityEvidence(manufacturer: 'SODクリエイト');
+      final hyphenated = parseScrapeWorkCodeIdentity(
+        'START-053-V',
+        evidence: sodEvidence,
+      );
+      expect(hyphenated?.key, 'start53');
       expect(hyphenated?.displayCode, 'START-053');
       expect(hyphenated?.isSpecialEdition, isTrue);
-      expect(scrapeWorkCodesEqual('START-053-V', 'START-053'), isTrue);
+      expect(
+        scrapeWorkCodesEqual('START-053-V', 'START-053', evidence: sodEvidence),
+        isTrue,
+      );
 
       for (final suffix in ['V', 'T', 'VT']) {
-        final special = parseScrapeWorkCodeIdentity('START-053-$suffix');
-        expect(special?.key, 'start053');
+        final special = parseScrapeWorkCodeIdentity(
+          'START-053-$suffix',
+          evidence: sodEvidence,
+        );
+        expect(special?.key, 'start53');
         expect(special?.displayCode, 'START-053');
         expect(special?.isSpecialEdition, isTrue);
-        expect(scrapeWorkCodesEqual('START-053-$suffix', 'START-053'), isTrue);
+        expect(
+          scrapeWorkCodesEqual(
+            'START-053-$suffix',
+            'START-053',
+            evidence: sodEvidence,
+          ),
+          isTrue,
+        );
       }
 
       expect(
-        preferredScrapeWorkCode(['START-053-VT', 'START-053-T', 'START-053']),
+        preferredScrapeWorkCode([
+          'START-053-VT',
+          'START-053-T',
+          'START-053',
+        ], evidence: sodEvidence),
         'START-053',
       );
       expect(scrapeWorkCodesEqual('START-053-VR', 'START-053'), isFalse);
+      expect(scrapeWorkCodesEqual('START-053-V', 'START-053'), isFalse);
     },
   );
 

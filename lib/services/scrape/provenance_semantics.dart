@@ -100,6 +100,85 @@ final class ScrapeProvenanceSemantics {
     return match?.group(0);
   }
 
+  /// A maker-declared product line can be decisive when the source exposes
+  /// the line name in a title/series/tag/description field. The maker gate,
+  /// explicit maker-named series check, and bounded marker check keep safe
+  /// phrases such as BEST FRIEND from becoming reuse evidence.
+  static ScrapeSemanticProposition? sourceDeclaredDerivedProductLine({
+    required String? manufacturer,
+    required String? label,
+    required String? series,
+    required Iterable<String> tags,
+    required String? description,
+    String? title,
+  }) {
+    final makerText = normalize(
+      [
+        manufacturer ?? '',
+        label ?? '',
+      ].where((value) => value.isNotEmpty).join(' '),
+    );
+    if (makerText.isEmpty) return null;
+    final normalizedSeries = normalize(series ?? '');
+    final seriesDeclaresMaker =
+        normalizedSeries.isNotEmpty &&
+        [manufacturer, label]
+            .whereType<String>()
+            .map(normalize)
+            .where((value) => value.length >= 3)
+            .any((maker) => normalizedSeries.contains(maker));
+    final values = <String?>[
+      title,
+      label,
+      series,
+      ...tags,
+      description,
+    ].whereType<String>();
+    final knownMaker =
+        RegExp(
+          r's1\s*(?:no\.?\s*1|no1)\s*style|エスワン|moodyz|ムーディーズ|rookie|kawaii\s*\*?|kira\s*☆\s*kira|kirakira|ideapocket|idea\s*pocket|アイデアポケット|attackers|アタッカーズ|madonna|マドンナ|prestige|プレステージ|oppai|オッパイ|vr',
+          caseSensitive: false,
+        ).hasMatch(makerText) ||
+        seriesDeclaresMaker;
+    if (!knownMaker) return null;
+    for (final value in values) {
+      final text = normalize(value);
+      final marker = _sourceDeclaredDerivedMarker(text);
+      if (marker != null) {
+        return ScrapeSemanticProposition(
+          ruleId: 'source_declared_derived_product_line',
+          observedText: '$makerText + $marker',
+        );
+      }
+    }
+    return null;
+  }
+
+  static String? _sourceDeclaredDerivedMarker(String text) {
+    final bestPattern = RegExp(
+      r'(^|[^a-z0-9])best(?=$|[^a-z0-9])',
+      caseSensitive: false,
+    );
+    for (final match in bestPattern.allMatches(text)) {
+      final suffix = text.substring(match.end);
+      if (RegExp(
+        r'^\s*(?:[-–—:：/／・･]\s*)?(?:friend|partner|condition)\b',
+        caseSensitive: false,
+      ).hasMatch(suffix)) {
+        continue;
+      }
+      return 'best';
+    }
+
+    final marker = RegExp(
+      r'ベスト(?![\s・･]*(?:フレンド|パートナー|コンディション))(?![ぁ-んァ-ン一-龯a-z0-9])|総集編|総集篇|総集成|作品集|全作品|(?:^|[^a-z0-9])collection(?=$|[^a-z0-9])|(?:^|[^a-z0-9])complete(?=$|[^a-z0-9])',
+      caseSensitive: false,
+    ).firstMatch(text);
+    if (marker == null) return null;
+    final value = marker.group(0)!;
+    return value.trim().isEmpty ? marker.group(0) : value.trim();
+  }
+
   /// Returns a title/metadata proposition that identifies a prior-work
   /// collection, or null when the text only contains a safe standalone token.
   static ScrapeSemanticProposition? strongReuseProposition(

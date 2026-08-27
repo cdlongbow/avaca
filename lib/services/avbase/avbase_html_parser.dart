@@ -46,23 +46,42 @@ final class AvBaseHtmlParser {
     final title = _clean(document.querySelector('h1')?.text) ?? '';
     final strippedTitle = _stripCode(title, rawCode);
     final performers = _performers(document, pageUri);
+    final releaseDate = _normalizeDate(_field(fields, const ['発売日', '発売日']));
+    final durationMinutes = _digitsAsInt(
+      _field(fields, const ['収録分数', '収録時間']),
+    );
+    final studio = _field(fields, const ['メーカー', '製作メーカー']);
+    final publisher = _field(fields, const ['レーベル', '発売元']);
+    final series = _field(fields, const ['シリーズ']);
+    final provenanceFacts = _provenanceFacts(
+      document,
+      fields,
+      strippedTitle,
+      pageUri,
+    );
 
     return AvBaseWorkDetails(
       code: rawCode,
       title: strippedTitle,
-      releaseDate: _normalizeDate(_field(fields, const ['発売日', '発売日'])),
-      durationMinutes: _digitsAsInt(_field(fields, const ['収録分数', '収録時間'])),
-      studio: _field(fields, const ['メーカー', '製作メーカー']),
-      publisher: _field(fields, const ['レーベル', '発売元']),
-      series: _field(fields, const ['シリーズ']),
+      releaseDate: releaseDate,
+      durationMinutes: durationMinutes,
+      studio: studio,
+      publisher: publisher,
+      series: series,
       performerCount: performers?.length,
       performers: performers,
-      provenanceFacts: _provenanceFacts(
-        document,
-        fields,
-        strippedTitle,
-        pageUri,
-      ),
+      provenanceFacts: provenanceFacts,
+      catalogEvidence: [
+        ScrapeCatalogWorkEvidence.fromDetails(
+          source: ScrapeSourceId.avbase,
+          code: rawCode,
+          title: strippedTitle,
+          manufacturer: studio,
+          label: publisher,
+          series: series,
+          provenanceFacts: provenanceFacts,
+        ),
+      ],
       originalImageEvidenceUris: _originalImageEvidenceUris(
         document,
         pageUri,
@@ -439,11 +458,60 @@ final class AvBaseHtmlParser {
     final releaseDate = _clean(
       card.querySelector('a[href*="/works/date/"]')?.text,
     );
+    final title = _clean(anchor.text) ?? '';
     return AvBaseWorkSummary(
       code: code,
-      title: _clean(anchor.text) ?? '',
+      title: title,
       detailUri: detailUri,
       releaseDate: _normalizeDate(releaseDate),
+      catalogEvidence: [
+        _catalogEvidenceFromCard(card, code: code, title: title),
+      ],
+    );
+  }
+
+  ScrapeCatalogWorkEvidence _catalogEvidenceFromCard(
+    Element card, {
+    required String code,
+    required String title,
+  }) {
+    String? firstText(List<String> selectors) {
+      for (final selector in selectors) {
+        final value = _clean(card.querySelector(selector)?.text);
+        if (value != null) return value;
+      }
+      return null;
+    }
+
+    List<String> texts(String selector) {
+      final values = <String>[];
+      final seen = <String>{};
+      for (final element in card.querySelectorAll(selector)) {
+        final value = _clean(element.text);
+        if (value != null && seen.add(value)) values.add(value);
+      }
+      return List.unmodifiable(values);
+    }
+
+    final tags = texts('a[href*="/tags/"]');
+    return ScrapeCatalogWorkEvidence(
+      source: ScrapeSourceId.avbase,
+      code: code,
+      rawCode: code,
+      title: title,
+      manufacturer: firstText(const [
+        'a[href*="/maker/"]',
+        'a[href*="/makers/"]',
+        'a[href*="/manufacturer/"]',
+      ]),
+      label: firstText(const [
+        'a[href*="/label/"]',
+        'a[href*="/labels/"]',
+        'a[href*="/publisher/"]',
+      ]),
+      series: firstText(const ['a[href*="/series/"]']),
+      tags: tags,
+      provenanceHints: tags,
     );
   }
 

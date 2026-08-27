@@ -124,6 +124,16 @@ final class AvWikiHtmlParser {
       series: series,
       platformIds: platformIds,
     );
+    final catalogEvidence = ScrapeCatalogWorkEvidence.fromDetails(
+      source: ScrapeSourceId.avwiki,
+      code: code,
+      title: title,
+      manufacturer: manufacturer,
+      label: label,
+      series: series,
+      description: description,
+      provenanceFacts: facts,
+    );
     return AvWikiWorkDetails(
       code: code,
       rawCode: makerCode ?? code,
@@ -138,6 +148,7 @@ final class AvWikiHtmlParser {
       genres: genres,
       provenanceFacts: facts,
       externalIdentity: externalIdentity.isEmpty ? null : externalIdentity,
+      catalogEvidence: [catalogEvidence],
     );
   }
 
@@ -179,6 +190,7 @@ final class AvWikiHtmlParser {
     String? code;
     String? manufacturer;
     String? label;
+    String? series;
     for (final item in metadata) {
       final value = _clean(item.text);
       if (value == null) continue;
@@ -195,6 +207,7 @@ final class AvWikiHtmlParser {
         label = pieces.length > 1 ? pieces.last.trim() : null;
       }
     }
+    series = _firstArchiveLinkText(article, const ['/series/']);
     final detailHref = _clean(
       article.querySelector('.read-more a[href]')?.attributes['href'],
     );
@@ -215,7 +228,20 @@ final class AvWikiHtmlParser {
       makerCode: code,
       manufacturer: manufacturer,
       label: label,
+      series: series,
       platformIds: platformIds,
+    );
+    final tags = _archiveTags(article);
+    final catalogEvidence = ScrapeCatalogWorkEvidence(
+      source: ScrapeSourceId.avwiki,
+      code: code,
+      rawCode: code,
+      title: title,
+      manufacturer: manufacturer,
+      label: label,
+      series: series,
+      tags: tags,
+      provenanceHints: tags,
     );
     return AvWikiWorkSummary(
       code: code,
@@ -224,7 +250,30 @@ final class AvWikiHtmlParser {
       detailUri: detailUri,
       releaseDate: releaseDate,
       externalIdentity: identity.isEmpty ? null : identity,
+      catalogEvidence: [catalogEvidence],
     );
+  }
+
+  String? _firstArchiveLinkText(Element article, List<String> hrefParts) {
+    for (final anchor in article.querySelectorAll('a[href]')) {
+      final href = anchor.attributes['href'] ?? '';
+      if (!hrefParts.any(href.contains)) continue;
+      final value = _clean(anchor.text);
+      if (value != null) return value;
+    }
+    return null;
+  }
+
+  List<String> _archiveTags(Element article) {
+    final values = <String>[];
+    final seen = <String>{};
+    for (final anchor in article.querySelectorAll(
+      'a[rel="tag"], a[href*="/tags/"]',
+    )) {
+      final value = _clean(anchor.text);
+      if (value != null && seen.add(value)) values.add(value);
+    }
+    return List.unmodifiable(values);
   }
 
   Map<String, String> _detailFields(Element article) {

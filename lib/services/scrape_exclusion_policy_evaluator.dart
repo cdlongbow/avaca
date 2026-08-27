@@ -68,6 +68,7 @@ class ScrapePolicyMatch {
 class ScrapePolicyDecision {
   const ScrapePolicyDecision({
     required this.finalAction,
+    required this.resolutionState,
     required this.provenanceClass,
     required this.evidenceLevel,
     required this.reasonCodes,
@@ -78,6 +79,7 @@ class ScrapePolicyDecision {
   });
 
   final ScrapeFinalAction finalAction;
+  final ScrapeResolutionState resolutionState;
   final ScrapeProvenanceClass provenanceClass;
   final ScrapeEvidenceLevel evidenceLevel;
   final List<String> reasonCodes;
@@ -86,7 +88,8 @@ class ScrapePolicyDecision {
   final bool hasConflict;
   final String snapshotDigest;
 
-  bool get reviewRequired => finalAction == ScrapeFinalAction.keepReview;
+  bool get reviewRequired =>
+      resolutionState == ScrapeResolutionState.finalReview;
 
   ScrapeProvenanceVerdict get verdict => switch (finalAction) {
     ScrapeFinalAction.keep => ScrapeProvenanceVerdict.keep,
@@ -98,6 +101,7 @@ class ScrapePolicyDecision {
 
   Map<String, Object?> toJson() => {
     'finalAction': finalAction.name,
+    'resolutionState': resolutionState.name,
     'provenanceClass': provenanceClass.name,
     'evidenceLevel': evidenceLevel.name,
     'reasonCodes': reasonCodes,
@@ -112,8 +116,9 @@ class ScrapePolicyDecision {
 /// Classifies work provenance from concrete lineage and production facts.
 ///
 /// Prefixes and performer counts are intentionally not part of the automatic
-/// decision. If the available facts cannot establish reuse, the evaluator
-/// returns [ScrapeFinalAction.keep].
+/// decision. Suspicion-only facts remain provisional while another enabled
+/// source can still provide evidence; only exhausted unresolved suspicion is
+/// surfaced as [ScrapeFinalAction.keepReview].
 class ScrapeExclusionPolicyEvaluator {
   ScrapeExclusionPolicyEvaluator(this.snapshot);
 
@@ -123,6 +128,7 @@ class ScrapeExclusionPolicyEvaluator {
     required String code,
     required List<ScrapeWorkDetails> details,
     ScrapeClassificationContext? classificationContext,
+    bool evidenceExhausted = true,
   }) {
     final surfaces = details.isEmpty
         ? <_PolicySurface>[
@@ -134,8 +140,21 @@ class ScrapeExclusionPolicyEvaluator {
             ),
           ]
         : [
-            for (var index = 0; index < details.length; index++)
+            for (var index = 0; index < details.length; index++) ...[
               _PolicySurface.fromDetails(details[index], index),
+              for (
+                var evidenceIndex = 0;
+                evidenceIndex < details[index].catalogEvidence.length;
+                evidenceIndex++
+              )
+                _PolicySurface.fromCatalogEvidence(
+                  details[index].catalogEvidence[evidenceIndex],
+                  code: details[index].rawCode ?? details[index].code,
+                  title: details[index].title,
+                  index: index,
+                  evidenceIndex: evidenceIndex,
+                ),
+            ],
           ];
     final evidence = <ScrapeEvidenceAtom>[];
     final policyMatches = <ScrapePolicyMatch>[];
@@ -190,16 +209,25 @@ class ScrapeExclusionPolicyEvaluator {
     final automaticClass = _classForEvidence(evidence, surfaces);
 
     var automaticAction = ScrapeFinalAction.keep;
+    var automaticState = ScrapeResolutionState.decisiveKeep;
     var automaticReasons = <String>['no_reuse_signal'];
     var automaticLevel = ScrapeEvidenceLevel.none;
     if (hasConflict) {
-      automaticAction = ScrapeFinalAction.keepReview;
-      automaticReasons = ['source_evidence_conflict'];
+      automaticAction = evidenceExhausted
+          ? ScrapeFinalAction.keepReview
+          : ScrapeFinalAction.keep;
+      automaticState = evidenceExhausted
+          ? ScrapeResolutionState.finalReview
+          : ScrapeResolutionState.conflict;
+      automaticReasons = ['source_provenance_conflict'];
       automaticLevel = ScrapeEvidenceLevel.strong;
     } else if (strongCompilation) {
       automaticAction = snapshot.autoExcludeDerivedWorks
           ? ScrapeFinalAction.exclude
           : ScrapeFinalAction.keepReview;
+      automaticState = snapshot.autoExcludeDerivedWorks
+          ? ScrapeResolutionState.decisiveExclude
+          : ScrapeResolutionState.finalReview;
       automaticReasons = [
         if (snapshot.autoExcludeDerivedWorks)
           'strong_compilation_evidence'
@@ -209,17 +237,24 @@ class ScrapeExclusionPolicyEvaluator {
       automaticLevel = ScrapeEvidenceLevel.strong;
     } else if (strongOriginal) {
       automaticAction = ScrapeFinalAction.keep;
+      automaticState = ScrapeResolutionState.decisiveKeep;
       automaticReasons = const ['explicit_original_work'];
       automaticLevel = ScrapeEvidenceLevel.strong;
     } else if (evidence.any(
       (item) => item.kind == ScrapeEvidenceKind.viewpointSelection,
     )) {
       automaticAction = ScrapeFinalAction.keep;
+      automaticState = ScrapeResolutionState.decisiveKeep;
       automaticReasons = const ['safe_presentation_context'];
       automaticLevel = ScrapeEvidenceLevel.none;
     } else if (hasReviewEvidence) {
-      automaticAction = ScrapeFinalAction.keepReview;
-      automaticReasons = ['review_evidence'];
+      automaticAction = evidenceExhausted
+          ? ScrapeFinalAction.keepReview
+          : ScrapeFinalAction.keep;
+      automaticState = evidenceExhausted
+          ? ScrapeResolutionState.finalReview
+          : ScrapeResolutionState.needsEvidence;
+      automaticReasons = [_unresolvedReason(evidence)];
       automaticLevel = ScrapeEvidenceLevel.review;
     }
 
@@ -273,6 +308,7 @@ class ScrapeExclusionPolicyEvaluator {
     if (allSurfacesAllowed && allSurfacesDenied) {
       return _decision(
         action: ScrapeFinalAction.keepReview,
+        resolutionState: ScrapeResolutionState.finalReview,
         classValue: ScrapeProvenanceClass.unknown,
         level: ScrapeEvidenceLevel.strong,
         reasons: const ['manual_override_conflict'],
@@ -284,6 +320,7 @@ class ScrapeExclusionPolicyEvaluator {
     if (allSurfacesAllowed) {
       return _decision(
         action: ScrapeFinalAction.keep,
+        resolutionState: ScrapeResolutionState.decisiveKeep,
         classValue: automaticClass,
         level: automaticLevel,
         reasons: const ['exact_allow'],
@@ -294,6 +331,7 @@ class ScrapeExclusionPolicyEvaluator {
     if (allSurfacesDenied) {
       return _decision(
         action: ScrapeFinalAction.exclude,
+        resolutionState: ScrapeResolutionState.decisiveExclude,
         classValue: automaticClass,
         level: automaticLevel,
         reasons: const ['exact_deny'],
@@ -303,12 +341,14 @@ class ScrapeExclusionPolicyEvaluator {
     }
     if (exactAllows.isNotEmpty || exactDenies.isNotEmpty) {
       automaticAction = ScrapeFinalAction.keepReview;
+      automaticState = ScrapeResolutionState.finalReview;
       automaticReasons = const ['manual_rule_scope_uncertain'];
       automaticLevel = ScrapeEvidenceLevel.review;
     }
 
     return _decision(
       action: automaticAction,
+      resolutionState: automaticState,
       classValue: automaticClass,
       level: automaticLevel,
       reasons: automaticReasons,
@@ -320,6 +360,7 @@ class ScrapeExclusionPolicyEvaluator {
 
   ScrapePolicyDecision _decision({
     required ScrapeFinalAction action,
+    required ScrapeResolutionState resolutionState,
     required ScrapeProvenanceClass classValue,
     required ScrapeEvidenceLevel level,
     required List<String> reasons,
@@ -329,6 +370,7 @@ class ScrapeExclusionPolicyEvaluator {
   }) {
     return ScrapePolicyDecision(
       finalAction: action,
+      resolutionState: resolutionState,
       provenanceClass: classValue,
       evidenceLevel: level,
       reasonCodes: List.unmodifiable(reasons),
@@ -337,6 +379,20 @@ class ScrapeExclusionPolicyEvaluator {
       hasConflict: hasConflict,
       snapshotDigest: snapshot.snapshotDigest,
     );
+  }
+
+  String _unresolvedReason(List<ScrapeEvidenceAtom> evidence) {
+    if (evidence.any(
+      (item) => item.kind == ScrapeEvidenceKind.productFamilySuspicion,
+    )) {
+      return 'reuse_family_unresolved';
+    }
+    if (evidence.any(
+      (item) => item.kind == ScrapeEvidenceKind.highVolumePresentation,
+    )) {
+      return 'lineage_incomplete';
+    }
+    return 'reuse_signal_unresolved';
   }
 
   List<ScrapeExactAllowRule> _exactAllowsFor(List<_PolicySurface> surfaces) {
@@ -380,23 +436,35 @@ class ScrapeExclusionPolicyEvaluator {
     ScrapeClassificationContext? classificationContext,
   }) {
     final details = surface.details;
-    if (details == null) return;
-    final facts = details.provenanceFacts;
+    final catalog = surface.catalogEvidence;
+    if (details == null && catalog == null) return;
+    final facts = details?.provenanceFacts ?? const ScrapeWorkProvenanceFacts();
     final includedWorks = [
-      ...details.includedWorks,
+      ...?details?.includedWorks,
       ...facts.includedWorks,
+      ...?catalog?.includedCodes,
     ].where((value) => value.trim().isNotEmpty).toSet();
     final parentWorks = [
-      ...details.parentWorks,
+      ...?details?.parentWorks,
       ...facts.parentWorks,
+      ...?catalog?.parentCodes,
     ].where((value) => value.trim().isNotEmpty).toSet();
-    final genres = [...details.genres, ...facts.genres, ...facts.tags];
+    final genres = [
+      ...?details?.genres,
+      ...facts.genres,
+      ...facts.tags,
+      ...?catalog?.tags,
+    ];
+    final title = details?.title ?? catalog?.title ?? '';
+    final series = details?.series ?? catalog?.series;
+    final description = details?.description ?? catalog?.description;
     final text = [
-      details.title,
-      details.series ?? '',
-      details.description ?? '',
+      title,
+      series ?? '',
+      description ?? '',
       facts.description ?? '',
       ...genres,
+      ...?catalog?.provenanceHints,
     ].join(' ').trim();
     var hasStrongDerivedSurfaceEvidence = false;
 
@@ -508,7 +576,7 @@ class ScrapeExclusionPolicyEvaluator {
       );
     }
     if (facts.coPerformance == ScrapeCoPerformance.independentSegments ||
-        details.coPerformance == ScrapeCoPerformance.independentSegments) {
+        details?.coPerformance == ScrapeCoPerformance.independentSegments) {
       // Multiple independent segments are not the same as reusing prior
       // works. Keep the fact as neutral context for diagnostics, but never
       // promote it to compilation evidence on its own.
@@ -661,23 +729,48 @@ class ScrapeExclusionPolicyEvaluator {
       );
     }
 
+    final manufacturer = details?.studio ?? catalog?.manufacturer;
+    final label = details?.publisher ?? catalog?.label;
+    final sourceDeclaredDerived =
+        ScrapeProvenanceSemantics.sourceDeclaredDerivedProductLine(
+          manufacturer: manufacturer,
+          label: label,
+          series: series,
+          tags: genres,
+          description: description,
+          title: title,
+        );
+    if (sourceDeclaredDerived != null) {
+      strong(
+        field: 'catalog_metadata',
+        kind: ScrapeEvidenceKind.verifiedDerivedFamily,
+        polarity: ScrapeEvidencePolarity.supportsCompilation,
+        ruleId: sourceDeclaredDerived.ruleId,
+        observedText: sourceDeclaredDerived.observedText,
+      );
+    }
+
     final productFamily = ScrapeProductFamilyRegistry.match(
       code: surface.code,
-      manufacturer: details.studio,
-      label: details.publisher,
-      series: details.series,
-      title: details.title,
+      manufacturer: manufacturer,
+      label: label,
+      series: series,
+      title: title,
     );
     if (productFamily != null) {
-      if (productFamily.hasCollectionMarker) {
+      final verified =
+          productFamily.disposition ==
+          ScrapeProductFamilyDisposition.verifiedDerivedOnly;
+      if (verified) {
         strong(
           field: 'product_identity',
-          kind: ScrapeEvidenceKind.productFamilySuspicion,
+          kind: ScrapeEvidenceKind.verifiedDerivedFamily,
           polarity: ScrapeEvidencePolarity.supportsCompilation,
           ruleId: productFamily.ruleId,
           observedText: productFamily.observedText,
         );
-      } else {
+      } else if (productFamily.disposition ==
+          ScrapeProductFamilyDisposition.suspicionOnly) {
         addEvidence(
           surface: surface,
           field: 'product_identity',
@@ -723,7 +816,7 @@ class ScrapeExclusionPolicyEvaluator {
     }
     if (!hasStrongDerivedSurfaceEvidence &&
         (facts.coPerformance == ScrapeCoPerformance.sharedProduction ||
-            details.coPerformance == ScrapeCoPerformance.sharedProduction)) {
+            details?.coPerformance == ScrapeCoPerformance.sharedProduction)) {
       strong(
         kind: ScrapeEvidenceKind.genuineCoPerformance,
         polarity: ScrapeEvidencePolarity.supportsOriginalWork,
@@ -732,7 +825,8 @@ class ScrapeExclusionPolicyEvaluator {
       );
     }
     if (facts.coPerformance == ScrapeCoPerformance.possibleSharedProduction ||
-        details.coPerformance == ScrapeCoPerformance.possibleSharedProduction) {
+        details?.coPerformance ==
+            ScrapeCoPerformance.possibleSharedProduction) {
       addEvidence(
         surface: surface,
         field: 'title_or_metadata',
@@ -838,12 +932,14 @@ class _PolicySurface {
     required this.source,
     required this.code,
     required this.details,
+    this.catalogEvidence,
   });
 
   final String id;
   final ScrapeSourceId source;
   final String code;
   final ScrapeWorkDetails? details;
+  final ScrapeCatalogWorkEvidence? catalogEvidence;
 
   factory _PolicySurface.fromDetails(
     ScrapeWorkDetails details,
@@ -853,6 +949,35 @@ class _PolicySurface {
     source: details.source,
     code: details.rawCode ?? details.code,
     details: details,
+  );
+
+  factory _PolicySurface.fromCatalogEvidence(
+    ScrapeCatalogWorkEvidence evidence, {
+    required String code,
+    required String title,
+    required int index,
+    required int evidenceIndex,
+  }) => _PolicySurface(
+    id: '${evidence.source.storageValue}:$index:catalog:$evidenceIndex:${evidence.code ?? code}',
+    source: evidence.source,
+    code: evidence.rawCode ?? evidence.code ?? code,
+    details: null,
+    catalogEvidence: evidence.title == null
+        ? ScrapeCatalogWorkEvidence(
+            source: evidence.source,
+            code: evidence.code ?? code,
+            rawCode: evidence.rawCode ?? code,
+            title: title,
+            manufacturer: evidence.manufacturer,
+            label: evidence.label,
+            series: evidence.series,
+            tags: evidence.tags,
+            provenanceHints: evidence.provenanceHints,
+            parentCodes: evidence.parentCodes,
+            includedCodes: evidence.includedCodes,
+            description: evidence.description,
+          )
+        : evidence,
   );
 }
 

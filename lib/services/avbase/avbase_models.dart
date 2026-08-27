@@ -22,12 +22,14 @@ final class AvBaseWorkSummary {
     required this.title,
     required this.detailUri,
     this.releaseDate,
+    this.catalogEvidence = const [],
   });
 
   final String? code;
   final String title;
   final Uri detailUri;
   final String? releaseDate;
+  final List<ScrapeCatalogWorkEvidence> catalogEvidence;
 }
 
 final class AvBaseWorkDetails {
@@ -43,6 +45,7 @@ final class AvBaseWorkDetails {
     this.performers,
     this.provenanceFacts = const ScrapeWorkProvenanceFacts(),
     this.originalImageEvidenceUris = const [],
+    this.catalogEvidence = const [],
   });
 
   final String code;
@@ -56,6 +59,7 @@ final class AvBaseWorkDetails {
   final List<WorkPerformer>? performers;
   final ScrapeWorkProvenanceFacts provenanceFacts;
   final List<Uri> originalImageEvidenceUris;
+  final List<ScrapeCatalogWorkEvidence> catalogEvidence;
 }
 
 enum AvBaseFailureKind {

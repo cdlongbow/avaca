@@ -69,6 +69,7 @@ final class JavBusScrapeSource
               title: work.title,
               detailUri: work.detailUri,
               releaseDate: work.releaseDate,
+              catalogEvidence: work.catalogEvidence,
             ),
           )
           .toList(growable: false),
@@ -135,6 +136,19 @@ final class JavBusScrapeSource
   }
 
   ScrapeWorkDetails _mapDetails(JavBusWorkDetails details) {
+    final catalogEvidence = details.catalogEvidence.isEmpty
+        ? [
+            ScrapeCatalogWorkEvidence.fromDetails(
+              source: id,
+              code: details.rawCode ?? details.code,
+              title: details.title,
+              manufacturer: details.studio,
+              label: details.publisher,
+              series: details.series,
+              provenanceFacts: details.provenanceFacts,
+            ),
+          ]
+        : details.catalogEvidence;
     return ScrapeWorkDetails(
       source: id,
       code: details.rawCode ?? details.code,
@@ -154,6 +168,7 @@ final class JavBusScrapeSource
       coPerformance: details.provenanceFacts.coPerformance,
       performerCount: details.actressUris.length,
       originalImageEvidenceUris: details.originalImageEvidenceUris,
+      catalogEvidence: catalogEvidence,
     );
   }
 
@@ -164,6 +179,7 @@ final class JavBusScrapeSource
       title: work.title,
       detailUri: work.detailUri,
       releaseDate: work.releaseDate,
+      catalogEvidence: work.catalogEvidence,
     );
   }
 

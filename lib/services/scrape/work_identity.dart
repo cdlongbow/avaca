@@ -5,6 +5,7 @@
 // by a few presentation/image consumers, but it must not decide whether two
 // newly scraped works are the same work.
 
+import '../../models/scrape_source_settings.dart';
 import 'scrape_models.dart';
 
 final class ScrapeTitleIdentity {
@@ -135,22 +136,54 @@ ScrapeWorkCodeIdentity? parseScrapeWorkCodeIdentity(
   final edition = _scopedSodEdition(surface, evidence);
   final baseSurface = edition?.baseSurface ?? surface;
   final parsed = _parseScrapeWorkCodeIdentitySurface(baseSurface);
-  if (edition != null && parsed.isStructured) {
+  if (parsed.isStructured) {
+    final scoped = _scopedSodIdentity(
+      parsed,
+      evidence,
+      isSpecialEdition: edition != null,
+    );
     return ScrapeWorkCodeIdentity(
       surface: surface,
-      key: parsed.key,
-      displayCode: parsed.displayCode,
+      key: scoped?.key ?? parsed.key,
+      displayCode: scoped?.displayCode ?? parsed.displayCode,
       isStructured: true,
-      isSpecialEdition: true,
+      isSpecialEdition: edition != null,
     );
   }
   return parsed;
+}
+
+ScrapeWorkCodeIdentity? _scopedSodIdentity(
+  ScrapeWorkCodeIdentity identity,
+  ScrapeWorkIdentityEvidence? evidence, {
+  required bool isSpecialEdition,
+}) {
+  if (!_hasSodContext(evidence)) return null;
+  final match = RegExp(
+    r'^(START|STARS)-(\d+)$',
+  ).firstMatch(identity.displayCode);
+  if (match == null) return null;
+  final prefix = match.group(1)!;
+  final digits = match.group(2)!.replaceFirst(RegExp(r'^0+(?=\d)'), '');
+  return ScrapeWorkCodeIdentity(
+    surface: identity.surface,
+    key: '${prefix.toLowerCase()}$digits',
+    displayCode: '$prefix-${_formatSodDigits(digits)}',
+    isStructured: true,
+    isSpecialEdition: isSpecialEdition,
+  );
+}
+
+String _formatSodDigits(String digits) {
+  final normalized = digits.replaceFirst(RegExp(r'^0+(?=\d)'), '');
+  return normalized.padLeft(3, '0');
 }
 
 ({String baseSurface, bool isSpecial})? _scopedSodEdition(
   String surface,
   ScrapeWorkIdentityEvidence? evidence,
 ) {
+  if (!_hasSodContext(evidence)) return null;
   final terminalEdition = RegExp(
     r'^(.+?)-?(VT2|VT|V|T)(?:-?EC)?$',
   ).firstMatch(surface);
@@ -234,11 +267,17 @@ ScrapeWorkCodeIdentity _parseScrapeWorkCodeIdentitySurface(String surface) {
   );
 }
 
-String? scrapeWorkCodeIdentityKey(String? raw) =>
-    parseScrapeWorkCodeIdentity(raw)?.key;
+String? scrapeWorkCodeIdentityKey(
+  String? raw, {
+  ScrapeWorkIdentityEvidence? evidence,
+}) => parseScrapeWorkCodeIdentity(raw, evidence: evidence)?.key;
 
-bool scrapeWorkCodeIsSpecialEdition(String? raw) =>
-    parseScrapeWorkCodeIdentity(raw)?.isSpecialEdition ?? false;
+bool scrapeWorkCodeIsSpecialEdition(
+  String? raw, {
+  ScrapeWorkIdentityEvidence? evidence,
+}) =>
+    parseScrapeWorkCodeIdentity(raw, evidence: evidence)?.isSpecialEdition ??
+    false;
 
 bool scrapeWorkCodesEqual(
   String? left,
@@ -260,6 +299,7 @@ String? scrapeWorkIdentityKeyForSummary(ScrapeWorkSummary summary) {
   return scrapeWorkResolvedIdentityKey(
     rawCode: summary.rawCode ?? summary.code,
     externalIdentity: summary.externalIdentity,
+    identityEvidence: scrapeWorkIdentityEvidenceForSummary(summary),
     fallback: 'uri:${summary.source.storageValue}:${summary.detailUri}',
   );
 }
@@ -268,6 +308,7 @@ String? scrapeWorkIdentityKeyForDetails(ScrapeWorkDetails details) {
   return scrapeWorkResolvedIdentityKey(
     rawCode: details.rawCode ?? details.code,
     externalIdentity: details.externalIdentity,
+    identityEvidence: scrapeWorkIdentityEvidenceForDetails(details),
     fallback:
         'uri:${details.source.storageValue}:${details.sourceUri ?? details.code}',
   );
@@ -276,10 +317,14 @@ String? scrapeWorkIdentityKeyForDetails(ScrapeWorkDetails details) {
 String? scrapeWorkResolvedIdentityKey({
   required String? rawCode,
   ScrapeExternalWorkIdentity? externalIdentity,
+  ScrapeWorkIdentityEvidence? identityEvidence,
   required String fallback,
 }) {
-  final evidence = _identityEvidence(externalIdentity);
-  final bridgeKey = _declaredScopedBridgeKey(externalIdentity);
+  final evidence = identityEvidence ?? _identityEvidence(externalIdentity);
+  final bridgeKey = _declaredScopedBridgeKey(
+    externalIdentity,
+    evidence: evidence,
+  );
   if (bridgeKey != null) return 'code:$bridgeKey';
   final identity = parseScrapeWorkCodeIdentity(rawCode, evidence: evidence);
   if (identity != null) return 'code:${identity.key}';
@@ -308,7 +353,115 @@ ScrapeWorkIdentityEvidence? _identityEvidence(
   );
 }
 
-String? _declaredScopedBridgeKey(ScrapeExternalWorkIdentity? identity) {
+ScrapeWorkIdentityEvidence? scrapeWorkIdentityEvidenceForSummary(
+  ScrapeWorkSummary summary,
+) {
+  return _identityEvidenceForSource(
+    identity: summary.externalIdentity,
+    rawCode: summary.rawCode ?? summary.code,
+    source: summary.source,
+    catalogEvidence: summary.catalogEvidence,
+  );
+}
+
+ScrapeWorkIdentityEvidence? scrapeWorkIdentityEvidenceForDetails(
+  ScrapeWorkDetails details,
+) {
+  return _identityEvidenceForSource(
+    identity: details.externalIdentity,
+    rawCode: details.rawCode ?? details.code,
+    source: details.source,
+    manufacturer: details.studio,
+    label: details.publisher,
+    series: details.series,
+    catalogEvidence: details.catalogEvidence,
+  );
+}
+
+ScrapeWorkIdentityEvidence? _identityEvidenceForSource({
+  required ScrapeExternalWorkIdentity? identity,
+  required String? rawCode,
+  required ScrapeSourceId source,
+  String? manufacturer,
+  String? label,
+  String? series,
+  Iterable<ScrapeCatalogWorkEvidence> catalogEvidence = const [],
+}) {
+  final base = _identityEvidence(identity);
+  final sourceCatalog = catalogEvidence.where(
+    (evidence) => evidence.source == source,
+  );
+
+  String? firstValue(Iterable<String?> values) {
+    for (final value in values) {
+      final trimmed = value?.trim();
+      if (trimmed != null && trimmed.isNotEmpty) return trimmed;
+    }
+    return null;
+  }
+
+  final resolvedManufacturer = firstValue([
+    base?.manufacturer,
+    manufacturer,
+    ...sourceCatalog.map((evidence) => evidence.manufacturer),
+  ]);
+  final resolvedLabel = firstValue([
+    base?.label,
+    label,
+    ...sourceCatalog.map((evidence) => evidence.label),
+  ]);
+  final resolvedSeries = firstValue([
+    base?.series,
+    series,
+    ...sourceCatalog.map((evidence) => evidence.series),
+  ]);
+
+  var effectiveManufacturer = resolvedManufacturer;
+  if (source == ScrapeSourceId.javbus &&
+      _looksLikeSodCode(rawCode) &&
+      effectiveManufacturer == null &&
+      resolvedLabel == null &&
+      resolvedSeries == null) {
+    // JavBus often exposes only the SOD-shaped code. This is a source-local
+    // identity hint, not a global prefix rule and not product classification.
+    effectiveManufacturer = 'SOD';
+  }
+
+  if (base == null &&
+      effectiveManufacturer == null &&
+      resolvedLabel == null &&
+      resolvedSeries == null) {
+    return null;
+  }
+
+  if (base != null &&
+      effectiveManufacturer == base.manufacturer &&
+      resolvedLabel == base.label &&
+      resolvedSeries == base.series) {
+    return base;
+  }
+
+  return ScrapeWorkIdentityEvidence(
+    canonicalCode: base?.canonicalCode,
+    makerCode: base?.makerCode,
+    manufacturer: effectiveManufacturer,
+    label: resolvedLabel,
+    series: resolvedSeries,
+    aliases: base?.aliases ?? const [],
+    platformIds: base?.platformIds ?? const {},
+  );
+}
+
+bool _looksLikeSodCode(String? raw) {
+  final surface = normalizeScrapeWorkCodeSurface(raw);
+  return surface != null &&
+      RegExp(r'^(?:START|STARS)(?:BD)?(?:-|\d)').hasMatch(surface);
+}
+
+String? _declaredScopedBridgeKey(
+  ScrapeExternalWorkIdentity? identity, {
+  ScrapeWorkIdentityEvidence? evidence,
+}) {
   if (identity == null) return null;
   final declared = identity.declaredCodes.toList(growable: false);
   final startNumbers = <String>{};
@@ -325,7 +478,9 @@ String? _declaredScopedBridgeKey(ScrapeExternalWorkIdentity? identity) {
   if (startNumbers.length == 1 && starsNumbers.isEmpty) {
     return 'start${startNumbers.single}';
   }
-  if (starsNumbers.length == 1 && startNumbers.isEmpty) {
+  if (starsNumbers.length == 1 &&
+      startNumbers.isEmpty &&
+      _hasSodContext(evidence)) {
     return 'stars${starsNumbers.single}';
   }
   return null;
@@ -334,9 +489,12 @@ String? _declaredScopedBridgeKey(ScrapeExternalWorkIdentity? identity) {
 /// Returns the canonical display spelling without using the legacy alias
 /// table. The selected spelling is for storage/UI only; surface remains
 /// available to source-specific image lookup when needed.
-String? preferredScrapeWorkCode(Iterable<String?> rawCodes) {
+String? preferredScrapeWorkCode(
+  Iterable<String?> rawCodes, {
+  ScrapeWorkIdentityEvidence? evidence,
+}) {
   final identities = rawCodes
-      .map(parseScrapeWorkCodeIdentity)
+      .map((raw) => parseScrapeWorkCodeIdentity(raw, evidence: evidence))
       .whereType<ScrapeWorkCodeIdentity>()
       .toList(growable: false);
   if (identities.isEmpty) {
@@ -377,8 +535,9 @@ String? scrapeWorkStorageCode(String? rawCode) {
 String? scrapeWorkCanonicalStorageCode(
   String? rawCode, {
   ScrapeExternalWorkIdentity? externalIdentity,
+  ScrapeWorkIdentityEvidence? identityEvidence,
 }) {
-  final evidence = _identityEvidence(externalIdentity);
+  final evidence = identityEvidence ?? _identityEvidence(externalIdentity);
   final declared = <String?>[
     externalIdentity?.canonicalCode,
     externalIdentity?.makerCode,
@@ -386,10 +545,13 @@ String? scrapeWorkCanonicalStorageCode(
     ...?externalIdentity?.platformIds.values,
     rawCode,
   ];
-  final bridgeKey = _declaredScopedBridgeKey(externalIdentity);
+  final bridgeKey = _declaredScopedBridgeKey(
+    externalIdentity,
+    evidence: evidence,
+  );
   if (bridgeKey != null) {
     final prefix = bridgeKey.startsWith('start') ? 'START' : 'STARS';
-    return '$prefix-${bridgeKey.substring(prefix.toLowerCase().length)}';
+    return '$prefix-${_formatSodDigits(bridgeKey.substring(prefix.toLowerCase().length))}';
   }
   for (final candidate in declared) {
     final identity = parseScrapeWorkCodeIdentity(candidate, evidence: evidence);

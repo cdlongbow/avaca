@@ -181,12 +181,13 @@ void main() {
     expect(independent.finalAction, ScrapeFinalAction.keep);
     expect(reused.finalAction, ScrapeFinalAction.exclude);
     expect(priorPackage.finalAction, ScrapeFinalAction.exclude);
-    expect(familyHint.finalAction, ScrapeFinalAction.keepReview);
+    expect(familyHint.finalAction, ScrapeFinalAction.exclude);
+    expect(familyHint.resolutionState, ScrapeResolutionState.decisiveExclude);
     expect(
       familyHint.evidence.any(
         (item) =>
-            item.kind == ScrapeEvidenceKind.productFamilySuspicion &&
-            item.strength == ScrapeEvidenceStrength.medium,
+            item.kind == ScrapeEvidenceKind.verifiedDerivedFamily &&
+            item.strength == ScrapeEvidenceStrength.strong,
       ),
       isTrue,
     );
@@ -200,12 +201,12 @@ void main() {
         _details('OFJE-607', 'BEST COLLECTION', studio: 'S1 NO.1 STYLE'),
       ],
     );
-    expect(safeFamilyTitle.finalAction, ScrapeFinalAction.keepReview);
+    expect(safeFamilyTitle.finalAction, ScrapeFinalAction.exclude);
     expect(collectionFamilyTitle.finalAction, ScrapeFinalAction.exclude);
     expect(
       collectionFamilyTitle.evidence.any(
         (item) =>
-            item.kind == ScrapeEvidenceKind.productFamilySuspicion &&
+            item.kind == ScrapeEvidenceKind.verifiedDerivedFamily &&
             item.strength == ScrapeEvidenceStrength.strong,
       ),
       isTrue,
@@ -225,7 +226,58 @@ void main() {
 
     expect(decision.finalAction, ScrapeFinalAction.keepReview);
     expect(decision.hasConflict, isTrue);
-    expect(decision.reasonCodes, ['source_evidence_conflict']);
+    expect(decision.reasonCodes, ['source_provenance_conflict']);
+  });
+
+  test('keeps provisional suspicion out of the final review count', () {
+    final provisional = _evaluator().evaluate(
+      code: 'ATKD-001',
+      details: [_details('ATKD-001', '單體作品', studio: 'Attackers')],
+      evidenceExhausted: false,
+    );
+    expect(provisional.finalAction, ScrapeFinalAction.keep);
+    expect(provisional.resolutionState, ScrapeResolutionState.needsEvidence);
+    expect(provisional.reviewRequired, isFalse);
+
+    final exhausted = _evaluator().evaluate(
+      code: 'ATKD-001',
+      details: [_details('ATKD-001', '單體作品', studio: 'Attackers')],
+    );
+    expect(exhausted.finalAction, ScrapeFinalAction.keepReview);
+    expect(exhausted.resolutionState, ScrapeResolutionState.finalReview);
+    expect(exhausted.reviewRequired, isTrue);
+  });
+
+  test('uses source-scoped catalog evidence for verified derived families', () {
+    final decision = _evaluator().evaluate(
+      code: 'MIZD-270',
+      details: [
+        _details(
+          'MIZD-270',
+          '普通の作品名',
+          catalogEvidence: const [
+            ScrapeCatalogWorkEvidence(
+              source: ScrapeSourceId.avbase,
+              code: 'MIZD-270',
+              title: '普通の作品名',
+              manufacturer: 'MOODYZ',
+              series: 'BEST',
+            ),
+          ],
+        ),
+      ],
+    );
+
+    expect(decision.finalAction, ScrapeFinalAction.exclude);
+    expect(decision.reasonCodes, contains('strong_compilation_evidence'));
+    expect(
+      decision.evidence.any(
+        (item) =>
+            item.source == ScrapeSourceId.avbase &&
+            item.kind == ScrapeEvidenceKind.verifiedDerivedFamily,
+      ),
+      isTrue,
+    );
   });
 
   test(
@@ -1155,6 +1207,7 @@ ScrapeWorkDetails _details(
   String? studio,
   String? publisher,
   String? series,
+  List<ScrapeCatalogWorkEvidence> catalogEvidence = const [],
 }) {
   return ScrapeWorkDetails(
     source: source,
@@ -1166,5 +1219,6 @@ ScrapeWorkDetails _details(
     publisher: publisher,
     series: series,
     provenanceFacts: provenanceFacts,
+    catalogEvidence: catalogEvidence,
   );
 }

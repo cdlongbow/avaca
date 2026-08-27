@@ -61,6 +61,7 @@ final class AvWikiScrapeSource
               detailUri: work.detailUri,
               releaseDate: work.releaseDate,
               externalIdentity: work.externalIdentity,
+              catalogEvidence: work.catalogEvidence,
             ),
           )
           .toList(growable: false),
@@ -115,6 +116,20 @@ final class AvWikiScrapeSource
   void close() => client.close();
 
   ScrapeWorkDetails _mapDetails(AvWikiWorkDetails details) {
+    final catalogEvidence = details.catalogEvidence.isEmpty
+        ? [
+            ScrapeCatalogWorkEvidence.fromDetails(
+              source: id,
+              code: details.code,
+              title: details.title,
+              manufacturer: details.studio,
+              label: details.publisher,
+              series: details.series,
+              description: details.description,
+              provenanceFacts: details.provenanceFacts,
+            ),
+          ]
+        : details.catalogEvidence;
     return ScrapeWorkDetails(
       source: id,
       code: details.code,
@@ -133,6 +148,7 @@ final class AvWikiScrapeSource
       externalIdentity: details.externalIdentity,
       imageUris: const [],
       originalImageEvidenceUris: const [],
+      catalogEvidence: catalogEvidence,
     );
   }
 
@@ -145,6 +161,7 @@ final class AvWikiScrapeSource
       detailUri: work.detailUri,
       releaseDate: work.releaseDate,
       externalIdentity: work.externalIdentity,
+      catalogEvidence: work.catalogEvidence,
     );
   }
 

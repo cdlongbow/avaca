@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.17 - 2026-08-27
+
+- Finalized provenance-driven reuse classification with neutral mixed-family
+  handling for KIBD/PPBD and concrete BEST/lineage evidence for derived works.
+- Added production-path actress stress coverage across 15 major makers,
+  including large frozen catalog sets for 新井リマ and 沢北みなみ.
+- Added canonical identity count invariants, corrected terminal-action
+  reporting, and deterministic JavBus verification pause/retry/cancel coverage.
+
 ## 0.9.16 - 2026-08-27
 
 - Added AV-Wiki as an optional works catalog with exact search, pagination,

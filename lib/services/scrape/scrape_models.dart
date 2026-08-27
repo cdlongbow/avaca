@@ -37,6 +37,9 @@ final class ScrapeExternalWorkIdentity {
   bool get isEmpty =>
       (canonicalCode == null || canonicalCode!.trim().isEmpty) &&
       (makerCode == null || makerCode!.trim().isEmpty) &&
+      (manufacturer == null || manufacturer!.trim().isEmpty) &&
+      (label == null || label!.trim().isEmpty) &&
+      (series == null || series!.trim().isEmpty) &&
       platformIds.isEmpty &&
       aliases.isEmpty;
 
@@ -107,6 +110,111 @@ final class ScrapeWorkProvenanceFacts {
 typedef WorkProvenanceEvidence = ScrapeWorkProvenanceFacts;
 typedef ScrapeWorkProvenance = ScrapeWorkProvenanceFacts;
 
+/// Classification facts exposed while a source is still returning a catalog
+/// summary.  This is deliberately source-scoped: the union may merge several
+/// records for one identity, but it must not overwrite one source's maker,
+/// series, or lineage hints with another source's values.
+final class ScrapeCatalogWorkEvidence {
+  const ScrapeCatalogWorkEvidence({
+    required this.source,
+    this.code,
+    this.rawCode,
+    this.title,
+    this.manufacturer,
+    this.label,
+    this.series,
+    this.tags = const [],
+    this.provenanceHints = const [],
+    this.parentCodes = const [],
+    this.includedCodes = const [],
+    this.description,
+  });
+
+  final ScrapeSourceId source;
+  final String? code;
+  final String? rawCode;
+  final String? title;
+  final String? manufacturer;
+  final String? label;
+  final String? series;
+  final List<String> tags;
+  final List<String> provenanceHints;
+  final List<String> parentCodes;
+  final List<String> includedCodes;
+  final String? description;
+
+  bool get isEmpty =>
+      (manufacturer == null || manufacturer!.trim().isEmpty) &&
+      (label == null || label!.trim().isEmpty) &&
+      (series == null || series!.trim().isEmpty) &&
+      tags.isEmpty &&
+      provenanceHints.isEmpty &&
+      parentCodes.isEmpty &&
+      includedCodes.isEmpty &&
+      (description == null || description!.trim().isEmpty);
+
+  factory ScrapeCatalogWorkEvidence.fromIdentity({
+    required ScrapeSourceId source,
+    required String? code,
+    required String? title,
+    ScrapeExternalWorkIdentity? identity,
+  }) {
+    return ScrapeCatalogWorkEvidence(
+      source: source,
+      code: code,
+      rawCode: code,
+      title: title,
+      manufacturer: identity?.manufacturer,
+      label: identity?.label,
+      series: identity?.series,
+    );
+  }
+
+  factory ScrapeCatalogWorkEvidence.fromDetails({
+    required ScrapeSourceId source,
+    required String code,
+    required String title,
+    String? manufacturer,
+    String? label,
+    String? series,
+    String? description,
+    ScrapeWorkProvenanceFacts provenanceFacts =
+        const ScrapeWorkProvenanceFacts(),
+  }) {
+    return ScrapeCatalogWorkEvidence(
+      source: source,
+      code: code,
+      rawCode: code,
+      title: title,
+      manufacturer: manufacturer,
+      label: label,
+      series: series,
+      tags: {
+        ...provenanceFacts.genres,
+        ...provenanceFacts.tags,
+      }.toList(growable: false),
+      provenanceHints: [
+        if (provenanceFacts.containsPriorWorks == true)
+          'source declares included prior works',
+        if (provenanceFacts.extractedFromPriorWork == true)
+          'source declares extraction from a prior work',
+        if (provenanceFacts.splitFromPriorWork == true)
+          'source declares a split from a prior work',
+        if (provenanceFacts.packageOfPriorWorks == true)
+          'source declares a package of prior works',
+        if (provenanceFacts.reissue == true) 'source declares a reissue',
+        if (provenanceFacts.remaster == true) 'source declares a remaster',
+        if (provenanceFacts.reedited == true) 'source declares a re-edit',
+        if (provenanceFacts.oldMaterialWithNewBonus == true)
+          'source declares old material with new bonus',
+      ],
+      parentCodes: provenanceFacts.parentWorks,
+      includedCodes: provenanceFacts.includedWorks,
+      description: description ?? provenanceFacts.description,
+    );
+  }
+}
+
 final class ScrapeActressSearchResult {
   const ScrapeActressSearchResult({
     required this.source,
@@ -144,6 +252,7 @@ final class ScrapeWorkSummary {
     required this.detailUri,
     this.releaseDate,
     this.externalIdentity,
+    this.catalogEvidence = const [],
   });
 
   final ScrapeSourceId source;
@@ -153,6 +262,7 @@ final class ScrapeWorkSummary {
   final Uri detailUri;
   final String? releaseDate;
   final ScrapeExternalWorkIdentity? externalIdentity;
+  final List<ScrapeCatalogWorkEvidence> catalogEvidence;
 }
 
 final class ScrapeWorkDetails {
@@ -179,6 +289,7 @@ final class ScrapeWorkDetails {
     this.fieldSources = const {},
     this.sourceUri,
     this.externalIdentity,
+    this.catalogEvidence = const [],
   });
 
   final ScrapeSourceId source;
@@ -203,8 +314,12 @@ final class ScrapeWorkDetails {
   final Map<String, WorkFieldSourceEvidence> fieldSources;
   final Uri? sourceUri;
   final ScrapeExternalWorkIdentity? externalIdentity;
+  final List<ScrapeCatalogWorkEvidence> catalogEvidence;
 
-  ScrapeWorkDetails copyWith({Uri? sourceUri}) => ScrapeWorkDetails(
+  ScrapeWorkDetails copyWith({
+    Uri? sourceUri,
+    List<ScrapeCatalogWorkEvidence>? catalogEvidence,
+  }) => ScrapeWorkDetails(
     source: source,
     code: code,
     rawCode: rawCode,
@@ -227,6 +342,7 @@ final class ScrapeWorkDetails {
     fieldSources: fieldSources,
     sourceUri: sourceUri ?? this.sourceUri,
     externalIdentity: externalIdentity,
+    catalogEvidence: catalogEvidence ?? this.catalogEvidence,
   );
 
   Work toWork({String? cardImagePath, String? detailImagePath}) {

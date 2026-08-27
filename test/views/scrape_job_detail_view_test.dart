@@ -1,8 +1,10 @@
 import 'dart:async';
 
+import 'package:avaca/components/javbus_verification_dialog.dart';
 import 'package:avaca/core/database.dart';
 import 'package:avaca/l10n/app_localizations.dart';
 import 'package:avaca/models/scrape_job.dart';
+import 'package:avaca/services/javbus/javbus_verification.dart';
 import 'package:avaca/services/scrape_job_coordinator.dart';
 import 'package:avaca/services/scrape_job_repository.dart';
 import 'package:avaca/views/scrape_job_detail_view.dart';
@@ -149,6 +151,52 @@ void main() {
 
     expect(find.text('新女優'), findsOneWidget);
     expect(find.text('舊女優'), findsNothing);
+  });
+
+  testWidgets('installs a user-visible JavBus verification handler', (
+    tester,
+  ) async {
+    final db = AppDatabase();
+    final job = _job(id: 'verification-job', name: '驗證女優');
+    final repository = _FakeScrapeJobRepository(db: db, job: job);
+    final coordinator = ScrapeJobCoordinator(db: db, repository: repository);
+    addTearDown(coordinator.dispose);
+
+    await tester.pumpWidget(
+      _testApp(
+        ScrapeJobDetailView(db: db, coordinator: coordinator, jobId: job.id),
+      ),
+    );
+    await tester.pump();
+
+    final challenge = JavBusVerificationChallenge(
+      submitUri: Uri.parse('https://www.javbus.com/verify'),
+      hiddenFields: const {},
+      submitFields: const {'submit': 'question'},
+      questions: [
+        JavBusVerificationQuestion(
+          name: 'answer',
+          prompt: 'Do you agree?',
+          options: [
+            JavBusVerificationOption(value: 'yes', label: 'Yes'),
+            JavBusVerificationOption(value: 'no', label: 'No'),
+          ],
+        ),
+      ],
+    );
+
+    final handler = coordinator.verificationHandler;
+    expect(handler, isNotNull);
+    final pending = handler!(challenge);
+    await tester.pump();
+    expect(find.byType(JavBusVerificationDialog), findsOneWidget);
+
+    await tester.tap(find.text('Yes'));
+    await tester.pump();
+    await tester.tap(find.text('送出驗證'));
+    await tester.pumpAndSettle();
+
+    expect(await pending, {'answer': 'yes'});
   });
 
   testWidgets('jobs view ignores an out-of-order stale read', (tester) async {

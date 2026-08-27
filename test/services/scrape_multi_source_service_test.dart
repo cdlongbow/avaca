@@ -10,9 +10,11 @@ import 'package:avaca/models/work_scrape_options.dart';
 import 'package:avaca/services/javbus/work_image_downloader.dart';
 import 'package:avaca/services/javbus/work_image_policy.dart';
 import 'package:avaca/services/javbus/work_image_route_resolver.dart';
+import 'package:avaca/services/javbus/javbus_verification.dart';
 import 'package:avaca/services/scrape/scrape_image_downloader.dart';
 import 'package:avaca/services/scrape/scrape_models.dart';
 import 'package:avaca/services/scrape/scrape_source.dart';
+import 'package:avaca/services/scrape_run_observer.dart';
 import 'package:avaca/services/scrape/work_code_canonicalizer.dart';
 import 'package:avaca/services/works_scrape_service.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -1998,6 +2000,289 @@ void main() {
       );
     },
   );
+
+  test(
+    'unions source-scoped catalog evidence before the final decision',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'avaca_catalog_evidence_union_test_',
+      );
+      final database = AppDatabase.forTesting(
+        baseDir: directory.path,
+        databaseFactory: databaseFactoryFfi,
+      );
+      addTearDown(() async {
+        await database.close();
+        await directory.delete(recursive: true);
+      });
+      await database.init();
+      await database.addActress(name: '新井リマ');
+      final actressId =
+          (await (await database.database).query('actresses')).single['id']
+              as int;
+
+      final javbus = _FakeScrapeSource(
+        id: ScrapeSourceId.javbus,
+        detailBirthDate: '2000-01-01',
+        works: [
+          ScrapeWorkSummary(
+            source: ScrapeSourceId.javbus,
+            code: 'MIZD-270',
+            title: '普通作品名',
+            detailUri: Uri.parse('https://www.javbus.com/MIZD-270'),
+          ),
+        ],
+        detailsByCode: const {
+          'MIZD-270': ScrapeWorkDetails(
+            source: ScrapeSourceId.javbus,
+            code: 'MIZD-270',
+            title: '普通作品名',
+            performerCount: 1,
+          ),
+        },
+      );
+      final avbase = _FakeScrapeSource(
+        id: ScrapeSourceId.avbase,
+        detailBirthDate: '2000-01-01',
+        works: [
+          ScrapeWorkSummary(
+            source: ScrapeSourceId.avbase,
+            code: 'MIZD-270',
+            title: '普通作品名',
+            detailUri: Uri.parse(
+              'https://www.avbase.net/works/moodyz:MIZD-270',
+            ),
+            catalogEvidence: const [
+              ScrapeCatalogWorkEvidence(
+                source: ScrapeSourceId.avbase,
+                code: 'MIZD-270',
+                title: '普通作品名',
+                manufacturer: 'MOODYZ',
+                series: 'MOODYZ BEST',
+              ),
+            ],
+          ),
+        ],
+        detailsByCode: const {},
+      );
+      final observer = _RecordingScrapeObserver();
+      final service = WorksScrapeService(
+        db: database,
+        sources: {ScrapeSourceId.javbus: javbus, ScrapeSourceId.avbase: avbase},
+        workImageDownloader: _FakeWorkImageDownloader(),
+        imageDirectory: directory.path,
+      );
+
+      final result = await service.scrape(
+        actressId: actressId,
+        actressName: '新井リマ',
+        options: const WorkScrapeOptions(syncDetails: false),
+        sourceSettings: const ScrapeSourceSettings(
+          actressDetailsSource: ScrapeSourceId.javbus,
+          worksSources: [ScrapeSourceId.javbus, ScrapeSourceId.avbase],
+        ),
+        observer: observer,
+      );
+
+      expect(result.saved, 0);
+      expect(result.excluded, 1);
+      expect(result.review, 0);
+      expect(javbus.detailRequests, ['MIZD-270']);
+      expect(avbase.detailRequests, isEmpty);
+      expect(
+        result.sourceResults[ScrapeSourceId.javbus]?.state,
+        ScrapeSourceRunState.success,
+      );
+      expect(
+        result.sourceResults[ScrapeSourceId.avbase]?.state,
+        ScrapeSourceRunState.success,
+      );
+      expect(observer.outcomes, hasLength(1));
+      final metadata = observer.outcomes.single.metadata;
+      expect(metadata['resolutionState'], 'decisiveExclude');
+      expect(metadata['evidenceSources'], containsAll(['javbus', 'avbase']));
+      expect(metadata['primarySource'], 'javbus');
+    },
+  );
+
+  test('escalates suspicion-only family evidence to the next source', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'avaca_provisional_evidence_escalation_test_',
+    );
+    final database = AppDatabase.forTesting(
+      baseDir: directory.path,
+      databaseFactory: databaseFactoryFfi,
+    );
+    addTearDown(() async {
+      await database.close();
+      await directory.delete(recursive: true);
+    });
+    await database.init();
+    await database.addActress(name: '沢北みなみ');
+    final actressId =
+        (await (await database.database).query('actresses')).single['id']
+            as int;
+
+    final javbus = _FakeScrapeSource(
+      id: ScrapeSourceId.javbus,
+      detailBirthDate: '2000-01-01',
+      works: [
+        ScrapeWorkSummary(
+          source: ScrapeSourceId.javbus,
+          code: 'ATKD-001',
+          title: '普通作品名',
+          detailUri: Uri.parse('https://www.javbus.com/ATKD-001'),
+        ),
+      ],
+      detailsByCode: const {
+        'ATKD-001': ScrapeWorkDetails(
+          source: ScrapeSourceId.javbus,
+          code: 'ATKD-001',
+          title: '普通作品名',
+          studio: 'Attackers',
+          performerCount: 1,
+        ),
+      },
+    );
+    final avbase = _FakeScrapeSource(
+      id: ScrapeSourceId.avbase,
+      detailBirthDate: '2000-01-01',
+      works: [
+        ScrapeWorkSummary(
+          source: ScrapeSourceId.avbase,
+          code: 'ATKD-001',
+          title: '普通作品名',
+          detailUri: Uri.parse(
+            'https://www.avbase.net/works/attackers:ATKD-001',
+          ),
+        ),
+      ],
+      detailsByCode: const {
+        'ATKD-001': ScrapeWorkDetails(
+          source: ScrapeSourceId.avbase,
+          code: 'ATKD-001',
+          title: '普通作品名',
+          studio: 'Attackers',
+          provenanceFacts: ScrapeWorkProvenanceFacts(
+            explicitOriginalProduction: true,
+          ),
+          performerCount: 1,
+        ),
+      },
+    );
+    final service = WorksScrapeService(
+      db: database,
+      sources: {ScrapeSourceId.javbus: javbus, ScrapeSourceId.avbase: avbase},
+      workImageDownloader: _FakeWorkImageDownloader(),
+      imageDirectory: directory.path,
+    );
+
+    final result = await service.scrape(
+      actressId: actressId,
+      actressName: '沢北みなみ',
+      options: const WorkScrapeOptions(syncDetails: false),
+      sourceSettings: const ScrapeSourceSettings(
+        actressDetailsSource: ScrapeSourceId.javbus,
+        worksSources: [ScrapeSourceId.javbus, ScrapeSourceId.avbase],
+      ),
+    );
+
+    expect(result.saved, 1);
+    expect(result.excluded, 0);
+    expect(result.review, 0);
+    expect(javbus.detailRequests, ['ATKD-001']);
+    expect(avbase.detailRequests, ['ATKD-001']);
+    expect(
+      (await database.getWorksForActress(actressId)).single['code'],
+      'ATKD-001',
+    );
+  });
+
+  test(
+    'marks JavBus verification cancellation while continuing other sources',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'avaca_verification_cancellation_source_test_',
+      );
+      final database = AppDatabase.forTesting(
+        baseDir: directory.path,
+        databaseFactory: databaseFactoryFfi,
+      );
+      addTearDown(() async {
+        await database.close();
+        await directory.delete(recursive: true);
+      });
+      await database.init();
+      await database.addActress(name: '新井リマ');
+      final actressId =
+          (await (await database.database).query('actresses')).single['id']
+              as int;
+
+      final javbus = _FakeScrapeSource(
+        id: ScrapeSourceId.javbus,
+        detailBirthDate: '2000-01-01',
+        works: const [],
+        detailsByCode: const {},
+        worksError: const JavBusVerificationCancelledException(),
+      );
+      final avbase = _FakeScrapeSource(
+        id: ScrapeSourceId.avbase,
+        detailBirthDate: '2000-01-01',
+        works: [
+          ScrapeWorkSummary(
+            source: ScrapeSourceId.avbase,
+            code: 'SAFE-001',
+            title: '另一來源的新作',
+            detailUri: Uri.parse('https://www.avbase.net/works/safe:SAFE-001'),
+          ),
+        ],
+        detailsByCode: const {
+          'SAFE-001': ScrapeWorkDetails(
+            source: ScrapeSourceId.avbase,
+            code: 'SAFE-001',
+            title: '另一來源的新作',
+            performerCount: 1,
+          ),
+        },
+      );
+      final service = WorksScrapeService(
+        db: database,
+        sources: {ScrapeSourceId.javbus: javbus, ScrapeSourceId.avbase: avbase},
+        workImageDownloader: _FakeWorkImageDownloader(),
+        imageDirectory: directory.path,
+      );
+
+      final result = await service.scrape(
+        actressId: actressId,
+        actressName: '新井リマ',
+        options: const WorkScrapeOptions(syncDetails: false),
+        sourceSettings: const ScrapeSourceSettings(
+          actressDetailsSource: ScrapeSourceId.avbase,
+          worksSources: [ScrapeSourceId.javbus, ScrapeSourceId.avbase],
+        ),
+      );
+
+      expect(result.cancelled, isFalse);
+      expect(result.partialSuccess, isTrue);
+      expect(result.saved, 1);
+      expect(
+        result.sourceResults[ScrapeSourceId.javbus]?.state,
+        ScrapeSourceRunState.cancelled,
+      );
+      expect(
+        result.sourceResults[ScrapeSourceId.javbus]?.error,
+        isA<JavBusVerificationCancelledException>(),
+      );
+      expect(
+        result.sourceResults[ScrapeSourceId.avbase]?.state,
+        ScrapeSourceRunState.success,
+      );
+      expect(
+        (await database.getWorksForActress(actressId)).single['code'],
+        'SAFE-001',
+      );
+    },
+  );
 }
 
 final class _FakeScrapeSource implements ScrapeSource {
@@ -2009,6 +2294,7 @@ final class _FakeScrapeSource implements ScrapeSource {
     this.detailsByUri = const {},
     this.failingCodes = const {},
     this.failWorks = false,
+    this.worksError,
     this.beforeSearch,
     this.beforeDetail,
     this.detailAvatarUrl,
@@ -2022,6 +2308,7 @@ final class _FakeScrapeSource implements ScrapeSource {
   final Map<String, ScrapeWorkDetails> detailsByUri;
   final Set<String> failingCodes;
   final bool failWorks;
+  final Object? worksError;
   final Future<void> Function()? beforeSearch;
   final Future<void> Function(String code)? beforeDetail;
   final Uri? detailAvatarUrl;
@@ -2066,6 +2353,9 @@ final class _FakeScrapeSource implements ScrapeSource {
     bool Function()? isCancelled,
     void Function(ScrapeCollectionProgress progress)? onProgress,
   }) async {
+    if (worksError != null) {
+      throw worksError!;
+    }
     if (failWorks) {
       throw StateError('simulated works traversal failure');
     }
@@ -2095,6 +2385,36 @@ final class _FakeScrapeSource implements ScrapeSource {
 
   @override
   void close() {}
+}
+
+final class _RecordingScrapeObserver extends ScrapeRunObserver {
+  final outcomes =
+      <
+        ({
+          String code,
+          ScrapeSourceId source,
+          ScrapeWorkOutcomeState outcome,
+          Map<String, Object?> metadata,
+        })
+      >[];
+
+  @override
+  void onWorkOutcome({
+    required String code,
+    required ScrapeSourceId source,
+    required ScrapeWorkOutcomeState outcome,
+    Object? error,
+    String? reason,
+    Iterable<String> imageFailureVariants = const <String>[],
+    Map<String, Object?> metadata = const <String, Object?>{},
+  }) {
+    outcomes.add((
+      code: code,
+      source: source,
+      outcome: outcome,
+      metadata: Map.unmodifiable(metadata),
+    ));
+  }
 }
 
 final class _RecordingScrapeImageUriDownloader

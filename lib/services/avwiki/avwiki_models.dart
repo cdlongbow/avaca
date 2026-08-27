@@ -24,6 +24,7 @@ final class AvWikiWorkSummary {
     required this.detailUri,
     this.releaseDate,
     this.externalIdentity,
+    this.catalogEvidence = const [],
   });
 
   final String? code;
@@ -32,6 +33,7 @@ final class AvWikiWorkSummary {
   final Uri detailUri;
   final String? releaseDate;
   final ScrapeExternalWorkIdentity? externalIdentity;
+  final List<ScrapeCatalogWorkEvidence> catalogEvidence;
 }
 
 final class AvWikiWorkDetails {
@@ -49,6 +51,7 @@ final class AvWikiWorkDetails {
     this.genres = const [],
     this.provenanceFacts = const ScrapeWorkProvenanceFacts(),
     this.externalIdentity,
+    this.catalogEvidence = const [],
   });
 
   final String code;
@@ -64,6 +67,7 @@ final class AvWikiWorkDetails {
   final List<String> genres;
   final ScrapeWorkProvenanceFacts provenanceFacts;
   final ScrapeExternalWorkIdentity? externalIdentity;
+  final List<ScrapeCatalogWorkEvidence> catalogEvidence;
 }
 
 enum AvWikiFailureKind {

@@ -1,6 +1,7 @@
 import 'package:avaca/services/javbus/javbus_html_parser.dart';
 import 'package:avaca/services/javbus/javbus_models.dart';
 import 'package:avaca/services/scrape/scrape_models.dart';
+import 'package:avaca/models/scrape_source_settings.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -50,6 +51,10 @@ void main() {
     expect(work.series, 'PRESTIGE PREMIUM');
     expect(work.provenanceFacts.genres, ['高畫質', '女上位']);
     expect(work.provenanceFacts.tags, ['高畫質', '女上位']);
+    expect(work.catalogEvidence.single.source, ScrapeSourceId.javbus);
+    expect(work.catalogEvidence.single.code, 'ABF-183');
+    expect(work.catalogEvidence.single.manufacturer, 'プレステージ');
+    expect(work.catalogEvidence.single.series, 'PRESTIGE PREMIUM');
   });
 
   test('removes V T and VT edition suffixes from scraped work codes', () {
@@ -87,6 +92,11 @@ void main() {
 
     expect(page.works.single.code, 'SIVR00303');
     expect(page.works.single.rawCode, 'SIVR00303');
+    expect(page.works.single.catalogEvidence.single.code, 'SIVR00303');
+    expect(
+      page.works.single.catalogEvidence.single.source,
+      ScrapeSourceId.javbus,
+    );
   });
 
   test('does not promote weak JavBus co-performance wording', () {

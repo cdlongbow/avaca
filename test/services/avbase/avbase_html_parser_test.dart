@@ -1,7 +1,13 @@
+import 'dart:io';
+
+import 'package:avaca/models/scrape_exclusion_policy.dart';
 import 'package:avaca/models/scrape_source_settings.dart';
+import 'package:avaca/models/scrape_rules.dart';
 import 'package:avaca/services/avbase/avbase_html_parser.dart';
 import 'package:avaca/services/avbase/avbase_models.dart';
 import 'package:avaca/services/scrape/scrape_models.dart';
+import 'package:avaca/services/scrape_exclusion_policy_evaluator.dart';
+import 'package:avaca/services/scrape/work_identity.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -22,6 +28,10 @@ void main() {
         <div class="bg-background border border-light rounded-lg overflow-hidden h-full">
           <a data-slot="button" href="/works/moodyz:MIZD-549">作品標題</a>
           <a href="/works/date/2026-08-20">2026/08/20</a>
+          <a href="/maker/moodyz">MOODYZ</a>
+          <a href="/label/moodyz">MOODYZ label</a>
+          <a href="/series/moodyz-best">MOODYZ BEST</a>
+          <a href="/tags/vr">VR</a>
         </div>
         <nav>
           <a data-slot="button" href="/works/date">本日発売</a>
@@ -49,6 +59,27 @@ void main() {
     expect(page.pageCount, 7);
     expect(page.works.single.code, 'MIZD-549');
     expect(page.works.single.releaseDate, '2026-08-20');
+    expect(page.works.single.catalogEvidence.single.manufacturer, 'MOODYZ');
+    expect(page.works.single.catalogEvidence.single.label, 'MOODYZ label');
+    expect(page.works.single.catalogEvidence.single.series, 'MOODYZ BEST');
+    expect(page.works.single.catalogEvidence.single.tags, ['VR']);
+  });
+
+  test('parses frozen live AvBase plural maker and label routes', () {
+    final page = parser.parseActressPage(
+      File(
+        'test/fixtures/avbase/live_search_card_2026-08-27.html',
+      ).readAsStringSync(),
+      pageUri: Uri.parse(
+        'https://www.avbase.net/talents/%E6%96%B0%E4%BA%95%E3%83%AA%E3%83%9E',
+      ),
+    );
+
+    expect(page.details.name, '新井リマ');
+    expect(page.works.single.code, 'UMD-1028');
+    expect(page.works.single.catalogEvidence.single.manufacturer, 'LEO');
+    expect(page.works.single.catalogEvidence.single.label, 'LEO');
+    expect(page.works.single.catalogEvidence.single.series, '男なら一度はやられてみたいっ！！');
   });
 
   test('parses work metadata, performers, and original evidence only', () {
@@ -105,6 +136,9 @@ void main() {
     expect(details.provenanceFacts.tags, ['ベスト・総集編', 'ハイクオリティVR']);
     expect(details.provenanceFacts.includedWorks, ['OLD-001', 'OLD-002']);
     expect(details.provenanceFacts.containsPriorWorks, isTrue);
+    expect(details.catalogEvidence.single.manufacturer, 'MOODYZ');
+    expect(details.catalogEvidence.single.series, 'テストシリーズ');
+    expect(details.catalogEvidence.single.description, contains('真実の紹介文'));
     expect(details.originalImageEvidenceUris, hasLength(1));
     expect(details.originalImageEvidenceUris.single.host, 'pics.dmm.co.jp');
   });
@@ -154,6 +188,229 @@ void main() {
       proven.provenanceFacts.coPerformance,
       ScrapeCoPerformance.sharedProduction,
     );
+  });
+
+  test('classifies a frozen live OFJE catalog card from parser evidence', () {
+    final page = parser.parseActressPage(
+      File(
+        'test/fixtures/avbase/live_ofje_453_card_2026-08-27.html',
+      ).readAsStringSync(),
+      pageUri: Uri.parse('https://www.avbase.net/talents/live-fixture'),
+    );
+    final summary = page.works.single;
+    final catalog = summary.catalogEvidence.single;
+    final decision =
+        ScrapeExclusionPolicyEvaluator(
+          ScrapePolicySnapshot.current(
+            rules: ScrapeRules.builtin,
+            exactAllows: const [],
+          ),
+        ).evaluate(
+          code: summary.code!,
+          details: [
+            ScrapeWorkDetails(
+              source: ScrapeSourceId.avbase,
+              code: summary.code!,
+              rawCode: summary.code,
+              title: summary.title,
+              studio: catalog.manufacturer,
+              publisher: catalog.label,
+              series: catalog.series,
+              catalogEvidence: [catalog],
+            ),
+          ],
+        );
+
+    expect(decision.finalAction, ScrapeFinalAction.exclude);
+    expect(decision.resolutionState, ScrapeResolutionState.decisiveExclude);
+    expect(
+      decision.evidence,
+      contains(
+        predicate<ScrapeEvidenceAtom>(
+          (item) =>
+              item.kind == ScrapeEvidenceKind.verifiedDerivedFamily &&
+              item.ruleId == 'source_declared_derived_product_line',
+        ),
+      ),
+    );
+  });
+
+  test('classifies the real MIZD-498 MOODYZ Best fixture as derived', () {
+    final page = parser.parseActressPage(
+      File(
+        'test/fixtures/avbase/live_mizd_498_card_2026-08-27.html',
+      ).readAsStringSync(),
+      pageUri: Uri.parse(
+        'https://www.avbase.net/talents/%E6%B0%B8%E9%87%8E%E3%81%84%E3%81%A1%E5%A4%8F',
+      ),
+    );
+    final summary = page.works.single;
+    expect(summary.code, 'MIZD-498');
+    expect(summary.title, '美少女J系のマンマン食い込み無自覚パンチラ眺めて爆射したい');
+    expect(summary.catalogEvidence.single.manufacturer, 'ムーディーズ');
+    expect(summary.catalogEvidence.single.label, 'MOODYZ Best');
+    expect(summary.catalogEvidence.single.series, isNull);
+
+    final workPage = parser.parseWorkPage('''
+      <html><body>
+        <h1>MIZD-498 美少女J系のマンマン食い込み無自覚パンチラ眺めて爆射したい</h1>
+        <dl>
+          <dt>発売日</dt><dd>2025/11/13</dd>
+          <dt>メーカー</dt><dd>ムーディーズ</dd>
+          <dt>レーベル</dt><dd>MOODYZ Best</dd>
+          <dt>収録分数</dt><dd>231分</dd>
+        </dl>
+        <section>
+          <h2>紹介文</h2>
+          <p>美少女J系の無自覚なパンチラを眺めてオナニーしたいアナタに送るベスト。厳選収録。</p>
+        </section>
+        <section>
+          <h2>タグ・説明文</h2>
+          <a href="/tags/%E3%83%91%E3%83%B3%E3%83%81%E3%83%A9">パンチラ</a>
+          <a href="/tags/%E5%A5%B3%E5%AD%90%E6%A0%A1%E7%94%9F">女子校生</a>
+        </section>
+      </body></html>
+      ''', pageUri: Uri.parse('https://www.avbase.net/works/moodyz:MIZD-498'));
+    expect(workPage.studio, 'ムーディーズ');
+    expect(workPage.publisher, 'MOODYZ Best');
+    expect(workPage.series, isNull);
+    expect(workPage.provenanceFacts.description, contains('ベスト'));
+
+    final decision =
+        ScrapeExclusionPolicyEvaluator(
+          ScrapePolicySnapshot.current(
+            rules: ScrapeRules.builtin,
+            exactAllows: const [],
+          ),
+        ).evaluate(
+          code: workPage.code,
+          details: [
+            ScrapeWorkDetails(
+              source: ScrapeSourceId.avbase,
+              code: workPage.code,
+              title: workPage.title,
+              releaseDate: workPage.releaseDate,
+              durationMinutes: workPage.durationMinutes,
+              studio: workPage.studio,
+              publisher: workPage.publisher,
+              series: workPage.series,
+              description: workPage.provenanceFacts.description,
+              provenanceFacts: workPage.provenanceFacts,
+              catalogEvidence: workPage.catalogEvidence,
+            ),
+          ],
+        );
+
+    expect(decision.finalAction, ScrapeFinalAction.exclude);
+    expect(decision.resolutionState, ScrapeResolutionState.decisiveExclude);
+    expect(decision.reasonCodes, contains('strong_compilation_evidence'));
+    expect(
+      decision.evidence,
+      contains(
+        predicate<ScrapeEvidenceAtom>(
+          (item) =>
+              item.kind == ScrapeEvidenceKind.verifiedDerivedFamily &&
+              item.ruleId == 'source_declared_derived_product_line',
+        ),
+      ),
+    );
+  });
+
+  test('keeps frozen live STARS-087 neutral and SOD-scoped', () {
+    final page = parser.parseActressPage(
+      File(
+        'test/fixtures/avbase/live_stars_087_card_2026-08-27.html',
+      ).readAsStringSync(),
+      pageUri: Uri.parse('https://www.avbase.net/talents/live-fixture'),
+    );
+    final summary = page.works.single;
+    expect(summary.catalogEvidence.single.manufacturer, 'SODクリエイト');
+    expect(summary.catalogEvidence.single.series, 'AV DEBUT(STAR)');
+    final scrapeSummary = ScrapeWorkSummary(
+      source: ScrapeSourceId.avbase,
+      code: summary.code,
+      rawCode: summary.code,
+      title: summary.title,
+      detailUri: summary.detailUri,
+      catalogEvidence: summary.catalogEvidence,
+    );
+    expect(scrapeWorkIdentityKeyForSummary(scrapeSummary), 'code:stars87');
+
+    final catalog = summary.catalogEvidence.single;
+    final decision =
+        ScrapeExclusionPolicyEvaluator(
+          ScrapePolicySnapshot.current(
+            rules: ScrapeRules.builtin,
+            exactAllows: const [],
+          ),
+        ).evaluate(
+          code: summary.code!,
+          details: [
+            ScrapeWorkDetails(
+              source: ScrapeSourceId.avbase,
+              code: summary.code!,
+              rawCode: summary.code,
+              title: summary.title,
+              studio: catalog.manufacturer,
+              publisher: catalog.label,
+              series: catalog.series,
+              catalogEvidence: [catalog],
+            ),
+          ],
+        );
+    expect(decision.finalAction, ScrapeFinalAction.keep);
+    expect(decision.resolutionState, ScrapeResolutionState.decisiveKeep);
+    expect(decision.evidence, isEmpty);
+  });
+
+  test('classifies frozen mixed KIBD cards by record-level evidence', () {
+    final cases = {
+      'live_kibd_355_card_2026-08-27.html': ScrapeFinalAction.keep,
+      'live_kibd_353_card_2026-08-27.html': ScrapeFinalAction.exclude,
+      'live_kibd_356_card_2026-08-27.html': ScrapeFinalAction.exclude,
+    };
+
+    for (final entry in cases.entries) {
+      final page = parser.parseActressPage(
+        File('test/fixtures/avbase/${entry.key}').readAsStringSync(),
+        pageUri: Uri.parse('https://www.avbase.net/talents/live-fixture'),
+      );
+      final summary = page.works.single;
+      final catalog = summary.catalogEvidence.single;
+      final decision =
+          ScrapeExclusionPolicyEvaluator(
+            ScrapePolicySnapshot.current(
+              rules: ScrapeRules.builtin,
+              exactAllows: const [],
+            ),
+          ).evaluate(
+            code: summary.code!,
+            details: [
+              ScrapeWorkDetails(
+                source: ScrapeSourceId.avbase,
+                code: summary.code!,
+                rawCode: summary.code,
+                title: summary.title,
+                studio: catalog.manufacturer,
+                publisher: catalog.label,
+                series: catalog.series,
+                catalogEvidence: [catalog],
+              ),
+            ],
+          );
+
+      expect(summary.code, contains('KIBD-'));
+      expect(catalog.manufacturer, 'kira☆kira');
+      expect(catalog.label, 'kira☆kira');
+      expect(decision.finalAction, entry.value, reason: entry.key);
+      expect(
+        decision.evidence.where(
+          (item) => item.kind == ScrapeEvidenceKind.productFamilySuspicion,
+        ),
+        isEmpty,
+        reason: entry.key,
+      );
+    }
   });
 
   test('keeps AvBase lineage, split, and independent-segment facts narrow', () {

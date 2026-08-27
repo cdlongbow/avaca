@@ -655,13 +655,17 @@ class ScrapeJobCoordinator extends ChangeNotifier {
     } on Object catch (error) {
       observer?.stopAccepting();
       await observer?.drain();
+      final verificationCancelled =
+          error is JavBusVerificationCancelledException;
       final waiting =
           error is JavBusVerificationRequiredException ||
-          error is JavBusVerificationCancelledException ||
-          error.toString().toLowerCase().contains('verification');
+          (!verificationCancelled &&
+              error.toString().toLowerCase().contains('verification'));
       final state = token.isPauseRequested
           ? ScrapeJobState.paused
           : token.isCancelRequested
+          ? ScrapeJobState.cancelled
+          : verificationCancelled
           ? ScrapeJobState.cancelled
           : waiting
           ? ScrapeJobState.waitingForVerification
@@ -689,7 +693,11 @@ class ScrapeJobCoordinator extends ChangeNotifier {
               ? ScrapeJobEventSeverity.error
               : ScrapeJobEventSeverity.warning,
           stage: ScrapeJobPhase.completed,
-          message: waiting ? '需要完成來源驗證後才能繼續' : safeError,
+          message: verificationCancelled
+              ? '來源驗證已取消，刮削工作已取消'
+              : waiting
+              ? '需要完成來源驗證後才能繼續'
+              : safeError,
         );
       });
     } finally {
@@ -929,7 +937,8 @@ class _JobObserver extends ScrapeRunObserver {
     Map<String, Object?> metadata = const <String, Object?>{},
   }) {
     final imageVariants = imageFailureVariants.toList(growable: false);
-    final baseDiagnostic = error == null && reason == null && imageVariants.isEmpty
+    final baseDiagnostic =
+        error == null && reason == null && imageVariants.isEmpty
         ? null
         : error == null
         ? reason ?? '圖片下載失敗（${imageVariants.join('、')}）'

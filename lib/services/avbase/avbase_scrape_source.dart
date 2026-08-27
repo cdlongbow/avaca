@@ -61,6 +61,7 @@ final class AvBaseScrapeSource
               title: work.title,
               detailUri: work.detailUri,
               releaseDate: work.releaseDate,
+              catalogEvidence: work.catalogEvidence,
             ),
           )
           .toList(growable: false),
@@ -116,6 +117,19 @@ final class AvBaseScrapeSource
   void close() => client.close();
 
   ScrapeWorkDetails _mapDetails(AvBaseWorkDetails details) {
+    final catalogEvidence = details.catalogEvidence.isEmpty
+        ? [
+            ScrapeCatalogWorkEvidence.fromDetails(
+              source: id,
+              code: details.code,
+              title: details.title,
+              manufacturer: details.studio,
+              label: details.publisher,
+              series: details.series,
+              provenanceFacts: details.provenanceFacts,
+            ),
+          ]
+        : details.catalogEvidence;
     return ScrapeWorkDetails(
       source: id,
       code: details.code,
@@ -136,6 +150,7 @@ final class AvBaseScrapeSource
       coPerformance: details.provenanceFacts.coPerformance,
       imageUris: const [],
       originalImageEvidenceUris: details.originalImageEvidenceUris,
+      catalogEvidence: catalogEvidence,
     );
   }
 
@@ -147,6 +162,7 @@ final class AvBaseScrapeSource
       title: work.title,
       detailUri: work.detailUri,
       releaseDate: work.releaseDate,
+      catalogEvidence: work.catalogEvidence,
     );
   }
 

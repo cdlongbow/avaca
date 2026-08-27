@@ -1,19 +1,29 @@
-/// Source-scoped product-family hints used for secondary evidence requests.
+enum ScrapeProductFamilyDisposition {
+  verifiedDerivedOnly,
+  suspicionOnly,
+  neutralMixed,
+}
+
+/// Source-scoped product-family evidence.
 ///
-/// A family match is never an exclusion by itself. It requires both an
-/// observed code family and maker/label metadata from the same record. A
-/// family-only match is a medium suspicion; the same family plus a safe
-/// collection marker in title/series is strong derived evidence.
+/// A match always requires the code family and maker/label metadata from the
+/// same source record. Only families backed by real catalog research may use
+/// [ScrapeProductFamilyDisposition.verifiedDerivedOnly]. A family proven to
+/// contain both normal originals and derived products uses
+/// [ScrapeProductFamilyDisposition.neutralMixed], so its prefix never creates
+/// suspicion without record-level lineage or reuse evidence.
 final class ScrapeProductFamilyMatch {
   const ScrapeProductFamilyMatch({
     required this.ruleId,
     required this.family,
+    required this.disposition,
     required this.observedText,
     required this.hasCollectionMarker,
   });
 
   final String ruleId;
   final String family;
+  final ScrapeProductFamilyDisposition disposition;
   final String observedText;
   final bool hasCollectionMarker;
 }
@@ -25,6 +35,7 @@ final class ScrapeProductFamilyRule {
     required this.prefixes,
     required this.makerTokens,
     required this.reuseTokens,
+    this.disposition = ScrapeProductFamilyDisposition.suspicionOnly,
   });
 
   final String ruleId;
@@ -32,6 +43,7 @@ final class ScrapeProductFamilyRule {
   final Set<String> prefixes;
   final Set<String> makerTokens;
   final Set<String> reuseTokens;
+  final ScrapeProductFamilyDisposition disposition;
 }
 
 final class ScrapeProductFamilyRegistry {
@@ -41,35 +53,25 @@ final class ScrapeProductFamilyRegistry {
   /// first-party maker/label evidence and corpus coverage, not by prefix.
   static const knownRules = <ScrapeProductFamilyRule>[
     ScrapeProductFamilyRule(
-      ruleId: 'known_sod_collection_family',
-      family: 'SOD product family',
-      prefixes: {'START', 'STARS'},
-      makerTokens: {'sod', 'sodクリエイト', 'sod create'},
-      reuseTokens: {
-        'best',
-        'collection',
-        '総集編',
-        '作品集',
-        '全作品',
-        '傑作選',
-        'reissue',
-        'remaster',
-        'リマスター',
-      },
-    ),
-    ScrapeProductFamilyRule(
       ruleId: 'known_s1_ofje_family',
       family: 'S1 NO.1 STYLE OFJE family',
       prefixes: {'OFJE'},
-      makerTokens: {'s1 no.1 style', 's1 no1 style', 's-one no.1 style'},
+      makerTokens: {
+        's1 no.1 style',
+        's1 no1 style',
+        's-one no.1 style',
+        'エスワン',
+      },
       reuseTokens: {'best', '総集編', '作品集', '全作品'},
+      disposition: ScrapeProductFamilyDisposition.verifiedDerivedOnly,
     ),
     ScrapeProductFamilyRule(
       ruleId: 'known_moodyz_mizd_family',
       family: 'MOODYZ MIZD family',
       prefixes: {'MIZD'},
-      makerTokens: {'moodyz'},
+      makerTokens: {'moodyz', 'ムーディーズ'},
       reuseTokens: {'best', '総集編', '作品集', '全作品'},
+      disposition: ScrapeProductFamilyDisposition.verifiedDerivedOnly,
     ),
     ScrapeProductFamilyRule(
       ruleId: 'known_kawaii_kwbd_family',
@@ -77,6 +79,7 @@ final class ScrapeProductFamilyRegistry {
       prefixes: {'KWBD'},
       makerTokens: {'kawaii', 'kawaii*'},
       reuseTokens: {'best', 'ベスト', '総集編', '作品集'},
+      disposition: ScrapeProductFamilyDisposition.verifiedDerivedOnly,
     ),
     ScrapeProductFamilyRule(
       ruleId: 'known_rookie_rbb_family',
@@ -84,6 +87,7 @@ final class ScrapeProductFamilyRegistry {
       prefixes: {'RBB'},
       makerTokens: {'rookie'},
       reuseTokens: {'best', 'ベスト', '総集編', '作品集'},
+      disposition: ScrapeProductFamilyDisposition.verifiedDerivedOnly,
     ),
     ScrapeProductFamilyRule(
       ruleId: 'known_attackers_atkd_family',
@@ -96,8 +100,20 @@ final class ScrapeProductFamilyRegistry {
       ruleId: 'known_ideapocket_idbd_family',
       family: 'IdeaPocket IDBD family',
       prefixes: {'IDBD'},
-      makerTokens: {'ideapocket', 'idea pocket'},
+      makerTokens: {'ideapocket', 'idea pocket', 'アイデアポケット'},
       reuseTokens: {'best', 'ベスト', '総集編', '作品集'},
+      disposition: ScrapeProductFamilyDisposition.verifiedDerivedOnly,
+    ),
+    ScrapeProductFamilyRule(
+      ruleId: 'known_kirakira_kibd_family',
+      family: 'kira☆kira KIBD family',
+      prefixes: {'KIBD'},
+      makerTokens: {'kira☆kira', 'kirakira'},
+      reuseTokens: {'best', 'ベスト', '総集編', '作品集'},
+      // Live catalog evidence contains ordinary KIBD new releases as well as
+      // BEST works. The prefix is therefore diagnostic only; the record must
+      // supply its own exact series/title/lineage evidence.
+      disposition: ScrapeProductFamilyDisposition.neutralMixed,
     ),
     ScrapeProductFamilyRule(
       ruleId: 'known_madonna_jusd_family',
@@ -112,6 +128,10 @@ final class ScrapeProductFamilyRegistry {
       prefixes: {'PPBD'},
       makerTokens: {'oppai'},
       reuseTokens: {'best', 'ベスト', '総集編', '作品集'},
+      // Live catalog evidence contains ordinary high-volume PPBD releases
+      // as well as BEST collections. The prefix is therefore neutral; only
+      // record-level collection or lineage evidence can classify the work.
+      disposition: ScrapeProductFamilyDisposition.neutralMixed,
     ),
     ScrapeProductFamilyRule(
       ruleId: 'known_prestige_thn_family',
@@ -142,6 +162,7 @@ final class ScrapeProductFamilyRegistry {
       return ScrapeProductFamilyMatch(
         ruleId: rule.ruleId,
         family: rule.family,
+        disposition: rule.disposition,
         observedText: reuseToken == null
             ? '$prefix + maker metadata'
             : '$prefix + maker metadata + $reuseToken',

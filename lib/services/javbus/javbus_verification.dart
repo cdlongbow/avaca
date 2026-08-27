@@ -145,5 +145,5 @@ class JavBusVerificationCancelledException implements Exception {
   const JavBusVerificationCancelledException();
 
   @override
-  String toString() => 'JavBus verification was cancelled.';
+  String toString() => 'JavBus verification cancelled by user.';
 }

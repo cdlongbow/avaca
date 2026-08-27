@@ -8,6 +8,17 @@ import 'scrape_rules.dart';
 /// parser failures.  A review decision is still a successful scrape.
 enum ScrapeFinalAction { keep, keepReview, exclude }
 
+/// Internal resolution state.  [needsEvidence] is deliberately separate from
+/// a user-facing review decision: it means another enabled source should be
+/// queried before the work is counted as REVIEW.
+enum ScrapeResolutionState {
+  decisiveKeep,
+  decisiveExclude,
+  needsEvidence,
+  conflict,
+  finalReview,
+}
+
 /// Diagnostic provenance classes. Unknown evidence is a neutral, keep-safe
 /// result; it is not proof that a product reuses prior material.
 enum ScrapeProvenanceClass {
@@ -60,6 +71,7 @@ enum ScrapeEvidenceKind {
   highVolumePresentation,
   explicitOriginalWork,
   productFamilySuspicion,
+  verifiedDerivedFamily,
 }
 
 enum ScrapePolicyOrigin { builtin, remote, user }

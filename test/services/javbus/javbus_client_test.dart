@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:avaca/services/javbus/javbus_client.dart';
 import 'package:avaca/services/javbus/javbus_models.dart';
+import 'package:avaca/services/javbus/javbus_verification.dart';
+import 'package:avaca/services/javbus/work_code.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -111,6 +114,18 @@ void main() {
       'https://www.javbus.com/STARS-715',
       'https://www.javbus.com/START-276',
     ]);
+  });
+
+  test('scopes edition suffix normalization to SOD work-code families', () {
+    expect(canonicalizeJavBusWorkCode('STARS-087-VT2-EC'), 'STARS-087-VT2-EC');
+    expect(canonicalizeJavBusWorkCode('STARSBD-087-V'), 'STARSBD-087');
+    expect(canonicalizeJavBusWorkCode('SIVR-303-V'), 'SIVR-303-V');
+    expect(canonicalizeJavBusWorkCode('FOO-123-VT'), 'FOO-123-VT');
+
+    expect(isJavBusSpecialEditionCode('START-053-V'), isTrue);
+    expect(isJavBusSpecialEditionCode('STARSBD-087-T'), isTrue);
+    expect(isJavBusSpecialEditionCode('SIVR-303-V'), isFalse);
+    expect(isJavBusSpecialEditionCode('FOO-123-VT'), isFalse);
   });
 
   test('searches actresses and fetches selected work details', () async {
@@ -255,6 +270,187 @@ void main() {
     expect(source, '<html>works</html>');
     expect(transport.cookieHeader, contains('driver=verified'));
   });
+
+  test(
+    'does not silently skip a first-page challenge without a handler',
+    () async {
+      var requestNumber = 0;
+      final transport = HttpJavBusTransport(
+        retryDelay: Duration.zero,
+        client: MockClient((request) async {
+          requestNumber++;
+          if (requestNumber == 1) {
+            return http.Response(
+              '',
+              302,
+              headers: {
+                'location':
+                    '/doc/driver-verify?referer=https%3A%2F%2Fwww.javbus.com%2Fstar%2Fuly',
+                'set-cookie': 'PHPSESSID=session-no-handler; path=/',
+              },
+            );
+          }
+          return http.Response.bytes(utf8.encode(_driverVerificationHtml), 200);
+        }),
+      );
+
+      await expectLater(
+        transport.get(Uri.parse('https://www.javbus.com/star/uly')),
+        throwsA(isA<JavBusVerificationRequiredException>()),
+      );
+      expect(requestNumber, 2);
+      expect(transport.cookieHeader, contains('PHPSESSID=session-no-handler'));
+    },
+  );
+
+  test(
+    'pauses at a paginated verification and retries the same page after answer',
+    () async {
+      final verificationShown = Completer<void>();
+      final answer = Completer<Map<String, String>>();
+      final requested = <String>[];
+      var challengeIssued = false;
+      final transport = HttpJavBusTransport(
+        retryDelay: Duration.zero,
+        verificationHandler: (challenge) async {
+          expect(challenge.questions.single.prompt, '你是否了解交通規則？');
+          verificationShown.complete();
+          return answer.future;
+        },
+        client: MockClient((request) async {
+          requested.add('${request.method} ${request.url.path}');
+          if (request.method == 'POST') {
+            expect(request.url.path, '/doc/driver-verify.php');
+            expect(request.body, contains('userAnswers%5B4%5D=A'));
+            return http.Response(
+              '',
+              302,
+              headers: {
+                'location': '/star/verify-flow/2',
+                'set-cookie': 'driver=verified; path=/',
+              },
+            );
+          }
+          switch (request.url.path) {
+            case '/star/verify-flow':
+              return http.Response.bytes(
+                utf8.encode(
+                  _page(
+                    pageCount: 3,
+                    works: const [('PAGE1-001', 'first page')],
+                  ),
+                ),
+                200,
+              );
+            case '/star/verify-flow/2':
+              if (!challengeIssued) {
+                challengeIssued = true;
+                return http.Response(
+                  '',
+                  302,
+                  headers: {
+                    'location':
+                        '/doc/driver-verify?referer=%2Fstar%2Fverify-flow%2F2',
+                    'set-cookie': 'PHPSESSID=session-page-two; path=/',
+                  },
+                );
+              }
+              expect(request.headers['cookie'], contains('driver=verified'));
+              return http.Response.bytes(
+                utf8.encode(
+                  _page(
+                    pageCount: 3,
+                    works: const [('PAGE2-001', 'second page')],
+                  ),
+                ),
+                200,
+              );
+            case '/doc/driver-verify':
+              return http.Response.bytes(
+                utf8.encode(_driverVerificationHtml),
+                200,
+              );
+            case '/star/verify-flow/3':
+              expect(request.headers['cookie'], contains('driver=verified'));
+              return http.Response.bytes(
+                utf8.encode(
+                  _page(
+                    pageCount: 3,
+                    works: const [('PAGE3-001', 'third page')],
+                  ),
+                ),
+                200,
+              );
+            default:
+              throw StateError('Unexpected request: $request');
+          }
+        }),
+      );
+      addTearDown(transport.close);
+
+      final pending = JavBusClient(transport: transport)
+          .fetchAllActressWorksResult(
+            Uri.parse('https://www.javbus.com/star/verify-flow'),
+          );
+
+      await verificationShown.future;
+      expect(requested, contains('GET /star/verify-flow/2'));
+      expect(
+        requested.where((item) => item == 'GET /star/verify-flow/3'),
+        isEmpty,
+      );
+
+      answer.complete({'userAnswers[4]': 'A'});
+      final result = await pending;
+
+      expect(result.issues, isEmpty);
+      expect(result.works.map((work) => work.code), [
+        'PAGE1-001',
+        'PAGE2-001',
+        'PAGE3-001',
+      ]);
+      expect(
+        requested.where((item) => item == 'GET /star/verify-flow/2'),
+        hasLength(3),
+      );
+      expect(requested.last, 'GET /star/verify-flow/3');
+    },
+  );
+
+  test(
+    'reports explicit verification cancellation for a detail request',
+    () async {
+      var requestNumber = 0;
+      final transport = HttpJavBusTransport(
+        retryDelay: Duration.zero,
+        verificationHandler: (_) async => null,
+        client: MockClient((request) async {
+          requestNumber++;
+          if (requestNumber == 1) {
+            return http.Response(
+              '',
+              302,
+              headers: {
+                'location':
+                    '/doc/driver-verify?referer=https%3A%2F%2Fwww.javbus.com%2FABF-183',
+              },
+            );
+          }
+          return http.Response.bytes(utf8.encode(_driverVerificationHtml), 200);
+        }),
+      );
+
+      await expectLater(
+        transport.get(Uri.parse('https://www.javbus.com/ABF-183')),
+        throwsA(isA<JavBusVerificationCancelledException>()),
+      );
+      expect(requestNumber, 2);
+      expect(
+        const JavBusVerificationCancelledException().toString(),
+        contains('cancelled by user'),
+      );
+    },
+  );
 
   test(
     'binary requests reuse cookies from the verified JavBus session',
@@ -408,6 +604,64 @@ void main() {
   });
 
   test(
+    'does not skip later pages when pagination needs verification',
+    () async {
+      final pageTwo = Uri.parse('https://www.javbus.com/star/verify/2');
+      final transport = _ThrowingTransport(
+        responses: {
+          'https://www.javbus.com/star/verify': _page(
+            pageCount: 3,
+            works: const [('ABF-183', 'first page')],
+          ),
+        },
+        errors: {
+          pageTwo.toString(): JavBusVerificationRequiredException(pageTwo),
+        },
+      );
+
+      await expectLater(
+        JavBusClient(transport: transport).fetchAllActressWorksResult(
+          Uri.parse('https://www.javbus.com/star/verify'),
+        ),
+        throwsA(isA<JavBusVerificationRequiredException>()),
+      );
+      expect(transport.requested, [
+        'https://www.javbus.com/star/verify',
+        'https://www.javbus.com/star/verify/2',
+      ]);
+    },
+  );
+
+  test(
+    'propagates an explicit verification cancellation from pagination',
+    () async {
+      final pageTwo = Uri.parse('https://www.javbus.com/star/cancel/2');
+      final transport = _ThrowingTransport(
+        responses: {
+          'https://www.javbus.com/star/cancel': _page(
+            pageCount: 3,
+            works: const [('ABF-183', 'first page')],
+          ),
+        },
+        errors: {
+          pageTwo.toString(): const JavBusVerificationCancelledException(),
+        },
+      );
+
+      await expectLater(
+        JavBusClient(transport: transport).fetchAllActressWorksResult(
+          Uri.parse('https://www.javbus.com/star/cancel'),
+        ),
+        throwsA(isA<JavBusVerificationCancelledException>()),
+      );
+      expect(transport.requested, [
+        'https://www.javbus.com/star/cancel',
+        'https://www.javbus.com/star/cancel/2',
+      ]);
+    },
+  );
+
+  test(
     'classifies Cloudflare access denial instead of calling it missing',
     () async {
       final transport = HttpJavBusTransport(
@@ -481,6 +735,24 @@ class _CallbackTransport extends _FakeTransport {
     final value = await super.get(uri);
     afterGet();
     return value;
+  }
+}
+
+class _ThrowingTransport implements JavBusTransport {
+  _ThrowingTransport({required this.responses, required this.errors});
+
+  final Map<String, String> responses;
+  final Map<String, Object> errors;
+  final List<String> requested = [];
+
+  @override
+  Future<String> get(Uri uri) async {
+    requested.add(uri.toString());
+    final error = errors[uri.toString()];
+    if (error != null) throw error;
+    final response = responses[uri.toString()];
+    if (response == null) throw StateError('Unexpected URI: $uri');
+    return response;
   }
 }
 

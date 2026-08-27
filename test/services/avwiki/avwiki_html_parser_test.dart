@@ -8,6 +8,7 @@ import 'package:avaca/services/avwiki/avwiki_scrape_source.dart';
 import 'package:avaca/services/avwiki/avwiki_transport.dart';
 import 'package:avaca/services/http_safety.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:html/parser.dart' as html;
 
 void main() {
   final parser = AvWikiHtmlParser();
@@ -40,6 +41,40 @@ void main() {
       page.works.first.externalIdentity?.platformIds['fanza'],
       'snos00371',
     );
+    expect(
+      page.works.first.catalogEvidence.single.source,
+      ScrapeSourceId.avwiki,
+    );
+    expect(page.works.first.catalogEvidence.single.manufacturer, 'エスワン');
+    expect(page.works.first.catalogEvidence.single.label, 'SNOS');
+  });
+
+  test('retains series and tags in archive catalog evidence', () {
+    final summary = parser.parseSearchWorkSummary(
+      html
+          .parse('''
+      <article class="archive-list">
+        <header class="archive-header">
+          <h2 class="archive-header-title"><a href="/title-001/">作品標題</a></h2>
+          <ul class="post-meta">
+            <li class="actress-name"><a href="/av-actress/test/">女優</a></li>
+            <li><a href="/maker/s1">S1 NO.1 STYLE</a></li>
+            <li>TITLE-001</li>
+          </ul>
+        </header>
+        <a href="/series/test-series">測試系列</a>
+        <a rel="tag" href="/tags/best">BEST</a>
+        <div class="read-more"><a href="/title-001/">続きを読む</a></div>
+      </article>
+      ''')
+          .querySelector('article')!,
+      Uri.parse('https://av-wiki.net/'),
+    );
+
+    expect(summary, isNotNull);
+    expect(summary!.catalogEvidence.single.manufacturer, 'S1 NO.1 STYLE');
+    expect(summary.catalogEvidence.single.series, '測試系列');
+    expect(summary.catalogEvidence.single.tags, ['BEST']);
   });
 
   test(
@@ -141,9 +176,7 @@ void main() {
         requestDelay: Duration.zero,
       );
       addTearDown(bridgeClient.close);
-      final bridged = await bridgeClient.fetchWorkDetailsByCode(
-        '1start00164',
-      );
+      final bridged = await bridgeClient.fetchWorkDetailsByCode('1start00164');
       expect(bridged.code, 'START-164');
 
       final emptyClient = AvWikiClient(

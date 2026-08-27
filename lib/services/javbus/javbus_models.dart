@@ -28,6 +28,7 @@ class JavBusWorkSummary {
     required this.detailUri,
     this.releaseDate,
     this.rawCode,
+    this.catalogEvidence = const [],
   });
 
   final String code;
@@ -35,6 +36,7 @@ class JavBusWorkSummary {
   final String title;
   final String? releaseDate;
   final Uri detailUri;
+  final List<ScrapeCatalogWorkEvidence> catalogEvidence;
 }
 
 class JavBusWorkDetails {
@@ -51,6 +53,7 @@ class JavBusWorkDetails {
     this.provenanceFacts = const ScrapeWorkProvenanceFacts(),
     this.actressUris = const [],
     this.originalImageEvidenceUris = const [],
+    this.catalogEvidence = const [],
   });
 
   final String code;
@@ -65,6 +68,7 @@ class JavBusWorkDetails {
   final ScrapeWorkProvenanceFacts provenanceFacts;
   final List<Uri> actressUris;
   final List<Uri> originalImageEvidenceUris;
+  final List<ScrapeCatalogWorkEvidence> catalogEvidence;
 
   Work toWork({String? cardImagePath, String? detailImagePath}) {
     return Work(

@@ -1,6 +1,7 @@
 import 'package:html/dom.dart';
 import 'package:html/parser.dart' as html;
 
+import '../../models/scrape_source_settings.dart';
 import '../../models/scraped_actress_details.dart';
 import '../../models/work.dart';
 import '../scrape/scrape_models.dart';
@@ -64,22 +65,36 @@ class JavBusHtmlParser {
 
     final performers = _actressPerformers(document, pageUri);
     final genres = _genreValues(document);
+    final parsedTitle = strippedTitle.isEmpty ? rawTitle : strippedTitle;
+    final provenanceFacts = _provenanceFacts(
+      document,
+      fields,
+      parsedTitle,
+      genres,
+    );
     return JavBusWorkDetails(
       code: code,
       rawCode: rawCode,
-      title: strippedTitle.isEmpty ? rawTitle : strippedTitle,
+      title: parsedTitle,
       releaseDate: _field(fields, const ['發行日期', '发行日期', '発売日']),
       durationMinutes: int.tryParse(duration ?? ''),
       studio: _field(fields, const ['製作商', '制作商', 'メーカー']),
       publisher: _field(fields, const ['發行商', '发行商', 'レーベル']),
       series: _field(fields, const ['系列', 'シリーズ']),
       performers: performers,
-      provenanceFacts: _provenanceFacts(
-        document,
-        fields,
-        strippedTitle.isEmpty ? rawTitle : strippedTitle,
-        genres,
-      ),
+      provenanceFacts: provenanceFacts,
+      catalogEvidence: [
+        ScrapeCatalogWorkEvidence.fromDetails(
+          source: ScrapeSourceId.javbus,
+          code: code,
+          title: parsedTitle,
+          manufacturer: _field(fields, const ['製作商', '制作商', 'メーカー']),
+          label: _field(fields, const ['發行商', '发行商', 'レーベル']),
+          series: _field(fields, const ['系列', 'シリーズ']),
+          description: provenanceFacts.description,
+          provenanceFacts: provenanceFacts,
+        ),
+      ],
       actressUris: _actressUris(document, pageUri),
       originalImageEvidenceUris: _originalImageEvidenceUris(
         document,
@@ -375,6 +390,14 @@ class JavBusHtmlParser {
       title: _clean(element.querySelector('.photo-info span')?.text) ?? '',
       releaseDate: dates.length > 1 ? _clean(dates[1].text) : null,
       detailUri: pageUri.resolve(href),
+      catalogEvidence: [
+        ScrapeCatalogWorkEvidence(
+          source: ScrapeSourceId.javbus,
+          code: canonicalizeJavBusWorkCode(code),
+          rawCode: code,
+          title: _clean(element.querySelector('.photo-info span')?.text),
+        ),
+      ],
     );
   }
 
