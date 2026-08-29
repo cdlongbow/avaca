@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:path/path.dart' as path;
 import 'package:sqflite/sqflite.dart';
 
 import '../core/database.dart';
@@ -85,27 +88,53 @@ class DataHealthService {
         ''');
       return _number(rows.firstOrNull?['count']);
     });
-    final jobCounts = await safe('jobStates', const <String, int>{}, () async {
-      final rows = await database.rawQuery(
-        'SELECT state, COUNT(*) AS count FROM scrape_jobs GROUP BY state ORDER BY state',
-      );
-      return _countsBy(rows, 'state');
-    });
-    final sourceErrorCounts = await safe(
-      'sourceErrors',
-      const <String, int>{},
-      () async {
-        final rows = await database.rawQuery('''
-          SELECT COALESCE(source, 'unknown') AS source, COUNT(*) AS count
-          FROM scrape_job_events
-          WHERE severity IN ('warning', 'error')
-            AND created_at >= datetime('now', '-7 day')
-          GROUP BY source
-          ORDER BY count DESC, source ASC
-        ''');
-        return _countsBy(rows, 'source');
-      },
+    final libraryWorkCount = await safe(
+      'library',
+      0,
+      () => _count(database, 'works', where: 'library_managed = 1'),
     );
+    final importRepairCount = await safe('library', 0, () async {
+      final rows = await database.rawQuery('''
+        SELECT COUNT(*) AS count
+        FROM import_operations
+        WHERE state IN ('repair_required', 'source_cleanup_pending')
+      ''');
+      return _number(rows.firstOrNull?['count']);
+    });
+    final libraryMediaIssueCount = await safe('library', 0, () async {
+      final rootRows = await database.query(
+        'library_roots',
+        columns: const ['path'],
+        where: 'is_active = 1',
+        orderBy: 'modified_at DESC',
+        limit: 1,
+      );
+      final root = rootRows.firstOrNull?['path']?.toString().trim();
+      if (root == null || root.isEmpty) return 0;
+      final rows = await database.rawQuery('''
+        SELECT w.library_relative_path, m.relative_path
+        FROM media_files m INNER JOIN works w ON w.id = m.work_id
+        WHERE w.library_managed = 1
+      ''');
+      var missing = 0;
+      for (final row in rows) {
+        final workPath = row['library_relative_path']?.toString();
+        final mediaPath = row['relative_path']?.toString();
+        if (workPath == null ||
+            mediaPath == null ||
+            !File(path.join(root, workPath, mediaPath)).existsSync()) {
+          missing++;
+        }
+      }
+      return missing;
+    });
+    final libraryLinkIssueCount = await safe('library', 0, () async {
+      final rows = await database.rawQuery('''
+        SELECT COUNT(*) AS count FROM library_link_artifacts
+        WHERE state <> 'ready'
+      ''');
+      return _number(rows.firstOrNull?['count']);
+    });
     return DataHealthSnapshot(
       generatedAt: DateTime.now().toUtc(),
       actressCount: actressCount,
@@ -120,18 +149,12 @@ class DataHealthService {
       missingDetailImageCount: missingDetailImageCount,
       missingProvenanceCount: missingProvenanceCount,
       pendingDeletionCount: pendingDeletionCount,
-      jobCounts: Map.unmodifiable(jobCounts),
-      sourceErrorCounts: Map.unmodifiable(sourceErrorCounts),
+      libraryWorkCount: libraryWorkCount,
+      libraryMediaIssueCount: libraryMediaIssueCount,
+      importRepairCount: importRepairCount,
+      libraryLinkIssueCount: libraryLinkIssueCount,
       warnings: List.unmodifiable(warnings),
     );
-  }
-
-  Map<String, int> _countsBy(List<Map<String, Object?>> rows, String key) {
-    final counts = <String, int>{};
-    for (final row in rows) {
-      counts[row[key]?.toString() ?? 'unknown'] = _number(row['count']);
-    }
-    return counts;
   }
 
   Future<int> _count(

@@ -1,0 +1,24 @@
+name: avaca_player_native
+description: Private native surface and Media3 bridge for the AVACA player.
+publish_to: 'none'
+
+environment:
+  sdk: ^3.11.5
+  flutter: '>=3.32.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.avaca.player.avaca
+        pluginClass: AvacaPlayerNativePlugin
+      windows:
+        pluginClass: AvacaPlayerNativePlugin

@@ -13,8 +13,10 @@ class DataHealthSnapshot {
     required this.missingDetailImageCount,
     required this.missingProvenanceCount,
     required this.pendingDeletionCount,
-    required this.jobCounts,
-    required this.sourceErrorCounts,
+    this.libraryWorkCount = 0,
+    this.libraryMediaIssueCount = 0,
+    this.importRepairCount = 0,
+    this.libraryLinkIssueCount = 0,
     this.warnings = const [],
   });
 
@@ -31,8 +33,10 @@ class DataHealthSnapshot {
   final int missingDetailImageCount;
   final int missingProvenanceCount;
   final int pendingDeletionCount;
-  final Map<String, int> jobCounts;
-  final Map<String, int> sourceErrorCounts;
+  final int libraryWorkCount;
+  final int libraryMediaIssueCount;
+  final int importRepairCount;
+  final int libraryLinkIssueCount;
   final List<String> warnings;
 
   double get storedRatio => workCount == 0 ? 0 : storedWorkCount / workCount;

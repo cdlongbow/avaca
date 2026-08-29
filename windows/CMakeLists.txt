@@ -6,6 +6,32 @@ project(avaca LANGUAGES CXX)
 # the on-disk name of your application.
 set(BINARY_NAME "avaca")
 
+# The QUIC bridge is deliberately opt-in. A normal Flutter build must remain
+# independent of the external MsQuic source tree and runtime DLL. When the
+# spike is enabled, both paths are validated here so a missing or mismatched
+# native dependency fails at configure time instead of becoming a plaintext or
+# silently unavailable transport at runtime.
+set(AVACA_MSQUIC_ROOT "" CACHE PATH
+  "Validated MsQuic source root containing src/inc/msquic.h")
+set(AVACA_MSQUIC_DLL "" CACHE FILEPATH
+  "Validated MsQuic runtime DLL built from AVACA_MSQUIC_ROOT")
+set(AVACA_REMOTE_QUIC_ENABLED OFF)
+if(AVACA_MSQUIC_ROOT OR AVACA_MSQUIC_DLL)
+  if(NOT AVACA_MSQUIC_ROOT OR NOT AVACA_MSQUIC_DLL)
+    message(FATAL_ERROR
+      "AVACA_REMOTE_QUIC requires both AVACA_MSQUIC_ROOT and AVACA_MSQUIC_DLL")
+  endif()
+  if(NOT EXISTS "${AVACA_MSQUIC_ROOT}/src/inc/msquic.h")
+    message(FATAL_ERROR
+      "AVACA_MSQUIC_ROOT does not contain the official src/inc/msquic.h")
+  endif()
+  if(NOT EXISTS "${AVACA_MSQUIC_DLL}")
+    message(FATAL_ERROR
+      "AVACA_MSQUIC_DLL does not point to a readable MsQuic runtime DLL")
+  endif()
+  set(AVACA_REMOTE_QUIC_ENABLED ON)
+endif()
+
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.
 cmake_policy(VERSION 3.14...3.25)
@@ -78,6 +104,17 @@ install(TARGETS avaca_update
   RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime
 )
+
+if(AVACA_REMOTE_QUIC_ENABLED)
+  install(TARGETS avaca_remote_quic
+    RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
+    COMPONENT Runtime
+  )
+  install(FILES "${AVACA_MSQUIC_DLL}"
+    DESTINATION "${CMAKE_INSTALL_PREFIX}"
+    COMPONENT Runtime
+  )
+endif()
 
 install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   COMPONENT Runtime)

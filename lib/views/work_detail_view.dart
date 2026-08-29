@@ -51,7 +51,10 @@ class _WorkDetailViewState extends State<WorkDetailView> {
                 ? const AlignedAppBarBackButton()
                 : null,
             title: Text(work?['code']?.toString() ?? ''),
-            actions: [if (work != null) _buildStorageAction(work)],
+            actions: [
+              if (work != null && !_isLibraryManaged(work))
+                _buildStorageAction(work),
+            ],
           ),
           body: switch (snapshot.connectionState) {
             ConnectionState.waiting => const Center(
@@ -239,10 +242,60 @@ class _WorkDetailViewState extends State<WorkDetailView> {
             _labeledValue(l10n.publisher, work['publisher']?.toString()),
             _labeledValue(l10n.series, work['series']?.toString()),
             _buildRelatedActresses(work),
+            _buildLibraryMedia(work),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildLibraryMedia(Map<String, Object?> work) {
+    final raw = work['library_media'];
+    if (raw is! List || raw.isEmpty) return const SizedBox.shrink();
+    final l10n = AppLocalizations.of(context);
+    return Padding(
+      key: const Key('library-media-section'),
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(l10n.libraryMediaTitle),
+          const SizedBox(height: 4),
+          for (final value in raw.whereType<Map>())
+            _libraryMediaTile(Map<String, Object?>.from(value), l10n),
+        ],
+      ),
+    );
+  }
+
+  Widget _libraryMediaTile(Map<String, Object?> media, AppLocalizations l10n) {
+    final fileName = media['file_name']?.toString() ?? '';
+    final part = media['part_label']?.toString();
+    final resolution = media['resolution_label']?.toString();
+    final width = media['width'];
+    final height = media['height'];
+    final fps = (media['frame_rate_decimal'] as num?)?.toDouble();
+    final dimensions = width is num && height is num
+        ? '${width.toInt()} × ${height.toInt()}'
+        : null;
+    final details = <String>[
+      if (part != null && part.isNotEmpty) '${l10n.libraryMediaPart}: $part',
+      if (dimensions != null)
+        '${l10n.libraryMediaResolution}: $dimensions${resolution == null ? '' : ' · $resolution'}',
+      if (fps != null)
+        '${l10n.libraryMediaFrameRate}: ${fps.toStringAsFixed(2)} FPS',
+    ];
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      title: Text(fileName),
+      subtitle: details.isEmpty ? null : Text(details.join(' · ')),
+    );
+  }
+
+  bool _isLibraryManaged(Map<String, Object?> work) {
+    final value = work['library_managed'];
+    return value is num ? value.toInt() == 1 : value == true;
   }
 
   Widget _buildRelatedActresses(Map<String, Object?> work) {

@@ -18,7 +18,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 ## In Windows, build-name is used as the major, minor, and patch parts
 ## of the product and file versions while build-number is used as the build suffix.
 
-version: 0.9.18+2048
+version: 0.10.0+2049
 
 environment:
   sdk: ^3.11.5
@@ -35,6 +35,8 @@ dependencies:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
+  avaca_player_native:
+    path: packages/avaca_player_native
 
   flutter_colorpicker: ^1.1.0
   sqflite: ^2.4.2+1
@@ -44,6 +46,9 @@ dependencies:
   image: ^4.8.0
   archive: 4.0.9
   crypto: ^3.0.7
+  cryptography: ^2.9.0
+  ffi: ^2.2.0
+  ffmpeg_kit_flutter_new: ^4.6.2
   file_picker: ^11.0.2
   shared_preferences: ^2.5.5
   intl: any

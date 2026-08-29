@@ -388,61 +388,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get noMatchingWorks => '找不到符合的作品';
 
   @override
-  String get scrapeWorks => '刮削作品';
-
-  @override
-  String get scrapeSettings => '刮削設定';
-
-  @override
-  String get scrapeExistingData => '已有資料處理方式';
-
-  @override
-  String get scrapeUpdateAll => '更新已有資料';
-
-  @override
-  String get scrapeAutomaticDerivedFilter => '自動排除重製／合集作品';
-
-  @override
-  String get scrapeAutomaticDerivedFilterDescription =>
-      '只依來源 lineage 與作品語義判定；未知作品保留，不用前綴直接排除。';
-
-  @override
-  String get scrapeAdvancedRules => '進階規則';
-
-  @override
-  String get scrapeAdvancedRulesDescription => '可輸入完整番號或前綴，例如 KCKC 或 KCKC-212。';
-
-  @override
-  String get scrapeExactAllows => '番號／前綴允許';
-
-  @override
-  String get scrapeExactDenies => '番號／前綴排除';
-
-  @override
-  String get scrapeRuleHint => '輸入番號或前綴';
-
-  @override
-  String get scrapeNoRules => '尚未設定規則';
-
-  @override
-  String get syncActressDetails => '同步詳細資料';
-
-  @override
-  String get replaceActressImage => '更換女優頭像';
-
-  @override
-  String get scrapeAvatarUnavailable => '找不到可用的女優頭像。';
-
-  @override
-  String get scrapeAvatarFailed => '女優頭像替換失敗，已保留原頭像。';
-
-  @override
-  String get fillMissingOnly => '二次刮削只補齊缺少的資訊';
-
-  @override
-  String get startScrape => '開始刮削';
-
-  @override
   String get noWorks => '尚無作品';
 
   @override
@@ -458,153 +403,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get series => '系列';
-
-  @override
-  String scrapeComplete(int saved, int excluded, int failed) {
-    return '刮削完成：儲存 $saved、排除 $excluded、失敗 $failed';
-  }
-
-  @override
-  String scrapeCancelled(int saved, int excluded, int failed) {
-    return '已取消刮削：儲存 $saved、排除 $excluded、失敗 $failed';
-  }
-
-  @override
-  String get scrapeFailed => '刮削失敗，請稍後再試。';
-
-  @override
-  String get scrapePhaseCollecting => '正在取得作品清單';
-
-  @override
-  String get scrapePhaseSyncingActress => '正在同步女優資料';
-
-  @override
-  String get scrapePhaseFetchingDetails => '正在取得作品詳情';
-
-  @override
-  String get scrapePhaseResolvingWorks => '正在整理去重後作品';
-
-  @override
-  String get scrapePhaseSavingWorks => '正在儲存作品與下載圖片';
-
-  @override
-  String get scrapePhaseCompleted => '刮削完成';
-
-  @override
-  String get scrapeSyncingTitle => '刮削中';
-
-  @override
-  String get scrapeSyncCompleted => '刮削完成';
-
-  @override
-  String get scrapeSyncPartial => '刮削完成，但有部分項目失敗';
-
-  @override
-  String get scrapeSyncFailed => '刮削失敗';
-
-  @override
-  String get scrapeSyncStopped => '已停止刮削';
-
-  @override
-  String get scrapeDetailsSection => '詳細資料';
-
-  @override
-  String get scrapeWorksSection => '作品';
-
-  @override
-  String get scrapeDownloadSection => '下載';
-
-  @override
-  String scrapeCurrentWork(String code) {
-    return '目前處理：$code';
-  }
-
-  @override
-  String get scrapeImagesLabel => '作品圖片';
-
-  @override
-  String get scrapeSavedCount => '已儲存';
-
-  @override
-  String get scrapeExcludedCount => '排除';
-
-  @override
-  String get scrapeFailedCount => '失敗';
-
-  @override
-  String get scrapeStatusWaiting => '等待中';
-
-  @override
-  String get scrapeStatusSyncing => '刮削中';
-
-  @override
-  String get scrapeStatusCompleted => '完成';
-
-  @override
-  String get scrapeStatusPartial => '部分完成';
-
-  @override
-  String get scrapeStatusFailed => '失敗';
-
-  @override
-  String get scrapeStatusCancelled => '已停止';
-
-  @override
-  String get scrapeStatusNoNewWorks => '完成，無新增作品';
-
-  @override
-  String get scrapeStatusUnavailable => '無法使用';
-
-  @override
-  String get scrapeStatusBlocked => '頁面被阻擋';
-
-  @override
-  String get scrapeStatusRateLimited => '被限流';
-
-  @override
-  String get scrapeStatusTimedOut => '逾時';
-
-  @override
-  String get stopScrape => '停止';
-
-  @override
-  String scrapeProgressSummary(int saved, int excluded, int failed) {
-    return '儲存 $saved、排除 $excluded、失敗 $failed';
-  }
-
-  @override
-  String scrapeFailedWorksTitle(int count) {
-    return '失敗作品（$count）';
-  }
-
-  @override
-  String scrapeImageFailuresTitle(int count) {
-    return '圖片下載失敗（$count）';
-  }
-
-  @override
-  String get scrapeFailureDetailsUnavailable => '所有來源都無法取得作品詳情';
-
-  @override
-  String get scrapeFailureDetailCodeMismatch => '作品詳情番號與作品不一致';
-
-  @override
-  String get scrapeFailureInvalidCode => '番號無法正規化';
-
-  @override
-  String get scrapeFailurePerformerCountUnavailable => '無法取得演員人數';
-
-  @override
-  String get scrapeFailureDatabaseSave => '作品資料儲存失敗';
-
-  @override
-  String get scrapeImageFailureCard => '封面圖片';
-
-  @override
-  String get scrapeImageFailureDetail => '詳細圖片';
-
-  @override
-  String get scrapeImageFailureBoth => '封面與詳細圖片';
 
   @override
   String get javBusVerificationTitle => 'JavBus 驗證';
@@ -707,75 +505,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get feedbackSuggestions => '回饋建議';
-
-  @override
-  String get scrapeSources => '刮削來源';
-
-  @override
-  String get scrapeSourceDetailsTitle => '女優詳細資料來源';
-
-  @override
-  String get scrapeSourceWorksTitle => '作品來源';
-
-  @override
-  String get scrapeSourcePriorityHint => '勾選來源並拖曳調整優先順序';
-
-  @override
-  String get scrapeSourceAliasTitle => '女優别名来源';
-
-  @override
-  String get scrapeSourceMinnanoAv => 'Minnano AV';
-
-  @override
-  String get scrapeSourceJavBus => 'JavBus';
-
-  @override
-  String get scrapeSourceAvBase => 'AvBase';
-
-  @override
-  String get scrapeSourceAvWiki => 'AV-Wiki';
-
-  @override
-  String get scrapeSourceAll => '所有來源（依番號整合並去重複）';
-
-  @override
-  String get scrapeSourceSaveFailed => '無法儲存刮削來源設定。';
-
-  @override
-  String get scrapeSourceConnectionTitle => '網站連線狀態';
-
-  @override
-  String get scrapeSourceConnectionSubtitle => '查看已加入的刮削網站，並在這裡測試連線與完成驗證。';
-
-  @override
-  String get scrapeSourceRetest => '重新測試連線';
-
-  @override
-  String get scrapeSourceTesting => '測試中…';
-
-  @override
-  String get scrapeSourceNotTested => '尚未測試';
-
-  @override
-  String get scrapeSourceConnected => '連線成功';
-
-  @override
-  String get scrapeSourceConnectionFailed => '連線失敗';
-
-  @override
-  String get scrapeSourceVerificationRequired => '需要驗證';
-
-  @override
-  String get scrapeAliases => '刮削别名';
-
-  @override
-  String get scrapeAliasesDescription => '将别名来源找到的名称写入女优别名，不包含当前名称。';
-
-  @override
-  String get scrapePartial => '部分來源或作品無法處理。';
-
-  @override
-  String get scrapeZeroResults => '找不到新作品。';
 
   @override
   String get softwareUpdate => '軟體更新';
@@ -1033,7 +762,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get dataHealthTitle => '資料健康度';
 
   @override
-  String get dataHealthSubtitle => '检查数量、作品字段与图片缺漏、字段来源、待清理文件及刮削来源错误。';
+  String get dataHealthSubtitle => '检查数量、作品字段与图片缺漏、字段来源及待清理文件。';
 
   @override
   String dataHealthSectionUnavailable(String section) {
@@ -1068,181 +797,116 @@ class AppLocalizationsZh extends AppLocalizations {
   String get dataHealthPendingDeletions => '待清理檔案';
 
   @override
-  String get dataHealthJobStates => '刮削工作狀態';
-
-  @override
-  String get dataHealthSourceErrors => '近 7 日來源錯誤';
-
-  @override
-  String get scrapeJobsTitle => '刮削工作';
-
-  @override
-  String get scrapeJobsEmpty => '目前沒有刮削工作。';
-
-  @override
-  String scrapeJobsSelectedCount(int count) {
-    return '已选择 $count 项';
-  }
-
-  @override
-  String get scrapeJobsDelete => '删除';
-
-  @override
-  String get scrapeJobsDeleteTitle => '删除选中的刮削工作？';
-
-  @override
-  String scrapeJobsDeleteMessage(int count) {
-    return '删除 $count 条已结束的刮削记录？不会删除作品、女优或设置。';
-  }
-
-  @override
-  String get scrapeJobsDeleteActive => '进行中的刮削工作不能删除，请只选择已结束的工作。';
-
-  @override
-  String scrapeJobsDeleted(int count) {
-    return '已删除 $count 条刮削记录。';
-  }
-
-  @override
-  String get scrapeJobsDeleteFailed => '删除刮削记录失败。';
-
-  @override
-  String get scrapeJobDetailTitle => '刮削工作詳情';
-
-  @override
-  String get scrapeJobPause => '暫停';
-
-  @override
-  String get scrapeJobResume => '繼續';
-
-  @override
-  String get scrapeJobCancel => '取消';
-
-  @override
-  String get scrapeJobRetryFailed => '只重試失敗作品';
-
-  @override
-  String get scrapeJobEvents => '事件紀錄';
-
-  @override
-  String get scrapeJobDiagnostics => '刮削診斷';
-
-  @override
-  String get scrapeJobItems => '作品檢查點';
-
-  @override
-  String get scrapeJobNoEvents => '尚無事件紀錄。';
-
-  @override
-  String get scrapeJobNoItems => '尚無作品檢查點。';
-
-  @override
-  String get scrapeJobFilterAll => '全部';
-
-  @override
-  String get scrapeJobFilterReview => '待檢視';
-
-  @override
-  String get scrapeJobFilterKeep => '保留';
-
-  @override
-  String get scrapeJobFilterExclude => '排除';
-
-  @override
-  String get scrapeJobFilterFailed => '失敗';
-
-  @override
-  String get scrapeJobNoFilteredItems => '沒有符合此篩選條件的檢查點。';
-
-  @override
-  String get scrapeJobStateReview => '待檢視';
-
-  @override
-  String get scrapeJobStateQueued => '排隊中';
-
-  @override
-  String get scrapeJobStateRunning => '執行中';
-
-  @override
-  String get scrapeJobStatePaused => '已暫停';
-
-  @override
-  String get scrapeJobStateWaiting => '等待驗證';
-
-  @override
-  String get scrapeJobStateSucceeded => '成功';
-
-  @override
-  String get scrapeJobStatePartial => '部分完成';
-
-  @override
-  String get scrapeJobStateFailed => '失敗';
-
-  @override
-  String get scrapeJobStateCancelled => '已取消';
-
-  @override
-  String get scrapeJobStateExcluded => '已排除';
-
-  @override
-  String scrapeJobCollectionSummary(int raw, int unique, int duplicates) {
-    return '取得 $raw 筆，去重後 $unique 筆，重複 $duplicates 筆';
-  }
-
-  @override
-  String scrapeJobDetailProgress(int current, int total) {
-    return '作品詳細 $current/$total';
-  }
-
-  @override
-  String scrapeJobTerminalProgress(
-    int processed,
-    int total,
-    int saved,
-    int excluded,
-    int failed,
-  ) {
-    return '已處理 $processed/$total，保存 $saved，排除 $excluded，失敗 $failed';
-  }
-
-  @override
-  String scrapeJobCandidateSummary(int count, int duplicates) {
-    return '候选作品 $count，集合重复 $duplicates';
-  }
-
-  @override
-  String scrapeJobSupplementalEvidence(int current, int total) {
-    return '补充证据 $current/$total';
-  }
-
-  @override
-  String scrapeJobOutcomeSummary(
-    int processed,
-    int total,
-    int keep,
-    int review,
-    int excluded,
-    int failed,
-  ) {
-    return '已处理 $processed/$total，保留 $keep，待检查 $review，排除 $excluded，失败 $failed';
-  }
-
-  @override
-  String scrapeJobRulesVersion(String version) {
-    return '規則版本：$version';
-  }
-
-  @override
   String get settingsDataHealthTitle => '資料健康度';
 
   @override
-  String get settingsDataHealthSubtitle => '查看資料完整性與刮削可觀測性。';
+  String get settingsDataHealthSubtitle => '查看資料完整性與欄位來源。';
 
   @override
-  String get settingsScrapeJobsTitle => '刮削工作';
+  String get libraryImportTitle => '資料夾刮削與媒體入庫';
 
   @override
-  String get settingsScrapeJobsSubtitle => '查看佇列、恢復、暫停與失敗重試。';
+  String get libraryImportSelectFolder => '選擇刮削資料夾';
+
+  @override
+  String get libraryImportSelectRoot => '選擇收藏資料夾';
+
+  @override
+  String get libraryImportScan => '掃描資料夾';
+
+  @override
+  String get libraryImportConfirm => '確認並開始刮削';
+
+  @override
+  String get libraryImportPhase1ReadOnly => '目前階段只讀取檔名與檔案資訊，不會修改來源影片。';
+
+  @override
+  String get libraryImportNoFolder => '請先選擇刮削資料夾。';
+
+  @override
+  String get libraryImportNoRoot => '請先選擇收藏資料夾。';
+
+  @override
+  String get libraryImportManualCode => '手動修正番號';
+
+  @override
+  String libraryImportSelected(int count) {
+    return '已選取 $count 個檔案';
+  }
+
+  @override
+  String libraryImportResult(int succeeded, int duplicate, int failed) {
+    return '匯入結果：成功 $succeeded、重複 $duplicate、失敗 $failed';
+  }
+
+  @override
+  String get libraryMediaTitle => '媒體檔案';
+
+  @override
+  String get libraryMediaPart => '分段';
+
+  @override
+  String get libraryMediaResolution => '解析度';
+
+  @override
+  String get libraryMediaFrameRate => '影格率';
+
+  @override
+  String get dataHealthLibraryWorks => 'Library 作品';
+
+  @override
+  String get dataHealthLibraryMediaIssues => 'Library 媒體問題';
+
+  @override
+  String get dataHealthImportRepairs => '匯入待修復';
+
+  @override
+  String get dataHealthLibraryLinks => '女優連結問題';
+
+  @override
+  String get playbackSettings => '播放設定';
+
+  @override
+  String get playbackSeekSeconds => '跳轉間隔';
+
+  @override
+  String get playbackHoldSpeed => '長按播放速度';
+
+  @override
+  String get seconds => '秒';
+
+  @override
+  String get playerBack => '返回';
+
+  @override
+  String get playerPlay => '播放';
+
+  @override
+  String get playerPause => '暫停';
+
+  @override
+  String get playerSpeed => '速度';
+
+  @override
+  String get playerSubtitles => '字幕';
+
+  @override
+  String get playerFullscreen => '全螢幕';
+
+  @override
+  String get playerExitFullscreen => '退出全螢幕';
+
+  @override
+  String get playerSubtitleOff => '關閉';
+
+  @override
+  String get playerHoldSpeed => '長按速度';
+
+  @override
+  String get playerPosition => '播放進度';
+
+  @override
+  String get playerPlaybackError => '無法播放這部影片';
 }
 
 /// The translations for Chinese, as used in China (`zh_CN`).
@@ -1629,61 +1293,6 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get noMatchingWorks => '找不到匹配的作品';
 
   @override
-  String get scrapeWorks => '刮削作品';
-
-  @override
-  String get scrapeSettings => '刮削设置';
-
-  @override
-  String get scrapeExistingData => '已有资料处理方式';
-
-  @override
-  String get scrapeUpdateAll => '更新已有资料';
-
-  @override
-  String get scrapeAutomaticDerivedFilter => '自动排除重制／合集作品';
-
-  @override
-  String get scrapeAutomaticDerivedFilterDescription =>
-      '只依据来源 lineage 与作品语义判断；未知作品保留，不用前缀直接排除。';
-
-  @override
-  String get scrapeAdvancedRules => '高级规则';
-
-  @override
-  String get scrapeAdvancedRulesDescription => '可输入完整番号或前缀，例如 KCKC 或 KCKC-212。';
-
-  @override
-  String get scrapeExactAllows => '番号／前缀允许';
-
-  @override
-  String get scrapeExactDenies => '番号／前缀排除';
-
-  @override
-  String get scrapeRuleHint => '输入番号或前缀';
-
-  @override
-  String get scrapeNoRules => '尚未设置规则';
-
-  @override
-  String get syncActressDetails => '同步详细资料';
-
-  @override
-  String get replaceActressImage => '更换女优头像';
-
-  @override
-  String get scrapeAvatarUnavailable => '找不到可用的女优头像。';
-
-  @override
-  String get scrapeAvatarFailed => '女优头像替换失败，已保留原头像。';
-
-  @override
-  String get fillMissingOnly => '二次刮削只补齐缺少的信息';
-
-  @override
-  String get startScrape => '开始刮削';
-
-  @override
   String get noWorks => '暂无作品';
 
   @override
@@ -1699,153 +1308,6 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get series => '系列';
-
-  @override
-  String scrapeComplete(int saved, int excluded, int failed) {
-    return '刮削完成：保存 $saved、排除 $excluded、失败 $failed';
-  }
-
-  @override
-  String scrapeCancelled(int saved, int excluded, int failed) {
-    return '已取消刮削：保存 $saved、排除 $excluded、失败 $failed';
-  }
-
-  @override
-  String get scrapeFailed => '刮削失败，请稍后再试。';
-
-  @override
-  String get scrapePhaseCollecting => '正在获取作品列表';
-
-  @override
-  String get scrapePhaseSyncingActress => '正在同步女优资料';
-
-  @override
-  String get scrapePhaseFetchingDetails => '正在获取作品详情';
-
-  @override
-  String get scrapePhaseResolvingWorks => '正在整理去重后的作品';
-
-  @override
-  String get scrapePhaseSavingWorks => '正在保存作品并下载图片';
-
-  @override
-  String get scrapePhaseCompleted => '刮削完成';
-
-  @override
-  String get scrapeSyncingTitle => '刮削中';
-
-  @override
-  String get scrapeSyncCompleted => '刮削完成';
-
-  @override
-  String get scrapeSyncPartial => '刮削完成，但有部分项目失败';
-
-  @override
-  String get scrapeSyncFailed => '刮削失败';
-
-  @override
-  String get scrapeSyncStopped => '已停止刮削';
-
-  @override
-  String get scrapeDetailsSection => '详细资料';
-
-  @override
-  String get scrapeWorksSection => '作品';
-
-  @override
-  String get scrapeDownloadSection => '下载';
-
-  @override
-  String scrapeCurrentWork(String code) {
-    return '目前处理：$code';
-  }
-
-  @override
-  String get scrapeImagesLabel => '作品图片';
-
-  @override
-  String get scrapeSavedCount => '已保存';
-
-  @override
-  String get scrapeExcludedCount => '排除';
-
-  @override
-  String get scrapeFailedCount => '失败';
-
-  @override
-  String get scrapeStatusWaiting => '等待中';
-
-  @override
-  String get scrapeStatusSyncing => '刮削中';
-
-  @override
-  String get scrapeStatusCompleted => '完成';
-
-  @override
-  String get scrapeStatusPartial => '部分完成';
-
-  @override
-  String get scrapeStatusFailed => '失败';
-
-  @override
-  String get scrapeStatusCancelled => '已停止';
-
-  @override
-  String get scrapeStatusNoNewWorks => '完成，无新增作品';
-
-  @override
-  String get scrapeStatusUnavailable => '无法使用';
-
-  @override
-  String get scrapeStatusBlocked => '页面被阻挡';
-
-  @override
-  String get scrapeStatusRateLimited => '被限流';
-
-  @override
-  String get scrapeStatusTimedOut => '超时';
-
-  @override
-  String get stopScrape => '停止';
-
-  @override
-  String scrapeProgressSummary(int saved, int excluded, int failed) {
-    return '保存 $saved、排除 $excluded、失败 $failed';
-  }
-
-  @override
-  String scrapeFailedWorksTitle(int count) {
-    return '失败作品（$count）';
-  }
-
-  @override
-  String scrapeImageFailuresTitle(int count) {
-    return '图片下载失败（$count）';
-  }
-
-  @override
-  String get scrapeFailureDetailsUnavailable => '所有来源都无法获取作品详情';
-
-  @override
-  String get scrapeFailureDetailCodeMismatch => '作品详情番号与作品不一致';
-
-  @override
-  String get scrapeFailureInvalidCode => '番号无法正規化';
-
-  @override
-  String get scrapeFailurePerformerCountUnavailable => '无法获取演员人数';
-
-  @override
-  String get scrapeFailureDatabaseSave => '作品数据保存失败';
-
-  @override
-  String get scrapeImageFailureCard => '封面图片';
-
-  @override
-  String get scrapeImageFailureDetail => '详细图片';
-
-  @override
-  String get scrapeImageFailureBoth => '封面与详细图片';
 
   @override
   String get javBusVerificationTitle => 'JavBus 验证';
@@ -1948,75 +1410,6 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get feedbackSuggestions => '反馈建议';
-
-  @override
-  String get scrapeSources => '刮削来源';
-
-  @override
-  String get scrapeSourceDetailsTitle => '女优详细资料来源';
-
-  @override
-  String get scrapeSourceWorksTitle => '作品来源';
-
-  @override
-  String get scrapeSourcePriorityHint => '勾选来源并拖动调整优先顺序';
-
-  @override
-  String get scrapeSourceAliasTitle => '女优别名来源';
-
-  @override
-  String get scrapeSourceMinnanoAv => 'Minnano AV';
-
-  @override
-  String get scrapeSourceJavBus => 'JavBus';
-
-  @override
-  String get scrapeSourceAvBase => 'AvBase';
-
-  @override
-  String get scrapeSourceAvWiki => 'AV-Wiki';
-
-  @override
-  String get scrapeSourceAll => '所有来源（按番号整合并去重）';
-
-  @override
-  String get scrapeSourceSaveFailed => '无法保存刮削来源设置。';
-
-  @override
-  String get scrapeSourceConnectionTitle => '网站连接状态';
-
-  @override
-  String get scrapeSourceConnectionSubtitle => '查看已加入的刮削网站，并在这里测试连接与完成验证。';
-
-  @override
-  String get scrapeSourceRetest => '重新测试连接';
-
-  @override
-  String get scrapeSourceTesting => '测试中…';
-
-  @override
-  String get scrapeSourceNotTested => '尚未测试';
-
-  @override
-  String get scrapeSourceConnected => '连接成功';
-
-  @override
-  String get scrapeSourceConnectionFailed => '连接失败';
-
-  @override
-  String get scrapeSourceVerificationRequired => '需要验证';
-
-  @override
-  String get scrapeAliases => '刮削别名';
-
-  @override
-  String get scrapeAliasesDescription => '将别名来源找到的名称写入女优别名，不包含当前名称。';
-
-  @override
-  String get scrapePartial => '部分来源或作品无法处理。';
-
-  @override
-  String get scrapeZeroResults => '找不到新作品。';
 
   @override
   String get softwareUpdate => '软件更新';
@@ -2274,7 +1667,7 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get dataHealthTitle => '数据健康度';
 
   @override
-  String get dataHealthSubtitle => '检查数量、作品字段与图片缺漏、字段来源、待清理文件及刮削来源错误。';
+  String get dataHealthSubtitle => '检查数量、作品字段与图片缺漏、字段来源及待清理文件。';
 
   @override
   String dataHealthSectionUnavailable(String section) {
@@ -2309,181 +1702,116 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get dataHealthPendingDeletions => '待清理文件';
 
   @override
-  String get dataHealthJobStates => '刮削任务状态';
-
-  @override
-  String get dataHealthSourceErrors => '近 7 日来源错误';
-
-  @override
-  String get scrapeJobsTitle => '刮削任务';
-
-  @override
-  String get scrapeJobsEmpty => '目前没有刮削任务。';
-
-  @override
-  String scrapeJobsSelectedCount(int count) {
-    return '已选择 $count 项';
-  }
-
-  @override
-  String get scrapeJobsDelete => '删除';
-
-  @override
-  String get scrapeJobsDeleteTitle => '删除选中的刮削任务？';
-
-  @override
-  String scrapeJobsDeleteMessage(int count) {
-    return '删除 $count 条已结束的刮削记录？不会删除作品、女优或设置。';
-  }
-
-  @override
-  String get scrapeJobsDeleteActive => '进行中的刮削任务不能删除，请只选择已结束的任务。';
-
-  @override
-  String scrapeJobsDeleted(int count) {
-    return '已删除 $count 条刮削记录。';
-  }
-
-  @override
-  String get scrapeJobsDeleteFailed => '删除刮削记录失败。';
-
-  @override
-  String get scrapeJobDetailTitle => '刮削任务详情';
-
-  @override
-  String get scrapeJobPause => '暂停';
-
-  @override
-  String get scrapeJobResume => '继续';
-
-  @override
-  String get scrapeJobCancel => '取消';
-
-  @override
-  String get scrapeJobRetryFailed => '只重试失败作品';
-
-  @override
-  String get scrapeJobEvents => '事件记录';
-
-  @override
-  String get scrapeJobDiagnostics => '刮削诊断';
-
-  @override
-  String get scrapeJobItems => '作品检查点';
-
-  @override
-  String get scrapeJobNoEvents => '尚无事件记录。';
-
-  @override
-  String get scrapeJobNoItems => '尚无作品检查点。';
-
-  @override
-  String get scrapeJobFilterAll => '全部';
-
-  @override
-  String get scrapeJobFilterReview => '待检查';
-
-  @override
-  String get scrapeJobFilterKeep => '保留';
-
-  @override
-  String get scrapeJobFilterExclude => '排除';
-
-  @override
-  String get scrapeJobFilterFailed => '失败';
-
-  @override
-  String get scrapeJobNoFilteredItems => '没有符合此筛选条件的检查点。';
-
-  @override
-  String get scrapeJobStateReview => '待审核';
-
-  @override
-  String get scrapeJobStateQueued => '排队中';
-
-  @override
-  String get scrapeJobStateRunning => '执行中';
-
-  @override
-  String get scrapeJobStatePaused => '已暂停';
-
-  @override
-  String get scrapeJobStateWaiting => '等待验证';
-
-  @override
-  String get scrapeJobStateSucceeded => '成功';
-
-  @override
-  String get scrapeJobStatePartial => '部分完成';
-
-  @override
-  String get scrapeJobStateFailed => '失败';
-
-  @override
-  String get scrapeJobStateCancelled => '已取消';
-
-  @override
-  String get scrapeJobStateExcluded => '已排除';
-
-  @override
-  String scrapeJobCollectionSummary(int raw, int unique, int duplicates) {
-    return '取得 $raw 条，去重后 $unique 条，重复 $duplicates 条';
-  }
-
-  @override
-  String scrapeJobDetailProgress(int current, int total) {
-    return '作品详情 $current/$total';
-  }
-
-  @override
-  String scrapeJobTerminalProgress(
-    int processed,
-    int total,
-    int saved,
-    int excluded,
-    int failed,
-  ) {
-    return '已处理 $processed/$total，保存 $saved，排除 $excluded，失败 $failed';
-  }
-
-  @override
-  String scrapeJobCandidateSummary(int count, int duplicates) {
-    return '候选作品 $count，集合重复 $duplicates';
-  }
-
-  @override
-  String scrapeJobSupplementalEvidence(int current, int total) {
-    return '补充证据 $current/$total';
-  }
-
-  @override
-  String scrapeJobOutcomeSummary(
-    int processed,
-    int total,
-    int keep,
-    int review,
-    int excluded,
-    int failed,
-  ) {
-    return '已处理 $processed/$total，保留 $keep，待检查 $review，排除 $excluded，失败 $failed';
-  }
-
-  @override
-  String scrapeJobRulesVersion(String version) {
-    return '规则版本：$version';
-  }
-
-  @override
   String get settingsDataHealthTitle => '数据健康度';
 
   @override
-  String get settingsDataHealthSubtitle => '查看数据完整性与刮削可观测性。';
+  String get settingsDataHealthSubtitle => '查看数据完整性与字段来源。';
 
   @override
-  String get settingsScrapeJobsTitle => '刮削任务';
+  String get libraryImportTitle => '文件夹刮削与媒体入库';
 
   @override
-  String get settingsScrapeJobsSubtitle => '查看队列、恢复、暂停与失败重试。';
+  String get libraryImportSelectFolder => '选择刮削文件夹';
+
+  @override
+  String get libraryImportSelectRoot => '选择收藏文件夹';
+
+  @override
+  String get libraryImportScan => '扫描文件夹';
+
+  @override
+  String get libraryImportConfirm => '确认并开始刮削';
+
+  @override
+  String get libraryImportPhase1ReadOnly => '当前阶段只读取文件名和文件信息，不会修改来源视频。';
+
+  @override
+  String get libraryImportNoFolder => '请先选择刮削文件夹。';
+
+  @override
+  String get libraryImportNoRoot => '请先选择收藏文件夹。';
+
+  @override
+  String get libraryImportManualCode => '手动修正番号';
+
+  @override
+  String libraryImportSelected(int count) {
+    return '已选择 $count 个文件';
+  }
+
+  @override
+  String libraryImportResult(int succeeded, int duplicate, int failed) {
+    return '导入结果：成功 $succeeded、重复 $duplicate、失败 $failed';
+  }
+
+  @override
+  String get libraryMediaTitle => '媒体文件';
+
+  @override
+  String get libraryMediaPart => '分段';
+
+  @override
+  String get libraryMediaResolution => '分辨率';
+
+  @override
+  String get libraryMediaFrameRate => '帧率';
+
+  @override
+  String get dataHealthLibraryWorks => 'Library 作品';
+
+  @override
+  String get dataHealthLibraryMediaIssues => 'Library 媒体问题';
+
+  @override
+  String get dataHealthImportRepairs => '待修复导入';
+
+  @override
+  String get dataHealthLibraryLinks => '女优链接问题';
+
+  @override
+  String get playbackSettings => '播放';
+
+  @override
+  String get playbackSeekSeconds => '跳转间隔';
+
+  @override
+  String get playbackHoldSpeed => '长按播放速度';
+
+  @override
+  String get seconds => '秒';
+
+  @override
+  String get playerBack => '返回';
+
+  @override
+  String get playerPlay => '播放';
+
+  @override
+  String get playerPause => '暂停';
+
+  @override
+  String get playerSpeed => '速度';
+
+  @override
+  String get playerSubtitles => '字幕';
+
+  @override
+  String get playerFullscreen => '全屏';
+
+  @override
+  String get playerExitFullscreen => '退出全屏';
+
+  @override
+  String get playerSubtitleOff => '关闭';
+
+  @override
+  String get playerHoldSpeed => '长按速度';
+
+  @override
+  String get playerPosition => '播放进度';
+
+  @override
+  String get playerPlaybackError => '无法播放此视频';
 }
 
 /// The translations for Chinese, as used in Taiwan (`zh_TW`).
@@ -2870,61 +2198,6 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get noMatchingWorks => '找不到符合的作品';
 
   @override
-  String get scrapeWorks => '刮削作品';
-
-  @override
-  String get scrapeSettings => '刮削設定';
-
-  @override
-  String get scrapeExistingData => '已有資料處理方式';
-
-  @override
-  String get scrapeUpdateAll => '更新已有資料';
-
-  @override
-  String get scrapeAutomaticDerivedFilter => '自動排除重製／合集作品';
-
-  @override
-  String get scrapeAutomaticDerivedFilterDescription =>
-      '只依來源 lineage 與作品語義判定；未知作品保留，不用前綴直接排除。';
-
-  @override
-  String get scrapeAdvancedRules => '進階規則';
-
-  @override
-  String get scrapeAdvancedRulesDescription => '可輸入完整番號或前綴，例如 KCKC 或 KCKC-212。';
-
-  @override
-  String get scrapeExactAllows => '番號／前綴允許';
-
-  @override
-  String get scrapeExactDenies => '番號／前綴排除';
-
-  @override
-  String get scrapeRuleHint => '輸入番號或前綴';
-
-  @override
-  String get scrapeNoRules => '尚未設定規則';
-
-  @override
-  String get syncActressDetails => '同步詳細資料';
-
-  @override
-  String get replaceActressImage => '更換女優頭像';
-
-  @override
-  String get scrapeAvatarUnavailable => '找不到可用的女優頭像。';
-
-  @override
-  String get scrapeAvatarFailed => '女優頭像替換失敗，已保留原頭像。';
-
-  @override
-  String get fillMissingOnly => '二次刮削只補齊缺少的資訊';
-
-  @override
-  String get startScrape => '開始刮削';
-
-  @override
   String get noWorks => '尚無作品';
 
   @override
@@ -2940,153 +2213,6 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get series => '系列';
-
-  @override
-  String scrapeComplete(int saved, int excluded, int failed) {
-    return '刮削完成：儲存 $saved、排除 $excluded、失敗 $failed';
-  }
-
-  @override
-  String scrapeCancelled(int saved, int excluded, int failed) {
-    return '已取消刮削：儲存 $saved、排除 $excluded、失敗 $failed';
-  }
-
-  @override
-  String get scrapeFailed => '刮削失敗，請稍後再試。';
-
-  @override
-  String get scrapePhaseCollecting => '正在取得作品清單';
-
-  @override
-  String get scrapePhaseSyncingActress => '正在同步女優資料';
-
-  @override
-  String get scrapePhaseFetchingDetails => '正在取得作品詳情';
-
-  @override
-  String get scrapePhaseResolvingWorks => '正在整理去重後作品';
-
-  @override
-  String get scrapePhaseSavingWorks => '正在儲存作品與下載圖片';
-
-  @override
-  String get scrapePhaseCompleted => '刮削完成';
-
-  @override
-  String get scrapeSyncingTitle => '刮削中';
-
-  @override
-  String get scrapeSyncCompleted => '刮削完成';
-
-  @override
-  String get scrapeSyncPartial => '刮削完成，但有部分項目失敗';
-
-  @override
-  String get scrapeSyncFailed => '刮削失敗';
-
-  @override
-  String get scrapeSyncStopped => '已停止刮削';
-
-  @override
-  String get scrapeDetailsSection => '詳細資料';
-
-  @override
-  String get scrapeWorksSection => '作品';
-
-  @override
-  String get scrapeDownloadSection => '下載';
-
-  @override
-  String scrapeCurrentWork(String code) {
-    return '目前處理：$code';
-  }
-
-  @override
-  String get scrapeImagesLabel => '作品圖片';
-
-  @override
-  String get scrapeSavedCount => '已儲存';
-
-  @override
-  String get scrapeExcludedCount => '排除';
-
-  @override
-  String get scrapeFailedCount => '失敗';
-
-  @override
-  String get scrapeStatusWaiting => '等待中';
-
-  @override
-  String get scrapeStatusSyncing => '刮削中';
-
-  @override
-  String get scrapeStatusCompleted => '完成';
-
-  @override
-  String get scrapeStatusPartial => '部分完成';
-
-  @override
-  String get scrapeStatusFailed => '失敗';
-
-  @override
-  String get scrapeStatusCancelled => '已停止';
-
-  @override
-  String get scrapeStatusNoNewWorks => '完成，無新增作品';
-
-  @override
-  String get scrapeStatusUnavailable => '無法使用';
-
-  @override
-  String get scrapeStatusBlocked => '頁面被阻擋';
-
-  @override
-  String get scrapeStatusRateLimited => '被限流';
-
-  @override
-  String get scrapeStatusTimedOut => '逾時';
-
-  @override
-  String get stopScrape => '停止';
-
-  @override
-  String scrapeProgressSummary(int saved, int excluded, int failed) {
-    return '儲存 $saved、排除 $excluded、失敗 $failed';
-  }
-
-  @override
-  String scrapeFailedWorksTitle(int count) {
-    return '失敗作品（$count）';
-  }
-
-  @override
-  String scrapeImageFailuresTitle(int count) {
-    return '圖片下載失敗（$count）';
-  }
-
-  @override
-  String get scrapeFailureDetailsUnavailable => '所有來源都無法取得作品詳情';
-
-  @override
-  String get scrapeFailureDetailCodeMismatch => '作品詳情番號與作品不一致';
-
-  @override
-  String get scrapeFailureInvalidCode => '番號無法正規化';
-
-  @override
-  String get scrapeFailurePerformerCountUnavailable => '無法取得演員人數';
-
-  @override
-  String get scrapeFailureDatabaseSave => '作品資料儲存失敗';
-
-  @override
-  String get scrapeImageFailureCard => '封面圖片';
-
-  @override
-  String get scrapeImageFailureDetail => '詳細圖片';
-
-  @override
-  String get scrapeImageFailureBoth => '封面與詳細圖片';
 
   @override
   String get javBusVerificationTitle => 'JavBus 驗證';
@@ -3189,75 +2315,6 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get feedbackSuggestions => '回饋建議';
-
-  @override
-  String get scrapeSources => '刮削來源';
-
-  @override
-  String get scrapeSourceDetailsTitle => '女優詳細資料來源';
-
-  @override
-  String get scrapeSourceWorksTitle => '作品來源';
-
-  @override
-  String get scrapeSourcePriorityHint => '勾選來源並拖曳調整優先順序';
-
-  @override
-  String get scrapeSourceAliasTitle => '女優別名來源';
-
-  @override
-  String get scrapeSourceMinnanoAv => 'Minnano AV';
-
-  @override
-  String get scrapeSourceJavBus => 'JavBus';
-
-  @override
-  String get scrapeSourceAvBase => 'AvBase';
-
-  @override
-  String get scrapeSourceAvWiki => 'AV-Wiki';
-
-  @override
-  String get scrapeSourceAll => '所有來源（依番號整合並去重複）';
-
-  @override
-  String get scrapeSourceSaveFailed => '無法儲存刮削來源設定。';
-
-  @override
-  String get scrapeSourceConnectionTitle => '網站連線狀態';
-
-  @override
-  String get scrapeSourceConnectionSubtitle => '查看已加入的刮削網站，並在這裡測試連線與完成驗證。';
-
-  @override
-  String get scrapeSourceRetest => '重新測試連線';
-
-  @override
-  String get scrapeSourceTesting => '測試中…';
-
-  @override
-  String get scrapeSourceNotTested => '尚未測試';
-
-  @override
-  String get scrapeSourceConnected => '連線成功';
-
-  @override
-  String get scrapeSourceConnectionFailed => '連線失敗';
-
-  @override
-  String get scrapeSourceVerificationRequired => '需要驗證';
-
-  @override
-  String get scrapeAliases => '刮削別名';
-
-  @override
-  String get scrapeAliasesDescription => '將別名來源找到的名稱寫入女優別名，不包含目前名稱。';
-
-  @override
-  String get scrapePartial => '部分來源或作品無法處理。';
-
-  @override
-  String get scrapeZeroResults => '找不到新作品。';
 
   @override
   String get softwareUpdate => '軟體更新';
@@ -3515,7 +2572,7 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get dataHealthTitle => '資料健康度';
 
   @override
-  String get dataHealthSubtitle => '檢查數量、作品欄位與圖片缺漏、欄位來源、待清理檔案及刮削來源錯誤。';
+  String get dataHealthSubtitle => '檢查數量、作品欄位與圖片缺漏、欄位來源及待清理檔案。';
 
   @override
   String dataHealthSectionUnavailable(String section) {
@@ -3550,179 +2607,114 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get dataHealthPendingDeletions => '待清理檔案';
 
   @override
-  String get dataHealthJobStates => '刮削工作狀態';
-
-  @override
-  String get dataHealthSourceErrors => '近 7 日來源錯誤';
-
-  @override
-  String get scrapeJobsTitle => '刮削工作';
-
-  @override
-  String get scrapeJobsEmpty => '目前沒有刮削工作。';
-
-  @override
-  String scrapeJobsSelectedCount(int count) {
-    return '已選取 $count 項';
-  }
-
-  @override
-  String get scrapeJobsDelete => '刪除';
-
-  @override
-  String get scrapeJobsDeleteTitle => '刪除選取的刮削工作？';
-
-  @override
-  String scrapeJobsDeleteMessage(int count) {
-    return '刪除 $count 筆已結束的刮削紀錄？不會刪除作品、女優或設定。';
-  }
-
-  @override
-  String get scrapeJobsDeleteActive => '進行中的刮削工作不能刪除，請只選取已結束的工作。';
-
-  @override
-  String scrapeJobsDeleted(int count) {
-    return '已刪除 $count 筆刮削紀錄。';
-  }
-
-  @override
-  String get scrapeJobsDeleteFailed => '刪除刮削紀錄失敗。';
-
-  @override
-  String get scrapeJobDetailTitle => '刮削工作詳情';
-
-  @override
-  String get scrapeJobPause => '暫停';
-
-  @override
-  String get scrapeJobResume => '繼續';
-
-  @override
-  String get scrapeJobCancel => '取消';
-
-  @override
-  String get scrapeJobRetryFailed => '只重試失敗作品';
-
-  @override
-  String get scrapeJobEvents => '事件紀錄';
-
-  @override
-  String get scrapeJobDiagnostics => '刮削診斷';
-
-  @override
-  String get scrapeJobItems => '作品檢查點';
-
-  @override
-  String get scrapeJobNoEvents => '尚無事件紀錄。';
-
-  @override
-  String get scrapeJobNoItems => '尚無作品檢查點。';
-
-  @override
-  String get scrapeJobFilterAll => '全部';
-
-  @override
-  String get scrapeJobFilterReview => '待檢視';
-
-  @override
-  String get scrapeJobFilterKeep => '保留';
-
-  @override
-  String get scrapeJobFilterExclude => '排除';
-
-  @override
-  String get scrapeJobFilterFailed => '失敗';
-
-  @override
-  String get scrapeJobNoFilteredItems => '沒有符合此篩選條件的檢查點。';
-
-  @override
-  String get scrapeJobStateReview => '待檢視';
-
-  @override
-  String get scrapeJobStateQueued => '排隊中';
-
-  @override
-  String get scrapeJobStateRunning => '執行中';
-
-  @override
-  String get scrapeJobStatePaused => '已暫停';
-
-  @override
-  String get scrapeJobStateWaiting => '等待驗證';
-
-  @override
-  String get scrapeJobStateSucceeded => '成功';
-
-  @override
-  String get scrapeJobStatePartial => '部分完成';
-
-  @override
-  String get scrapeJobStateFailed => '失敗';
-
-  @override
-  String get scrapeJobStateCancelled => '已取消';
-
-  @override
-  String get scrapeJobStateExcluded => '已排除';
-
-  @override
-  String scrapeJobCollectionSummary(int raw, int unique, int duplicates) {
-    return '取得 $raw 筆，去重後 $unique 筆，重複 $duplicates 筆';
-  }
-
-  @override
-  String scrapeJobDetailProgress(int current, int total) {
-    return '作品詳細 $current/$total';
-  }
-
-  @override
-  String scrapeJobTerminalProgress(
-    int processed,
-    int total,
-    int saved,
-    int excluded,
-    int failed,
-  ) {
-    return '已處理 $processed/$total，保存 $saved，排除 $excluded，失敗 $failed';
-  }
-
-  @override
-  String scrapeJobCandidateSummary(int count, int duplicates) {
-    return '候選作品 $count，集合重複 $duplicates';
-  }
-
-  @override
-  String scrapeJobSupplementalEvidence(int current, int total) {
-    return '補充證據 $current/$total';
-  }
-
-  @override
-  String scrapeJobOutcomeSummary(
-    int processed,
-    int total,
-    int keep,
-    int review,
-    int excluded,
-    int failed,
-  ) {
-    return '已處理 $processed/$total，保留 $keep，待檢視 $review，排除 $excluded，失敗 $failed';
-  }
-
-  @override
-  String scrapeJobRulesVersion(String version) {
-    return '規則版本：$version';
-  }
-
-  @override
   String get settingsDataHealthTitle => '資料健康度';
 
   @override
-  String get settingsDataHealthSubtitle => '查看資料完整性與刮削可觀測性。';
+  String get settingsDataHealthSubtitle => '查看資料完整性與欄位來源。';
 
   @override
-  String get settingsScrapeJobsTitle => '刮削工作';
+  String get libraryImportTitle => '資料夾刮削與媒體入庫';
 
   @override
-  String get settingsScrapeJobsSubtitle => '查看佇列、恢復、暫停與失敗重試。';
+  String get libraryImportSelectFolder => '選擇刮削資料夾';
+
+  @override
+  String get libraryImportSelectRoot => '選擇收藏資料夾';
+
+  @override
+  String get libraryImportScan => '掃描資料夾';
+
+  @override
+  String get libraryImportConfirm => '確認並開始刮削';
+
+  @override
+  String get libraryImportPhase1ReadOnly => '目前階段只讀取檔名與檔案資訊，不會修改來源影片。';
+
+  @override
+  String get libraryImportNoFolder => '請先選擇刮削資料夾。';
+
+  @override
+  String get libraryImportNoRoot => '請先選擇收藏資料夾。';
+
+  @override
+  String get libraryImportManualCode => '手動修正番號';
+
+  @override
+  String libraryImportSelected(int count) {
+    return '已選取 $count 個檔案';
+  }
+
+  @override
+  String libraryImportResult(int succeeded, int duplicate, int failed) {
+    return '匯入結果：成功 $succeeded、重複 $duplicate、失敗 $failed';
+  }
+
+  @override
+  String get libraryMediaTitle => '媒體檔案';
+
+  @override
+  String get libraryMediaPart => '分段';
+
+  @override
+  String get libraryMediaResolution => '解析度';
+
+  @override
+  String get libraryMediaFrameRate => '影格率';
+
+  @override
+  String get dataHealthLibraryWorks => 'Library 作品';
+
+  @override
+  String get dataHealthLibraryMediaIssues => 'Library 媒體問題';
+
+  @override
+  String get dataHealthImportRepairs => '匯入待修復';
+
+  @override
+  String get dataHealthLibraryLinks => '女優連結問題';
+
+  @override
+  String get playbackSettings => '播放設定';
+
+  @override
+  String get playbackSeekSeconds => '跳轉間隔';
+
+  @override
+  String get playbackHoldSpeed => '長按播放速度';
+
+  @override
+  String get seconds => '秒';
+
+  @override
+  String get playerBack => '返回';
+
+  @override
+  String get playerPlay => '播放';
+
+  @override
+  String get playerPause => '暫停';
+
+  @override
+  String get playerSpeed => '速度';
+
+  @override
+  String get playerSubtitles => '字幕';
+
+  @override
+  String get playerFullscreen => '全螢幕';
+
+  @override
+  String get playerExitFullscreen => '退出全螢幕';
+
+  @override
+  String get playerSubtitleOff => '關閉';
+
+  @override
+  String get playerHoldSpeed => '長按速度';
+
+  @override
+  String get playerPosition => '播放進度';
+
+  @override
+  String get playerPlaybackError => '無法播放這部影片';
 }

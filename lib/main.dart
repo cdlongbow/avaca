@@ -8,9 +8,12 @@ import 'core/config.dart';
 import 'core/database.dart';
 import 'core/keyboard_dismiss_navigator_observer.dart';
 import 'controllers/software_update_controller.dart';
+import 'library/library_filesystem.dart';
+import 'library/library_maintenance_service.dart';
+import 'library/library_repository.dart';
+import 'remote/remote_coordinator.dart';
 import 'services/update_cache_service.dart';
 import 'services/update_startup_marker.dart';
-import 'services/scrape_job_coordinator.dart';
 import 'views/add_view.dart';
 import 'views/data_health_view.dart';
 import 'views/detail_view.dart';
@@ -18,17 +21,36 @@ import 'views/home_view.dart';
 import 'views/settings_view.dart';
 import 'views/software_update_view.dart';
 import 'views/works_view.dart';
-import 'views/scrape_job_detail_view.dart';
-import 'views/scrape_jobs_view.dart';
+import 'views/library_import_view.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final db = AppDatabase();
   await db.init();
+  unawaited(
+    LibraryImportRecoveryService(
+      repository: LibraryRepository(db: db),
+      filesystem: LibraryFilesystem(),
+    ).recover().then<void>(
+      (_) {},
+      onError: (Object error, StackTrace stackTrace) {
+        debugPrint('Library import recovery failed: ${error.runtimeType}');
+      },
+    ),
+  );
   await markWindowsStartupSuccess();
 
-  runApp(AvacaApp(db: db, enableAutomaticUpdateCheck: true));
+  final remoteServiceCoordinator = RemoteServiceCoordinator.forApp(
+    baseDir: db.baseDir,
+  );
+  runApp(
+    AvacaApp(
+      db: db,
+      enableAutomaticUpdateCheck: true,
+      remoteServiceCoordinator: remoteServiceCoordinator,
+    ),
+  );
 }
 
 class AvacaApp extends StatefulWidget {
@@ -37,17 +59,19 @@ class AvacaApp extends StatefulWidget {
     required this.db,
     this.softwareUpdateController,
     this.enableAutomaticUpdateCheck = false,
+    this.remoteServiceCoordinator,
   });
 
   final AppDatabase db;
   final SoftwareUpdateController? softwareUpdateController;
   final bool enableAutomaticUpdateCheck;
+  final RemoteServiceCoordinator? remoteServiceCoordinator;
 
   @override
   State<AvacaApp> createState() => _AvacaAppState();
 }
 
-class _AvacaAppState extends State<AvacaApp> {
+class _AvacaAppState extends State<AvacaApp> with WidgetsBindingObserver {
   final KeyboardDismissNavigatorObserver _keyboardObserver =
       KeyboardDismissNavigatorObserver();
   ThemeMode _themeMode = ThemeMode.system;
@@ -57,7 +81,6 @@ class _AvacaAppState extends State<AvacaApp> {
   bool _ready = false;
   late final SoftwareUpdateController _softwareUpdateController;
   late final bool _ownsSoftwareUpdateController;
-  late final ScrapeJobCoordinator _scrapeJobCoordinator;
   final UpdateCacheService _updateCacheService = UpdateCacheService();
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
   bool _automaticUpdateStarted = false;
@@ -65,25 +88,50 @@ class _AvacaAppState extends State<AvacaApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _ownsSoftwareUpdateController = widget.softwareUpdateController == null;
     _softwareUpdateController =
         widget.softwareUpdateController ??
         SoftwareUpdateController.forApp(db: widget.db);
-    _scrapeJobCoordinator = ScrapeJobCoordinator(db: widget.db);
-    unawaited(
-      _scrapeJobCoordinator.initialize().catchError((Object error) {
-        debugPrint('Scrape job coordinator initialization failed: $error');
-      }),
-    );
+    final remote = widget.remoteServiceCoordinator;
+    if (remote != null) {
+      unawaited(
+        remote.startIfEnabled().catchError((Object error) {
+          debugPrint('Remote core startup failed: ${error.runtimeType}');
+        }),
+      );
+    }
     unawaited(_restoreThemeState());
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     if (_ownsSoftwareUpdateController) _softwareUpdateController.dispose();
-    _scrapeJobCoordinator.rulesRepository.close();
-    _scrapeJobCoordinator.dispose();
+    final remote = widget.remoteServiceCoordinator;
+    if (remote != null) {
+      unawaited(
+        remote.dispose().catchError((Object error) {
+          debugPrint('Remote core shutdown failed: ${error.runtimeType}');
+        }),
+      );
+    }
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState lifecycleState) {
+    if (lifecycleState != AppLifecycleState.detached) {
+      return;
+    }
+    final remote = widget.remoteServiceCoordinator;
+    if (remote != null) {
+      unawaited(
+        remote.stop().catchError((Object error) {
+          debugPrint('Remote core lifecycle stop failed: ${error.runtimeType}');
+        }),
+      );
+    }
   }
 
   // 啟動時讀取上次儲存的主題與語言設定。
@@ -278,11 +326,14 @@ class _AvacaAppState extends State<AvacaApp> {
       return _page(AddView(db: widget.db));
     }
 
+    if (name == '/library-import') {
+      return _page(LibraryImportView(db: widget.db));
+    }
+
     if (name == '/settings') {
       return _page(
         SettingsView(
           db: widget.db,
-          scrapeJobCoordinator: _scrapeJobCoordinator,
           softwareUpdateController: _softwareUpdateController,
           onThemeChanged: (mode, pureBlack, custom) {
             setState(() {
@@ -312,32 +363,7 @@ class _AvacaAppState extends State<AvacaApp> {
       final id = int.tryParse(name.split('/').last);
 
       if (id != null) {
-        return _page(
-          WorksView(
-            db: widget.db,
-            actressId: id,
-            scrapeJobCoordinator: _scrapeJobCoordinator,
-          ),
-        );
-      }
-    }
-
-    if (name == '/scrape-jobs') {
-      return _page(
-        ScrapeJobsView(db: widget.db, coordinator: _scrapeJobCoordinator),
-      );
-    }
-
-    if (name.startsWith('/scrape-job/')) {
-      final id = name.substring('/scrape-job/'.length);
-      if (id.isNotEmpty) {
-        return _page(
-          ScrapeJobDetailView(
-            db: widget.db,
-            coordinator: _scrapeJobCoordinator,
-            jobId: id,
-          ),
-        );
+        return _page(WorksView(db: widget.db, actressId: id));
       }
     }
 

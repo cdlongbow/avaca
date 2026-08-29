@@ -389,62 +389,6 @@ class AppLocalizationsJa extends AppLocalizations {
   String get noMatchingWorks => '一致する作品がありません';
 
   @override
-  String get scrapeWorks => '作品情報を取得';
-
-  @override
-  String get scrapeSettings => '取得設定';
-
-  @override
-  String get scrapeExistingData => '既存データの処理';
-
-  @override
-  String get scrapeUpdateAll => '既存データも更新';
-
-  @override
-  String get scrapeAutomaticDerivedFilter => '再編集・合集作品を自動除外';
-
-  @override
-  String get scrapeAutomaticDerivedFilterDescription =>
-      '出典の系譜と作品語義だけで判定し、不明な作品は保持します。';
-
-  @override
-  String get scrapeAdvancedRules => '詳細ルール';
-
-  @override
-  String get scrapeAdvancedRulesDescription =>
-      '完全な作品番号またはPrefixを入力（例：KCKC、KCKC-212）。';
-
-  @override
-  String get scrapeExactAllows => '番号／Prefixで許可';
-
-  @override
-  String get scrapeExactDenies => '番号／Prefixで除外';
-
-  @override
-  String get scrapeRuleHint => '作品番号またはPrefixを入力';
-
-  @override
-  String get scrapeNoRules => 'ルールは未設定です';
-
-  @override
-  String get syncActressDetails => 'プロフィール詳細を同期';
-
-  @override
-  String get replaceActressImage => '女優画像を差し替える';
-
-  @override
-  String get scrapeAvatarUnavailable => '利用可能な女優画像が見つかりませんでした。';
-
-  @override
-  String get scrapeAvatarFailed => '女優画像の差し替えに失敗したため、元の画像を保持しました。';
-
-  @override
-  String get fillMissingOnly => '再取得時は未入力の情報のみ補完';
-
-  @override
-  String get startScrape => '取得を開始';
-
-  @override
   String get noWorks => '作品はまだありません';
 
   @override
@@ -460,153 +404,6 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get series => 'シリーズ';
-
-  @override
-  String scrapeComplete(int saved, int excluded, int failed) {
-    return '取得完了: 保存 $saved件、除外 $excluded件、失敗 $failed件';
-  }
-
-  @override
-  String scrapeCancelled(int saved, int excluded, int failed) {
-    return '取得をキャンセルしました: 保存 $saved件、除外 $excluded件、失敗 $failed件';
-  }
-
-  @override
-  String get scrapeFailed => '取得に失敗しました。もう一度お試しください。';
-
-  @override
-  String get scrapePhaseCollecting => '作品一覧を取得中';
-
-  @override
-  String get scrapePhaseSyncingActress => '女優情報を同期中';
-
-  @override
-  String get scrapePhaseFetchingDetails => '作品詳細を取得中';
-
-  @override
-  String get scrapePhaseResolvingWorks => '重複除去した作品を整理中';
-
-  @override
-  String get scrapePhaseSavingWorks => '作品を保存して画像をダウンロード中';
-
-  @override
-  String get scrapePhaseCompleted => '取得完了';
-
-  @override
-  String get scrapeSyncingTitle => 'スクレイピング中';
-
-  @override
-  String get scrapeSyncCompleted => 'スクレイピング完了';
-
-  @override
-  String get scrapeSyncPartial => 'スクレイピング完了（一部失敗）';
-
-  @override
-  String get scrapeSyncFailed => 'スクレイピングに失敗しました';
-
-  @override
-  String get scrapeSyncStopped => 'スクレイピングを停止しました';
-
-  @override
-  String get scrapeDetailsSection => '詳細情報';
-
-  @override
-  String get scrapeWorksSection => '作品';
-
-  @override
-  String get scrapeDownloadSection => 'ダウンロード';
-
-  @override
-  String scrapeCurrentWork(String code) {
-    return '処理中：$code';
-  }
-
-  @override
-  String get scrapeImagesLabel => '作品画像';
-
-  @override
-  String get scrapeSavedCount => '保存';
-
-  @override
-  String get scrapeExcludedCount => '除外';
-
-  @override
-  String get scrapeFailedCount => '失敗';
-
-  @override
-  String get scrapeStatusWaiting => '待機中';
-
-  @override
-  String get scrapeStatusSyncing => 'スクレイピング中';
-
-  @override
-  String get scrapeStatusCompleted => '完了';
-
-  @override
-  String get scrapeStatusPartial => '一部完了';
-
-  @override
-  String get scrapeStatusFailed => '失敗';
-
-  @override
-  String get scrapeStatusCancelled => '停止済み';
-
-  @override
-  String get scrapeStatusNoNewWorks => '完了（新しい作品なし）';
-
-  @override
-  String get scrapeStatusUnavailable => '利用不可';
-
-  @override
-  String get scrapeStatusBlocked => 'ページがブロックされました';
-
-  @override
-  String get scrapeStatusRateLimited => 'レート制限';
-
-  @override
-  String get scrapeStatusTimedOut => 'タイムアウト';
-
-  @override
-  String get stopScrape => '停止';
-
-  @override
-  String scrapeProgressSummary(int saved, int excluded, int failed) {
-    return '保存 $saved件、除外 $excluded件、失敗 $failed件';
-  }
-
-  @override
-  String scrapeFailedWorksTitle(int count) {
-    return '失敗した作品（$count件）';
-  }
-
-  @override
-  String scrapeImageFailuresTitle(int count) {
-    return '画像ダウンロード失敗（$count件）';
-  }
-
-  @override
-  String get scrapeFailureDetailsUnavailable => '利用可能な作品詳細を取得できませんでした';
-
-  @override
-  String get scrapeFailureDetailCodeMismatch => '作品詳細の番号が作品と一致しません';
-
-  @override
-  String get scrapeFailureInvalidCode => '作品番号を正規化できませんでした';
-
-  @override
-  String get scrapeFailurePerformerCountUnavailable => '出演者数を取得できませんでした';
-
-  @override
-  String get scrapeFailureDatabaseSave => '作品データの保存に失敗しました';
-
-  @override
-  String get scrapeImageFailureCard => 'ジャケット画像';
-
-  @override
-  String get scrapeImageFailureDetail => '詳細画像';
-
-  @override
-  String get scrapeImageFailureBoth => 'ジャケットと詳細画像';
 
   @override
   String get javBusVerificationTitle => 'JavBus の確認';
@@ -710,76 +507,6 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get feedbackSuggestions => 'フィードバック';
-
-  @override
-  String get scrapeSources => '取得元';
-
-  @override
-  String get scrapeSourceDetailsTitle => '女優詳細情報の取得元';
-
-  @override
-  String get scrapeSourceWorksTitle => '作品の取得元';
-
-  @override
-  String get scrapeSourcePriorityHint => '取得元を選択し、ドラッグして優先順位を変更';
-
-  @override
-  String get scrapeSourceAliasTitle => '女優別名の取得元';
-
-  @override
-  String get scrapeSourceMinnanoAv => 'みんなのAV';
-
-  @override
-  String get scrapeSourceJavBus => 'JavBus';
-
-  @override
-  String get scrapeSourceAvBase => 'AvBase';
-
-  @override
-  String get scrapeSourceAvWiki => 'AV-Wiki';
-
-  @override
-  String get scrapeSourceAll => 'すべての取得元（品番で統合・重複排除）';
-
-  @override
-  String get scrapeSourceSaveFailed => '取得元の設定を保存できませんでした。';
-
-  @override
-  String get scrapeSourceConnectionTitle => '取得元の接続状態';
-
-  @override
-  String get scrapeSourceConnectionSubtitle => '追加済みの取得元を確認し、ここで接続テストと確認を行います。';
-
-  @override
-  String get scrapeSourceRetest => '接続を再テスト';
-
-  @override
-  String get scrapeSourceTesting => 'テスト中…';
-
-  @override
-  String get scrapeSourceNotTested => '未テスト';
-
-  @override
-  String get scrapeSourceConnected => '接続成功';
-
-  @override
-  String get scrapeSourceConnectionFailed => '接続失敗';
-
-  @override
-  String get scrapeSourceVerificationRequired => '確認が必要';
-
-  @override
-  String get scrapeAliases => '別名を取得';
-
-  @override
-  String get scrapeAliasesDescription =>
-      '別名の取得元で見つかった名前を、現在の名前を除いて女優の別名に保存します。';
-
-  @override
-  String get scrapePartial => '一部の取得元または作品を処理できませんでした。';
-
-  @override
-  String get scrapeZeroResults => '新しい作品は見つかりませんでした。';
 
   @override
   String get softwareUpdate => 'ソフトウェア更新';
@@ -1043,8 +770,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get dataHealthTitle => 'データ健全性';
 
   @override
-  String get dataHealthSubtitle =>
-      '件数、不足している作品項目や画像、項目ソース、保留中の削除、取得元エラーを確認します。';
+  String get dataHealthSubtitle => '件数、不足している作品項目や画像、項目ソース、保留中の削除を確認します。';
 
   @override
   String dataHealthSectionUnavailable(String section) {
@@ -1079,182 +805,117 @@ class AppLocalizationsJa extends AppLocalizations {
   String get dataHealthPendingDeletions => '保留中のファイル削除';
 
   @override
-  String get dataHealthJobStates => 'スクレイプジョブ状態';
-
-  @override
-  String get dataHealthSourceErrors => '過去 7 日間のソースエラー';
-
-  @override
-  String get scrapeJobsTitle => 'スクレイプジョブ';
-
-  @override
-  String get scrapeJobsEmpty => 'スクレイプジョブはありません。';
-
-  @override
-  String scrapeJobsSelectedCount(int count) {
-    return '$count 件を選択中';
-  }
-
-  @override
-  String get scrapeJobsDelete => '削除';
-
-  @override
-  String get scrapeJobsDeleteTitle => '選択したスクレイプジョブを削除しますか？';
-
-  @override
-  String scrapeJobsDeleteMessage(int count) {
-    return '$count 件の完了したスクレイプジョブの記録を削除しますか？作品、女優、設定は変更されません。';
-  }
-
-  @override
-  String get scrapeJobsDeleteActive =>
-      '実行中または待機中のジョブは削除できません。完了したジョブだけを選択してください。';
-
-  @override
-  String scrapeJobsDeleted(int count) {
-    return '$count 件のスクレイプジョブを削除しました。';
-  }
-
-  @override
-  String get scrapeJobsDeleteFailed => 'スクレイプジョブの記録を削除できませんでした。';
-
-  @override
-  String get scrapeJobDetailTitle => 'スクレイプジョブ詳細';
-
-  @override
-  String get scrapeJobPause => '一時停止';
-
-  @override
-  String get scrapeJobResume => '再開';
-
-  @override
-  String get scrapeJobCancel => 'キャンセル';
-
-  @override
-  String get scrapeJobRetryFailed => '失敗した作品だけ再試行';
-
-  @override
-  String get scrapeJobEvents => 'イベント履歴';
-
-  @override
-  String get scrapeJobDiagnostics => '刮削診断';
-
-  @override
-  String get scrapeJobItems => '作品チェックポイント';
-
-  @override
-  String get scrapeJobNoEvents => 'イベントはまだありません。';
-
-  @override
-  String get scrapeJobNoItems => '作品チェックポイントはまだありません。';
-
-  @override
-  String get scrapeJobFilterAll => 'すべて';
-
-  @override
-  String get scrapeJobFilterReview => '要確認';
-
-  @override
-  String get scrapeJobFilterKeep => '保持';
-
-  @override
-  String get scrapeJobFilterExclude => '除外';
-
-  @override
-  String get scrapeJobFilterFailed => '失敗';
-
-  @override
-  String get scrapeJobNoFilteredItems => 'このフィルターに一致するチェックポイントはありません。';
-
-  @override
-  String get scrapeJobStateReview => '要確認';
-
-  @override
-  String get scrapeJobStateQueued => '待機中';
-
-  @override
-  String get scrapeJobStateRunning => '実行中';
-
-  @override
-  String get scrapeJobStatePaused => '一時停止';
-
-  @override
-  String get scrapeJobStateWaiting => '認証待ち';
-
-  @override
-  String get scrapeJobStateSucceeded => '成功';
-
-  @override
-  String get scrapeJobStatePartial => '一部完了';
-
-  @override
-  String get scrapeJobStateFailed => '失敗';
-
-  @override
-  String get scrapeJobStateCancelled => 'キャンセル済み';
-
-  @override
-  String get scrapeJobStateExcluded => '除外';
-
-  @override
-  String scrapeJobCollectionSummary(int raw, int unique, int duplicates) {
-    return '取得 $raw、重複除外後 $unique、重複 $duplicates';
-  }
-
-  @override
-  String scrapeJobDetailProgress(int current, int total) {
-    return '詳細 $current/$total';
-  }
-
-  @override
-  String scrapeJobTerminalProgress(
-    int processed,
-    int total,
-    int saved,
-    int excluded,
-    int failed,
-  ) {
-    return '処理 $processed/$total、保存 $saved、除外 $excluded、失敗 $failed';
-  }
-
-  @override
-  String scrapeJobCandidateSummary(int count, int duplicates) {
-    return '候補作品 $count、コレクション重複 $duplicates';
-  }
-
-  @override
-  String scrapeJobSupplementalEvidence(int current, int total) {
-    return '補足証拠 $current/$total';
-  }
-
-  @override
-  String scrapeJobOutcomeSummary(
-    int processed,
-    int total,
-    int keep,
-    int review,
-    int excluded,
-    int failed,
-  ) {
-    return '処理 $processed/$total、保持 $keep、要確認 $review、除外 $excluded、失敗 $failed';
-  }
-
-  @override
-  String scrapeJobRulesVersion(String version) {
-    return 'ルールバージョン：$version';
-  }
-
-  @override
   String get settingsDataHealthTitle => 'データ健全性';
 
   @override
-  String get settingsDataHealthSubtitle => 'データ完全性とスクレイプの可観測性を確認します。';
+  String get settingsDataHealthSubtitle => 'データ完全性と項目ソースを確認します。';
 
   @override
-  String get settingsScrapeJobsTitle => 'スクレイプジョブ';
+  String get libraryImportTitle => 'フォルダーのスクレイプとメディア取り込み';
 
   @override
-  String get settingsScrapeJobsSubtitle => 'キュー、復旧、一時停止、失敗再試行を確認します。';
+  String get libraryImportSelectFolder => 'スクレイプフォルダーを選択';
+
+  @override
+  String get libraryImportSelectRoot => 'ライブラリルートを選択';
+
+  @override
+  String get libraryImportScan => 'フォルダーをスキャン';
+
+  @override
+  String get libraryImportConfirm => '確認してスクレイプ開始';
+
+  @override
+  String get libraryImportPhase1ReadOnly =>
+      'この段階ではファイル名とメタデータのみを読み取り、元動画は変更しません。';
+
+  @override
+  String get libraryImportNoFolder => '先にスクレイプフォルダーを選択してください。';
+
+  @override
+  String get libraryImportNoRoot => '先にライブラリルートを選択してください。';
+
+  @override
+  String get libraryImportManualCode => '番号を手動修正';
+
+  @override
+  String libraryImportSelected(int count) {
+    return '$count 個のファイルを選択';
+  }
+
+  @override
+  String libraryImportResult(int succeeded, int duplicate, int failed) {
+    return '取り込み結果：成功 $succeeded、重複 $duplicate、失敗 $failed';
+  }
+
+  @override
+  String get libraryMediaTitle => 'メディアファイル';
+
+  @override
+  String get libraryMediaPart => 'パート';
+
+  @override
+  String get libraryMediaResolution => '解像度';
+
+  @override
+  String get libraryMediaFrameRate => 'フレームレート';
+
+  @override
+  String get dataHealthLibraryWorks => 'Library 作品';
+
+  @override
+  String get dataHealthLibraryMediaIssues => 'Library メディア問題';
+
+  @override
+  String get dataHealthImportRepairs => '要修復の取り込み';
+
+  @override
+  String get dataHealthLibraryLinks => '女優リンクの問題';
+
+  @override
+  String get playbackSettings => '再生';
+
+  @override
+  String get playbackSeekSeconds => 'シーク間隔';
+
+  @override
+  String get playbackHoldSpeed => '長押し再生速度';
+
+  @override
+  String get seconds => '秒';
+
+  @override
+  String get playerBack => '戻る';
+
+  @override
+  String get playerPlay => '再生';
+
+  @override
+  String get playerPause => '一時停止';
+
+  @override
+  String get playerSpeed => '速度';
+
+  @override
+  String get playerSubtitles => '字幕';
+
+  @override
+  String get playerFullscreen => '全画面';
+
+  @override
+  String get playerExitFullscreen => '全画面を終了';
+
+  @override
+  String get playerSubtitleOff => 'オフ';
+
+  @override
+  String get playerHoldSpeed => '長押し速度';
+
+  @override
+  String get playerPosition => '再生位置';
+
+  @override
+  String get playerPlaybackError => 'この動画を再生できません';
 }
 
 /// The translations for Japanese, as used in Japan (`ja_JP`).
@@ -1642,62 +1303,6 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
   String get noMatchingWorks => '一致する作品がありません';
 
   @override
-  String get scrapeWorks => '作品情報を取得';
-
-  @override
-  String get scrapeSettings => '取得設定';
-
-  @override
-  String get scrapeExistingData => '既存データの処理';
-
-  @override
-  String get scrapeUpdateAll => '既存データも更新';
-
-  @override
-  String get scrapeAutomaticDerivedFilter => '再編集・合集作品を自動除外';
-
-  @override
-  String get scrapeAutomaticDerivedFilterDescription =>
-      '出典の系譜と作品語義だけで判定し、不明な作品は保持します。';
-
-  @override
-  String get scrapeAdvancedRules => '詳細ルール';
-
-  @override
-  String get scrapeAdvancedRulesDescription =>
-      '完全な作品番号またはPrefixを入力（例：KCKC、KCKC-212）。';
-
-  @override
-  String get scrapeExactAllows => '番号／Prefixで許可';
-
-  @override
-  String get scrapeExactDenies => '番号／Prefixで除外';
-
-  @override
-  String get scrapeRuleHint => '作品番号またはPrefixを入力';
-
-  @override
-  String get scrapeNoRules => 'ルールは未設定です';
-
-  @override
-  String get syncActressDetails => 'プロフィール詳細を同期';
-
-  @override
-  String get replaceActressImage => '女優画像を差し替える';
-
-  @override
-  String get scrapeAvatarUnavailable => '利用可能な女優画像が見つかりませんでした。';
-
-  @override
-  String get scrapeAvatarFailed => '女優画像の差し替えに失敗したため、元の画像を保持しました。';
-
-  @override
-  String get fillMissingOnly => '再取得時は未入力の情報のみ補完';
-
-  @override
-  String get startScrape => '取得を開始';
-
-  @override
   String get noWorks => '作品はまだありません';
 
   @override
@@ -1713,153 +1318,6 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
 
   @override
   String get series => 'シリーズ';
-
-  @override
-  String scrapeComplete(int saved, int excluded, int failed) {
-    return '取得完了: 保存 $saved件、除外 $excluded件、失敗 $failed件';
-  }
-
-  @override
-  String scrapeCancelled(int saved, int excluded, int failed) {
-    return '取得をキャンセルしました: 保存 $saved件、除外 $excluded件、失敗 $failed件';
-  }
-
-  @override
-  String get scrapeFailed => '取得に失敗しました。もう一度お試しください。';
-
-  @override
-  String get scrapePhaseCollecting => '作品一覧を取得中';
-
-  @override
-  String get scrapePhaseSyncingActress => '女優情報を同期中';
-
-  @override
-  String get scrapePhaseFetchingDetails => '作品詳細を取得中';
-
-  @override
-  String get scrapePhaseResolvingWorks => '重複除去した作品を整理中';
-
-  @override
-  String get scrapePhaseSavingWorks => '作品を保存して画像をダウンロード中';
-
-  @override
-  String get scrapePhaseCompleted => '取得完了';
-
-  @override
-  String get scrapeSyncingTitle => 'スクレイピング中';
-
-  @override
-  String get scrapeSyncCompleted => 'スクレイピング完了';
-
-  @override
-  String get scrapeSyncPartial => 'スクレイピング完了（一部失敗）';
-
-  @override
-  String get scrapeSyncFailed => 'スクレイピングに失敗しました';
-
-  @override
-  String get scrapeSyncStopped => 'スクレイピングを停止しました';
-
-  @override
-  String get scrapeDetailsSection => '詳細情報';
-
-  @override
-  String get scrapeWorksSection => '作品';
-
-  @override
-  String get scrapeDownloadSection => 'ダウンロード';
-
-  @override
-  String scrapeCurrentWork(String code) {
-    return '処理中：$code';
-  }
-
-  @override
-  String get scrapeImagesLabel => '作品画像';
-
-  @override
-  String get scrapeSavedCount => '保存';
-
-  @override
-  String get scrapeExcludedCount => '除外';
-
-  @override
-  String get scrapeFailedCount => '失敗';
-
-  @override
-  String get scrapeStatusWaiting => '待機中';
-
-  @override
-  String get scrapeStatusSyncing => 'スクレイピング中';
-
-  @override
-  String get scrapeStatusCompleted => '完了';
-
-  @override
-  String get scrapeStatusPartial => '一部完了';
-
-  @override
-  String get scrapeStatusFailed => '失敗';
-
-  @override
-  String get scrapeStatusCancelled => '停止済み';
-
-  @override
-  String get scrapeStatusNoNewWorks => '完了（新しい作品なし）';
-
-  @override
-  String get scrapeStatusUnavailable => '利用不可';
-
-  @override
-  String get scrapeStatusBlocked => 'ページがブロックされました';
-
-  @override
-  String get scrapeStatusRateLimited => 'レート制限';
-
-  @override
-  String get scrapeStatusTimedOut => 'タイムアウト';
-
-  @override
-  String get stopScrape => '停止';
-
-  @override
-  String scrapeProgressSummary(int saved, int excluded, int failed) {
-    return '保存 $saved件、除外 $excluded件、失敗 $failed件';
-  }
-
-  @override
-  String scrapeFailedWorksTitle(int count) {
-    return '失敗した作品（$count件）';
-  }
-
-  @override
-  String scrapeImageFailuresTitle(int count) {
-    return '画像ダウンロード失敗（$count件）';
-  }
-
-  @override
-  String get scrapeFailureDetailsUnavailable => '利用可能な作品詳細を取得できませんでした';
-
-  @override
-  String get scrapeFailureDetailCodeMismatch => '作品詳細の番号が作品と一致しません';
-
-  @override
-  String get scrapeFailureInvalidCode => '作品番号を正規化できませんでした';
-
-  @override
-  String get scrapeFailurePerformerCountUnavailable => '出演者数を取得できませんでした';
-
-  @override
-  String get scrapeFailureDatabaseSave => '作品データの保存に失敗しました';
-
-  @override
-  String get scrapeImageFailureCard => 'ジャケット画像';
-
-  @override
-  String get scrapeImageFailureDetail => '詳細画像';
-
-  @override
-  String get scrapeImageFailureBoth => 'ジャケットと詳細画像';
 
   @override
   String get javBusVerificationTitle => 'JavBus の確認';
@@ -1963,76 +1421,6 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
 
   @override
   String get feedbackSuggestions => 'フィードバック';
-
-  @override
-  String get scrapeSources => '取得元';
-
-  @override
-  String get scrapeSourceDetailsTitle => '女優詳細情報の取得元';
-
-  @override
-  String get scrapeSourceWorksTitle => '作品の取得元';
-
-  @override
-  String get scrapeSourcePriorityHint => '取得元を選択し、ドラッグして優先順位を変更';
-
-  @override
-  String get scrapeSourceAliasTitle => '女優別名の取得元';
-
-  @override
-  String get scrapeSourceMinnanoAv => 'みんなのAV';
-
-  @override
-  String get scrapeSourceJavBus => 'JavBus';
-
-  @override
-  String get scrapeSourceAvBase => 'AvBase';
-
-  @override
-  String get scrapeSourceAvWiki => 'AV-Wiki';
-
-  @override
-  String get scrapeSourceAll => 'すべての取得元（品番で統合・重複排除）';
-
-  @override
-  String get scrapeSourceSaveFailed => '取得元の設定を保存できませんでした。';
-
-  @override
-  String get scrapeSourceConnectionTitle => '取得元の接続状態';
-
-  @override
-  String get scrapeSourceConnectionSubtitle => '追加済みの取得元を確認し、ここで接続テストと確認を行います。';
-
-  @override
-  String get scrapeSourceRetest => '接続を再テスト';
-
-  @override
-  String get scrapeSourceTesting => 'テスト中…';
-
-  @override
-  String get scrapeSourceNotTested => '未テスト';
-
-  @override
-  String get scrapeSourceConnected => '接続成功';
-
-  @override
-  String get scrapeSourceConnectionFailed => '接続失敗';
-
-  @override
-  String get scrapeSourceVerificationRequired => '確認が必要';
-
-  @override
-  String get scrapeAliases => '別名を取得';
-
-  @override
-  String get scrapeAliasesDescription =>
-      '別名の取得元で見つかった名前を、現在の名前を除いて女優の別名に保存します。';
-
-  @override
-  String get scrapePartial => '一部の取得元または作品を処理できませんでした。';
-
-  @override
-  String get scrapeZeroResults => '新しい作品は見つかりませんでした。';
 
   @override
   String get softwareUpdate => 'ソフトウェア更新';
@@ -2296,8 +1684,7 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
   String get dataHealthTitle => 'データ健全性';
 
   @override
-  String get dataHealthSubtitle =>
-      '件数、不足している作品項目や画像、項目ソース、保留中の削除、取得元エラーを確認します。';
+  String get dataHealthSubtitle => '件数、不足している作品項目や画像、項目ソース、保留中の削除を確認します。';
 
   @override
   String dataHealthSectionUnavailable(String section) {
@@ -2332,180 +1719,115 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
   String get dataHealthPendingDeletions => '保留中のファイル削除';
 
   @override
-  String get dataHealthJobStates => 'スクレイプジョブ状態';
-
-  @override
-  String get dataHealthSourceErrors => '過去 7 日間のソースエラー';
-
-  @override
-  String get scrapeJobsTitle => 'スクレイプジョブ';
-
-  @override
-  String get scrapeJobsEmpty => 'スクレイプジョブはありません。';
-
-  @override
-  String scrapeJobsSelectedCount(int count) {
-    return '$count 件を選択中';
-  }
-
-  @override
-  String get scrapeJobsDelete => '削除';
-
-  @override
-  String get scrapeJobsDeleteTitle => '選択したスクレイプジョブを削除しますか？';
-
-  @override
-  String scrapeJobsDeleteMessage(int count) {
-    return '$count 件の完了したスクレイプジョブの記録を削除しますか？作品、女優、設定は変更されません。';
-  }
-
-  @override
-  String get scrapeJobsDeleteActive =>
-      '実行中または待機中のジョブは削除できません。完了したジョブだけを選択してください。';
-
-  @override
-  String scrapeJobsDeleted(int count) {
-    return '$count 件のスクレイプジョブを削除しました。';
-  }
-
-  @override
-  String get scrapeJobsDeleteFailed => 'スクレイプジョブの記録を削除できませんでした。';
-
-  @override
-  String get scrapeJobDetailTitle => 'スクレイプジョブ詳細';
-
-  @override
-  String get scrapeJobPause => '一時停止';
-
-  @override
-  String get scrapeJobResume => '再開';
-
-  @override
-  String get scrapeJobCancel => 'キャンセル';
-
-  @override
-  String get scrapeJobRetryFailed => '失敗した作品だけ再試行';
-
-  @override
-  String get scrapeJobEvents => 'イベント履歴';
-
-  @override
-  String get scrapeJobDiagnostics => '刮削診断';
-
-  @override
-  String get scrapeJobItems => '作品チェックポイント';
-
-  @override
-  String get scrapeJobNoEvents => 'イベントはまだありません。';
-
-  @override
-  String get scrapeJobNoItems => '作品チェックポイントはまだありません。';
-
-  @override
-  String get scrapeJobFilterAll => 'すべて';
-
-  @override
-  String get scrapeJobFilterReview => '要確認';
-
-  @override
-  String get scrapeJobFilterKeep => '保持';
-
-  @override
-  String get scrapeJobFilterExclude => '除外';
-
-  @override
-  String get scrapeJobFilterFailed => '失敗';
-
-  @override
-  String get scrapeJobNoFilteredItems => 'このフィルターに一致するチェックポイントはありません。';
-
-  @override
-  String get scrapeJobStateReview => '要確認';
-
-  @override
-  String get scrapeJobStateQueued => '待機中';
-
-  @override
-  String get scrapeJobStateRunning => '実行中';
-
-  @override
-  String get scrapeJobStatePaused => '一時停止';
-
-  @override
-  String get scrapeJobStateWaiting => '認証待ち';
-
-  @override
-  String get scrapeJobStateSucceeded => '成功';
-
-  @override
-  String get scrapeJobStatePartial => '一部完了';
-
-  @override
-  String get scrapeJobStateFailed => '失敗';
-
-  @override
-  String get scrapeJobStateCancelled => 'キャンセル済み';
-
-  @override
-  String get scrapeJobStateExcluded => '除外';
-
-  @override
-  String scrapeJobCollectionSummary(int raw, int unique, int duplicates) {
-    return '取得 $raw、重複除外後 $unique、重複 $duplicates';
-  }
-
-  @override
-  String scrapeJobDetailProgress(int current, int total) {
-    return '詳細 $current/$total';
-  }
-
-  @override
-  String scrapeJobTerminalProgress(
-    int processed,
-    int total,
-    int saved,
-    int excluded,
-    int failed,
-  ) {
-    return '処理 $processed/$total、保存 $saved、除外 $excluded、失敗 $failed';
-  }
-
-  @override
-  String scrapeJobCandidateSummary(int count, int duplicates) {
-    return '候補作品 $count、コレクション重複 $duplicates';
-  }
-
-  @override
-  String scrapeJobSupplementalEvidence(int current, int total) {
-    return '補足証拠 $current/$total';
-  }
-
-  @override
-  String scrapeJobOutcomeSummary(
-    int processed,
-    int total,
-    int keep,
-    int review,
-    int excluded,
-    int failed,
-  ) {
-    return '処理 $processed/$total、保持 $keep、要確認 $review、除外 $excluded、失敗 $failed';
-  }
-
-  @override
-  String scrapeJobRulesVersion(String version) {
-    return 'ルールバージョン：$version';
-  }
-
-  @override
   String get settingsDataHealthTitle => 'データ健全性';
 
   @override
-  String get settingsDataHealthSubtitle => 'データ完全性とスクレイプの可観測性を確認します。';
+  String get settingsDataHealthSubtitle => 'データ完全性と項目ソースを確認します。';
 
   @override
-  String get settingsScrapeJobsTitle => 'スクレイプジョブ';
+  String get libraryImportTitle => 'フォルダーのスクレイプとメディア取り込み';
 
   @override
-  String get settingsScrapeJobsSubtitle => 'キュー、復旧、一時停止、失敗再試行を確認します。';
+  String get libraryImportSelectFolder => 'スクレイプフォルダーを選択';
+
+  @override
+  String get libraryImportSelectRoot => 'ライブラリルートを選択';
+
+  @override
+  String get libraryImportScan => 'フォルダーをスキャン';
+
+  @override
+  String get libraryImportConfirm => '確認してスクレイプ開始';
+
+  @override
+  String get libraryImportPhase1ReadOnly =>
+      'この段階ではファイル名とメタデータのみを読み取り、元動画は変更しません。';
+
+  @override
+  String get libraryImportNoFolder => '先にスクレイプフォルダーを選択してください。';
+
+  @override
+  String get libraryImportNoRoot => '先にライブラリルートを選択してください。';
+
+  @override
+  String get libraryImportManualCode => '番号を手動修正';
+
+  @override
+  String libraryImportSelected(int count) {
+    return '$count 個のファイルを選択';
+  }
+
+  @override
+  String libraryImportResult(int succeeded, int duplicate, int failed) {
+    return '取り込み結果：成功 $succeeded、重複 $duplicate、失敗 $failed';
+  }
+
+  @override
+  String get libraryMediaTitle => 'メディアファイル';
+
+  @override
+  String get libraryMediaPart => 'パート';
+
+  @override
+  String get libraryMediaResolution => '解像度';
+
+  @override
+  String get libraryMediaFrameRate => 'フレームレート';
+
+  @override
+  String get dataHealthLibraryWorks => 'Library 作品';
+
+  @override
+  String get dataHealthLibraryMediaIssues => 'Library メディア問題';
+
+  @override
+  String get dataHealthImportRepairs => '要修復の取り込み';
+
+  @override
+  String get dataHealthLibraryLinks => '女優リンクの問題';
+
+  @override
+  String get playbackSettings => '再生';
+
+  @override
+  String get playbackSeekSeconds => 'シーク間隔';
+
+  @override
+  String get playbackHoldSpeed => '長押し再生速度';
+
+  @override
+  String get seconds => '秒';
+
+  @override
+  String get playerBack => '戻る';
+
+  @override
+  String get playerPlay => '再生';
+
+  @override
+  String get playerPause => '一時停止';
+
+  @override
+  String get playerSpeed => '速度';
+
+  @override
+  String get playerSubtitles => '字幕';
+
+  @override
+  String get playerFullscreen => '全画面';
+
+  @override
+  String get playerExitFullscreen => '全画面を終了';
+
+  @override
+  String get playerSubtitleOff => 'オフ';
+
+  @override
+  String get playerHoldSpeed => '長押し速度';
+
+  @override
+  String get playerPosition => '再生位置';
+
+  @override
+  String get playerPlaybackError => 'この動画を再生できません';
 }

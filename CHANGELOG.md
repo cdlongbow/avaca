@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.10.0 - 2026-08-30
+
+- Added portable library import and maintenance flows with durable import
+  journals, media metadata, portable identities, and resumable recovery.
+- Added the cross-platform player surface and native Android/Windows playback
+  integration, including seek and temporary playback-speed settings.
+- Added the isolated remote connectivity core with authenticated sessions,
+  certificate pinning, QUIC channel binding, and an explicit Windows MsQuic
+  opt-in boundary.
+- Refined source identity, provenance, image routing, data-health, and works
+  presentation around the new library and playback flows.
+
 ## 0.9.18 - 2026-08-27
 
 - Extended advanced scrape rules to support complete work codes and safe
