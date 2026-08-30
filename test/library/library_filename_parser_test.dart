@@ -18,6 +18,39 @@ void main() {
     expect(result.noiseTokens, contains('FHD'));
   });
 
+  test('normalizes compact and hyphenated zero-padded codes identically', () {
+    for (final fileName in <String>[
+      'ssis00123_4k60_UC.mp4',
+      'SSIS00123_UC.mkv',
+      'SSIS00123_4K_U.mp4',
+      'SSIS00123_1080P_C.mp4',
+      'SSIS00123_4K60_RU.mp4',
+      'SSIS00123 4K60 UC.mp4',
+      'SSIS00123.UC.mp4',
+      'SSIS-00123_4K60_UC.mp4',
+      '[FHD] SSIS00123-RUC.mp4',
+    ]) {
+      final result = parser.parse(fileName);
+      expect(result.normalizedCode, 'SSIS-123', reason: fileName);
+    }
+    expect(parser.parse('ssis00123_4k60_UC.mp4').variantToken, 'UC');
+    expect(parser.parse('SSIS00123_4K_U.mp4').variantToken, 'U');
+    expect(parser.parse('SSIS00123_1080P_C.mp4').variantToken, 'C');
+    expect(parser.parse('SSIS00123_4K60_RU.mp4').variantToken, 'RU');
+    expect(parser.parse('SSIS00123 4K60 UC.mp4').variantToken, 'UC');
+    expect(parser.parse('SSIS00123.UC.mp4').variantToken, 'UC');
+  });
+
+  test(
+    'accepts underscore and dot separators without accepting substrings',
+    () {
+      expect(parser.parse('prefix_SSIS00123_suffix.mp4').isImportable, isTrue);
+      expect(parser.parse('prefix.SSIS00123.suffix.mp4').isImportable, isTrue);
+      expect(parser.parse('somethingUhere.mp4').isImportable, isFalse);
+      expect(parser.parse('SSIS00123_UCextra.mp4').variantToken, isNull);
+    },
+  );
+
   test('uses exact longest-match variant tokens', () {
     final cases = <String, LibraryVariant>{
       'ABC-123-U.mp4': LibraryVariant.u,
@@ -65,4 +98,16 @@ void main() {
     expect(corrected.normalizedCode, 'SSIS-123');
     expect(rejected.isImportable, isFalse);
   });
+
+  test(
+    'manual correction accepts compact input and stores its canonical code',
+    () {
+      final original = parser.parse('download.mp4');
+      final corrected = parser.applyManualCode(original, 'ssis00123');
+
+      expect(corrected.isImportable, isTrue);
+      expect(corrected.code, 'SSIS-123');
+      expect(corrected.normalizedCode, 'SSIS-123');
+    },
+  );
 }

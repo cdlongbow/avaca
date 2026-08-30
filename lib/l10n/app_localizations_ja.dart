@@ -814,6 +814,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get libraryImportTitle => 'フォルダーのスクレイプとメディア取り込み';
 
   @override
+  String get libraryImportOpen => '動画を取り込む';
+
+  @override
   String get libraryImportSelectFolder => 'スクレイプフォルダーを選択';
 
   @override
@@ -839,6 +842,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get libraryImportManualCode => '番号を手動修正';
 
   @override
+  String get libraryImportStatusReady => '処理可能';
+
+  @override
+  String get libraryImportStatusNeedsCorrection => '番号の修正が必要';
+
+  @override
   String libraryImportSelected(int count) {
     return '$count 個のファイルを選択';
   }
@@ -849,7 +858,67 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get libraryImportSource => '來源資料夾';
+
+  @override
+  String get libraryImportDestination => '目的地 LibraryRoot';
+
+  @override
+  String get libraryImportSelectAll => '選取所有可辨識檔案';
+
+  @override
+  String get libraryImportClearAll => '清除全部';
+
+  @override
+  String get libraryImportReview => '檢查已選取項目';
+
+  @override
+  String get libraryImportBackToScan => '返回掃描';
+
+  @override
+  String get libraryImportCommit => '正式匯入 Library';
+
+  @override
+  String get libraryImportReviewTitle => '檢查匯入內容';
+
+  @override
+  String get libraryImportPrimaryPerformer => '主女優';
+
+  @override
+  String get libraryImportChoosePrimary => '選擇主女優';
+
+  @override
+  String get libraryImportPrimaryRequired => '正式匯入前必須選擇主女優。';
+
+  @override
+  String get libraryImportReviewNoItems => '沒有可供檢查的已選取媒體。';
+
+  @override
+  String get libraryImportReviewWork => '作品';
+
+  @override
+  String get libraryImportReviewMedia => '媒體';
+
+  @override
+  String get libraryImportReviewDestination => '目的地';
+
+  @override
+  String get libraryImportReviewIssues => '檢查問題';
+
+  @override
+  String get libraryImportCommitBlocked => '所有已選取項目準備完成前，不能正式匯入。';
+
+  @override
+  String get libraryImportNoRecognizable => '找不到可辨識的影片檔案。';
+
+  @override
   String get libraryMediaTitle => 'メディアファイル';
+
+  @override
+  String get libraryMediaPlay => 'メディアを再生';
+
+  @override
+  String get libraryMediaUnavailable => 'メディアを利用できません。Library 項目を修復してください。';
 
   @override
   String get libraryMediaPart => 'パート';
@@ -1728,6 +1797,9 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
   String get libraryImportTitle => 'フォルダーのスクレイプとメディア取り込み';
 
   @override
+  String get libraryImportOpen => '動画を取り込む';
+
+  @override
   String get libraryImportSelectFolder => 'スクレイプフォルダーを選択';
 
   @override
@@ -1753,6 +1825,12 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
   String get libraryImportManualCode => '番号を手動修正';
 
   @override
+  String get libraryImportStatusReady => '処理可能';
+
+  @override
+  String get libraryImportStatusNeedsCorrection => '番号の修正が必要';
+
+  @override
   String libraryImportSelected(int count) {
     return '$count 個のファイルを選択';
   }
@@ -1764,6 +1842,12 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
 
   @override
   String get libraryMediaTitle => 'メディアファイル';
+
+  @override
+  String get libraryMediaPlay => 'メディアを再生';
+
+  @override
+  String get libraryMediaUnavailable => 'メディアを利用できません。Library 項目を修復してください。';
 
   @override
   String get libraryMediaPart => 'パート';

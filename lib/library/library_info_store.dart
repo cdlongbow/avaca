@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:path/path.dart' as path;
 
 import 'library_filesystem.dart';
+import 'library_media_locator.dart';
 import 'library_models.dart';
 import 'library_repository.dart';
 
@@ -12,6 +13,9 @@ class LibraryInfoStore {
     : filesystem = filesystem ?? LibraryFilesystem();
 
   final LibraryFilesystem filesystem;
+  late final LibraryMediaLocator locator = LibraryMediaLocator(
+    filesystem: filesystem,
+  );
 
   Future<void> write(
     Directory workDirectory,
@@ -39,16 +43,10 @@ class LibraryInfoStore {
       throw const FormatException('info.json requires work identity');
     }
     if (document.libraryRelativePath.trim().isNotEmpty) {
-      filesystem.validateRelativePath(document.libraryRelativePath);
+      locator.validateWorkRelativePath(document.libraryRelativePath);
     }
     for (final media in document.media) {
-      filesystem.validateRelativePath(media.relativePath);
-      if (media.relativePath.contains(':') ||
-          media.relativePath.startsWith('/')) {
-        throw const FormatException(
-          'info.json cannot contain an absolute media path',
-        );
-      }
+      locator.validateMediaRelativePath(media.relativePath);
     }
     for (final imagePath in document.images.values.whereType<String>()) {
       filesystem.validateRelativePath(imagePath);
@@ -77,12 +75,17 @@ class LibraryReindexService {
     required this.repository,
     LibraryInfoStore? infoStore,
     LibraryFilesystem? filesystem,
-  }) : filesystem = filesystem ?? LibraryFilesystem(),
-       infoStore = infoStore ?? LibraryInfoStore(filesystem: filesystem);
+  }) {
+    this.filesystem =
+        filesystem ?? infoStore?.filesystem ?? LibraryFilesystem();
+    this.infoStore = infoStore ?? LibraryInfoStore(filesystem: this.filesystem);
+    locator = LibraryMediaLocator(filesystem: this.filesystem);
+  }
 
   final LibraryRepository repository;
-  final LibraryFilesystem filesystem;
-  final LibraryInfoStore infoStore;
+  late final LibraryFilesystem filesystem;
+  late final LibraryInfoStore infoStore;
+  late final LibraryMediaLocator locator;
 
   Future<LibraryReindexReport> reindex(String rootPath) async {
     final root = filesystem.absolutePath(rootPath);
@@ -114,12 +117,12 @@ class LibraryReindexService {
         final document = await infoStore.read(entity);
         final declaredRelativePath = document.libraryRelativePath.trim();
         if (declaredRelativePath.isNotEmpty) {
-          final declaredWorkPath = path.normalize(
-            path.join(
-              root,
-              declaredRelativePath.replaceAll('/', path.separator),
-            ),
-          );
+          final declaredWorkPath = locator
+              .resolveWorkPath(
+                libraryRoot: root,
+                workRelativePath: declaredRelativePath,
+              )
+              .absolutePath;
           if (!filesystem.isWithin(root, declaredWorkPath) ||
               !filesystem.samePath(declaredWorkPath, workDirectory.path)) {
             throw FormatException(
@@ -128,21 +131,15 @@ class LibraryReindexService {
           }
         }
         for (final media in document.media) {
-          final candidate = path.normalize(
-            path.join(
-              workDirectory.path,
-              media.relativePath.replaceAll('/', path.separator),
-            ),
+          final resolved = await locator.resolveMedia(
+            libraryRoot: root,
+            workRelativePath: relativeWorkPath.replaceAll('\\', '/'),
+            mediaRelativePath: media.relativePath,
+            mediaPortableId: media.mediaId,
           );
-          if (!filesystem.isWithin(workDirectory.path, candidate) ||
-              await FileSystemEntity.type(candidate, followLinks: false) !=
-                  FileSystemEntityType.file) {
-            throw FormatException(
-              'media file is missing: ${media.relativePath}',
-            );
-          }
           if (media.sha256.isNotEmpty &&
-              await filesystem.hashFile(candidate) != media.sha256) {
+              await filesystem.hashFile(resolved.absolutePath) !=
+                  media.sha256) {
             throw FormatException(
               'media hash does not match info.json: ${media.relativePath}',
             );

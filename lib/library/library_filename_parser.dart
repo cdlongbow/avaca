@@ -33,7 +33,7 @@ class LibraryFilenameParser {
   static final RegExp _partPattern = RegExp(r'^(?:CD|DISC|PART)([0-9]+)$');
   static final RegExp _versionPattern = RegExp(r'^(?:V|VER)[0-9]+$');
   static final RegExp _resolutionNoisePattern = RegExp(
-    r'^(?:FHD|UHD|4K|8K|[0-9]{3,4}P)$',
+    r'^(?:FHD|UHD|8K|4K(?:[0-9]+)?|[0-9]{3,4}P)$',
   );
 
   LibraryFilenameParseResult parse(String fileName) {
@@ -154,8 +154,7 @@ class LibraryFilenameParser {
   ) {
     final candidate = editedCode.trim();
     final parsed = parse('$candidate.${previous.extension}');
-    if (!parsed.isImportable ||
-        parsed.normalizedCode != candidate.toUpperCase()) {
+    if (!parsed.isImportable) {
       return previous.copyWith(
         code: candidate.isEmpty ? null : candidate.toUpperCase(),
         normalizedCode: null,
@@ -187,8 +186,7 @@ class LibraryFilenameParser {
       if (character == null) return false;
       final codeUnit = character.codeUnitAt(0);
       return (codeUnit >= 48 && codeUnit <= 57) ||
-          (codeUnit >= 65 && codeUnit <= 90) ||
-          character == '_';
+          (codeUnit >= 65 && codeUnit <= 90);
     }
 
     return !isWord(before) && !isWord(after);
@@ -196,9 +194,8 @@ class LibraryFilenameParser {
 
   String _normalizeCode(String raw) {
     final value = raw.trim().toUpperCase();
-    if (value.contains('-') || value.contains('_')) return value;
     final compact = RegExp(
-      r'^([0-9]?[A-Z]{2,10})([0-9]{3,6})([A-Z]?)$',
+      r'^([0-9]?[A-Z]{2,10})(?:[-_]?)([0-9]{3,6})([A-Z]?)$',
     ).firstMatch(value);
     if (compact == null) return value;
     final numeric = compact.group(2)!.replaceFirst(RegExp(r'^0+(?=\d)'), '');

@@ -164,16 +164,18 @@ class LibraryFilenameParseResult {
       status == LibraryParseStatus.recognized && normalizedCode != null;
 
   LibraryFilenameParseResult copyWith({
-    String? code,
-    String? normalizedCode,
+    Object? code = _unset,
+    Object? normalizedCode = _unset,
     LibraryParseStatus? status,
     String? diagnostic,
   }) {
     return LibraryFilenameParseResult(
       rawFileName: rawFileName,
       extension: extension,
-      code: code ?? this.code,
-      normalizedCode: normalizedCode ?? this.normalizedCode,
+      code: identical(code, _unset) ? this.code : code as String?,
+      normalizedCode: identical(normalizedCode, _unset)
+          ? this.normalizedCode
+          : normalizedCode as String?,
       variantToken: variantToken,
       variantType: variantType,
       hasChineseSubtitles: hasChineseSubtitles,
@@ -185,6 +187,8 @@ class LibraryFilenameParseResult {
       noiseTokens: noiseTokens,
     );
   }
+
+  static const Object _unset = Object();
 
   Map<String, Object?> toJson() => <String, Object?>{
     'rawFileName': rawFileName,

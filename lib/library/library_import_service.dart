@@ -86,6 +86,7 @@ class LibraryImportPlan {
     required this.items,
     required this.issues,
     required this.fingerprint,
+    this.revision = 0,
   });
 
   final String sourceFolder;
@@ -93,6 +94,7 @@ class LibraryImportPlan {
   final List<LibraryImportPlanItem> items;
   final List<LibraryPlanIssue> issues;
   final String fingerprint;
+  final int revision;
 
   bool get isUsable => items.isNotEmpty && issues.isEmpty;
 }
@@ -116,11 +118,15 @@ class LibraryPreflightReport {
     required this.items,
     required this.errors,
     required this.diskSpaceChecked,
+    this.planFingerprint = '',
+    this.revision = 0,
   });
 
   final List<LibraryPreflightItem> items;
   final List<LibraryPlanIssue> errors;
   final bool diskSpaceChecked;
+  final String planFingerprint;
+  final int revision;
 
   bool get isReady => errors.isEmpty && items.every((item) => item.isReady);
 
@@ -209,6 +215,8 @@ class LibraryImportService {
     required String libraryRoot,
     required Iterable<LibraryScanEntry> selectedEntries,
     LibraryPrimaryActressSelector? primaryActressSelector,
+    int revision = 0,
+    bool allowImplicitPrimary = false,
   }) async {
     final source = filesystem.absolutePath(sourceFolder);
     final root = filesystem.absolutePath(libraryRoot);
@@ -228,6 +236,7 @@ class LibraryImportService {
     final workIdsByCode = <String, String>{};
     final primaryByCode = <String, String>{};
     final actressIdsByName = <String, String>{};
+    final resolutionsByCode = <String, LibraryResolutionResult>{};
     final selected = selectedEntries.where((entry) => entry.selected).toList();
     for (final entry in selected) {
       final parsed = entry.parseResult;
@@ -243,7 +252,9 @@ class LibraryImportService {
       }
       final code = parsed.normalizedCode!;
       try {
-        final resolution = await resolver.resolve(code);
+        final resolution = resolutionsByCode[code] ??= await resolver.resolve(
+          code,
+        );
         final details = resolution.details;
         if (details == null) {
           throw StateError(
@@ -264,19 +275,26 @@ class LibraryImportService {
         }
         final selectedPrimary = primaryActressSelector?.call(details)?.trim();
         final primaryName = (selectedPrimary == null || selectedPrimary.isEmpty)
-            ? performerNames.firstOrNull
+            ? (allowImplicitPrimary || performerNames.length == 1
+                  ? performerNames.firstOrNull
+                  : null)
             : selectedPrimary;
         if (primaryName == null || primaryName.isEmpty) {
-          throw StateError('performer resolution returned no primary actress');
+          throw StateError(
+            performerNames.length > 1
+                ? 'multiple performers require an explicit primary actress'
+                : 'performer resolution returned no primary actress',
+          );
         }
         if (!seenPerformerNames.contains(primaryName.toLowerCase())) {
-          performerNames.insert(0, primaryName);
-        } else {
-          performerNames.removeWhere(
-            (name) => name.toLowerCase() == primaryName.toLowerCase(),
+          throw StateError(
+            'selected primary actress is not a resolved performer',
           );
-          performerNames.insert(0, primaryName);
         }
+        performerNames.removeWhere(
+          (name) => name.toLowerCase() == primaryName.toLowerCase(),
+        );
+        performerNames.insert(0, primaryName);
         final previousPrimary = primaryByCode[code];
         if (previousPrimary != null &&
             previousPrimary.toLowerCase() != primaryName.toLowerCase()) {
@@ -351,9 +369,14 @@ class LibraryImportService {
         );
       }
     }
-    final fingerprintInput = items
-        .map((item) => item.toJournalJson())
-        .toList(growable: false);
+    final fingerprintInput = <String, Object?>{
+      'sourceFolder': source,
+      'libraryRoot': root,
+      'revision': revision,
+      'items': items
+          .map((item) => item.toJournalJson())
+          .toList(growable: false),
+    };
     final fingerprint = sha256
         .convert(utf8.encode(jsonEncode(fingerprintInput)))
         .toString();
@@ -363,6 +386,7 @@ class LibraryImportService {
       items: List.unmodifiable(items),
       issues: List.unmodifiable(issues),
       fingerprint: fingerprint,
+      revision: revision,
     );
   }
 
@@ -482,6 +506,8 @@ class LibraryImportService {
       items: List.unmodifiable(preflightItems),
       errors: List.unmodifiable(errors),
       diskSpaceChecked: diskSpaceChecked,
+      planFingerprint: plan.fingerprint,
+      revision: plan.revision,
     );
   }
 
@@ -491,16 +517,28 @@ class LibraryImportService {
     bool Function()? isCancelled,
     LibraryProgressCallback? onProgress,
   }) async {
-    final blockingErrors = report.errors.where(
-      (issue) =>
-          issue.sourcePath.isEmpty || issue.sourcePath == plan.libraryRoot,
-    );
-    if (blockingErrors.isNotEmpty) {
-      throw StateError(blockingErrors.join('\n'));
+    final blockingErrors = <String>[
+      ...plan.issues.map((issue) => issue.toString()),
+      ...report.errors.map((issue) => issue.toString()),
+      if (report.planFingerprint.isEmpty ||
+          report.planFingerprint != plan.fingerprint)
+        'import preflight does not match the reviewed plan',
+      if (report.revision != plan.revision)
+        'import review is stale and must be rebuilt',
+      if (report.items.length != plan.items.length)
+        'import preflight does not cover the complete selected plan',
+    ];
+    if (blockingErrors.isNotEmpty ||
+        !report.isReady ||
+        plan.items.isEmpty ||
+        report.items.isEmpty) {
+      throw StateError(
+        blockingErrors.isEmpty
+            ? 'import preflight is not ready for the complete batch'
+            : blockingErrors.join('\n'),
+      );
     }
-    if (!report.hasReadyItems && plan.items.isEmpty && plan.issues.isEmpty) {
-      throw StateError('import preflight has no ready items');
-    }
+    await repository.setActiveLibraryRoot(plan.libraryRoot);
     final operationItems = report.items
         .map(
           (item) => {
@@ -635,7 +673,6 @@ class LibraryImportService {
           destinationWork.path,
         );
         await stagingItem.create(recursive: true);
-        final existingWork = await destinationWork.exists();
         final stagedMedia = path.join(
           stagingWork.path,
           item.normalizedFileName,
@@ -670,10 +707,18 @@ class LibraryImportService {
           details: item.details,
           destinationDirectory: stagingWork.path,
         );
+        // Re-check the destination after the potentially slow probe/image
+        // work.  Preflight is a review snapshot, not a lock against another
+        // process creating or changing a portable Work in the meantime.
+        final destinationState = await _validateDestinationBeforeCommit(
+          item: item,
+          libraryRoot: plan.libraryRoot,
+          destinationWork: destinationWork,
+        );
         final mediaRecord = _mediaRecord(item, importOperationId: operationId);
         var document = await _documentForItem(
           item,
-          existingWork ? destinationWork : null,
+          destinationState.exists ? destinationWork : null,
         );
         final images = <String, String?>{
           ...document.images,
@@ -692,7 +737,14 @@ class LibraryImportService {
           scrape: document.scrape,
           libraryRelativePath: item.destinationRelativePath,
         );
-        if (existingWork) {
+        if (destinationState.exists) {
+          // Recheck immediately before moving the media into an existing
+          // Work.  A file that appeared after the first check must never be
+          // replaced by this import.
+          await _validateDestinationMediaIsAbsent(
+            item: item,
+            destinationWork: destinationWork,
+          );
           await Directory(
             path.dirname(
               path.join(destinationWork.path, item.normalizedFileName),
@@ -753,6 +805,21 @@ class LibraryImportService {
         );
         await repository.updateImportItem(
           itemId: journalId,
+          state: LibraryImportItemState.linking,
+          step: 'linking',
+        );
+        await repository.updateImportOperation(
+          operationId: operationId,
+          state: LibraryImportOperationState.linking,
+        );
+        await _buildPerformerLinks(
+          item: item,
+          libraryRoot: plan.libraryRoot,
+          destinationWork: destinationWork,
+          workId: commit.workId,
+        );
+        await repository.updateImportItem(
+          itemId: journalId,
           state: LibraryImportItemState.sourceCleanupPending,
           step: 'source_cleanup_pending',
         );
@@ -769,21 +836,6 @@ class LibraryImportService {
           );
         }
         await filesystem.deleteFileIfExists(item.entry.sourcePath);
-        await repository.updateImportItem(
-          itemId: journalId,
-          state: LibraryImportItemState.linking,
-          step: 'linking',
-        );
-        await repository.updateImportOperation(
-          operationId: operationId,
-          state: LibraryImportOperationState.linking,
-        );
-        await _buildPerformerLinks(
-          item: item,
-          libraryRoot: plan.libraryRoot,
-          destinationWork: destinationWork,
-          workId: commit.workId,
-        );
         await repository.updateImportItem(
           itemId: journalId,
           state: LibraryImportItemState.succeeded,
@@ -882,7 +934,9 @@ class LibraryImportService {
     if (cached != null) {
       return cached;
     }
-    final candidates = await repository.findActressCandidates([name]);
+    final candidates = await repository.findActressCandidates([
+      name,
+    ], ensurePortableIds: false);
     if (candidates.length > 1) {
       throw StateError('actress name is ambiguous: $name');
     }
@@ -897,6 +951,55 @@ class LibraryImportService {
         : '-${parsed.variantToken}';
     final part = parsed.partNumber == null ? '' : '-CD${parsed.partNumber}';
     return '$code$variant$part.${parsed.extension.toLowerCase()}';
+  }
+
+  Future<_DestinationCommitState> _validateDestinationBeforeCommit({
+    required LibraryImportPlanItem item,
+    required String libraryRoot,
+    required Directory destinationWork,
+  }) async {
+    await filesystem.validateNoSymbolicLinks(libraryRoot, destinationWork.path);
+    final entityType = await FileSystemEntity.type(
+      destinationWork.path,
+      followLinks: false,
+    );
+    if (entityType == FileSystemEntityType.notFound) {
+      return const _DestinationCommitState.missing();
+    }
+    if (entityType != FileSystemEntityType.directory) {
+      throw StateError('destination Work path is not a directory');
+    }
+    final info = File(path.join(destinationWork.path, 'info.json'));
+    if (!await info.exists()) {
+      throw StateError(
+        'destination Work appeared or changed after preflight without portable info.json',
+      );
+    }
+    final existing = await infoStore.read(info);
+    if (existing.workId != item.workPortableId ||
+        existing.code.trim().toUpperCase() !=
+            item.details.code.trim().toUpperCase()) {
+      throw StateError('destination Work identity changed after preflight');
+    }
+    await _validateDestinationMediaIsAbsent(
+      item: item,
+      destinationWork: destinationWork,
+    );
+    return const _DestinationCommitState.exists();
+  }
+
+  Future<void> _validateDestinationMediaIsAbsent({
+    required LibraryImportPlanItem item,
+    required Directory destinationWork,
+  }) async {
+    final destinationMedia = File(
+      path.join(destinationWork.path, item.normalizedFileName),
+    );
+    if (await destinationMedia.exists()) {
+      throw StateError(
+        'destination media appeared or changed after preflight; import was not allowed to overwrite it',
+      );
+    }
   }
 
   LibraryMediaRecord _mediaRecord(
@@ -1050,4 +1153,11 @@ class LibraryImportService {
       );
     }
   }
+}
+
+class _DestinationCommitState {
+  const _DestinationCommitState.missing() : exists = false;
+  const _DestinationCommitState.exists() : exists = true;
+
+  final bool exists;
 }

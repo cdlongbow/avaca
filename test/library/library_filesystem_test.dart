@@ -23,6 +23,8 @@ void main() {
   test('phase-one scanner is read-only and ignores derived links', () async {
     final video = File(path.join(source.path, '[FHD] SSIS00123-RUC.mp4'))
       ..writeAsBytesSync(<int>[1, 2, 3]);
+    File(path.join(source.path, 'not-a-video.pdf')).writeAsStringSync('pdf');
+    File(path.join(source.path, 'nested.txt')).writeAsStringSync('text');
     File(path.join(source.path, 'ignored.lnk')).writeAsStringSync('link');
     File(path.join(source.path, 'ignored.tmp')).writeAsStringSync('tmp');
     final before = video.readAsBytesSync();
@@ -37,6 +39,18 @@ void main() {
       Directory(path.join(library.path, 'SSIS-123')).existsSync(),
       isFalse,
     );
+  });
+
+  test('scanner includes supported nested videos only', () async {
+    final nested = Directory(path.join(source.path, 'nested'))..createSync();
+    File(path.join(nested.path, 'ABC00123.mp4')).writeAsBytesSync(<int>[1]);
+    File(path.join(nested.path, 'ABC00123.jpg')).writeAsBytesSync(<int>[1]);
+
+    final entries = await LibraryFolderScanner().scan(source.path);
+
+    expect(entries.map((entry) => entry.originalFileName), <String>[
+      'ABC00123.mp4',
+    ]);
   });
 
   test('relative path validation blocks traversal and absolute paths', () {

@@ -1,15 +1,21 @@
 import 'package:flutter/foundation.dart';
 
 import '../core/database.dart';
+import '../library/library_collection_service.dart';
 import '../models/work_storage.dart';
 
 enum WorksLoadStatus { loading, loaded, notFound, error }
 
 class WorksController extends ChangeNotifier {
-  WorksController({required this.db, required this.actressId});
+  WorksController({
+    required this.db,
+    required this.actressId,
+    this.collectionService,
+  });
 
   final AppDatabase db;
   final int actressId;
+  final LibraryCollectionService? collectionService;
 
   String actressName = '';
   List<String> actressAliases = const [];
@@ -75,6 +81,13 @@ class WorksController extends ChangeNotifier {
 
   Future<void> init() async {
     try {
+      if (collectionService != null &&
+          await collectionService!.getActressById(actressId) == null) {
+        status = WorksLoadStatus.notFound;
+        works = const [];
+        notifyListeners();
+        return;
+      }
       final actress = await db.getActressById(actressId);
 
       if (actress == null) {
@@ -85,7 +98,9 @@ class WorksController extends ChangeNotifier {
         actressAliases = aliases is Iterable
             ? aliases.map((alias) => alias.toString()).toList(growable: false)
             : const [];
-        works = await db.getWorksForActress(actressId);
+        works =
+            await (collectionService?.getWorksForActress(actressId) ??
+                db.getWorksForActress(actressId));
         status = WorksLoadStatus.loaded;
       }
     } catch (error) {
@@ -97,7 +112,9 @@ class WorksController extends ChangeNotifier {
   }
 
   Future<void> reloadWorks() async {
-    works = await db.getWorksForActress(actressId);
+    works =
+        await (collectionService?.getWorksForActress(actressId) ??
+            db.getWorksForActress(actressId));
     notifyListeners();
   }
 

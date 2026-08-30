@@ -1,15 +1,15 @@
-import 'dart:io';
-
-import 'package:path/path.dart' as path;
 import 'package:sqflite/sqflite.dart';
 
 import '../core/database.dart';
+import '../library/library_media_locator.dart';
 import '../models/data_health.dart';
 
 class DataHealthService {
-  DataHealthService({required this.db});
+  DataHealthService({required this.db, LibraryMediaLocator? locator})
+    : locator = locator ?? LibraryMediaLocator();
 
   final AppDatabase db;
+  final LibraryMediaLocator locator;
 
   Future<DataHealthSnapshot> load() async {
     final database = await db.database;
@@ -112,17 +112,24 @@ class DataHealthService {
       final root = rootRows.firstOrNull?['path']?.toString().trim();
       if (root == null || root.isEmpty) return 0;
       final rows = await database.rawQuery('''
-        SELECT w.library_relative_path, m.relative_path
+        SELECT w.library_relative_path, m.relative_path, m.portable_id
         FROM media_files m INNER JOIN works w ON w.id = m.work_id
         WHERE w.library_managed = 1
       ''');
       var missing = 0;
       for (final row in rows) {
-        final workPath = row['library_relative_path']?.toString();
-        final mediaPath = row['relative_path']?.toString();
-        if (workPath == null ||
-            mediaPath == null ||
-            !File(path.join(root, workPath, mediaPath)).existsSync()) {
+        if (row['portable_id']?.toString().trim().isEmpty ?? true) {
+          missing++;
+          continue;
+        }
+        try {
+          await locator.resolveMedia(
+            libraryRoot: root,
+            workRelativePath: row['library_relative_path']?.toString() ?? '',
+            mediaRelativePath: row['relative_path']?.toString() ?? '',
+            mediaPortableId: row['portable_id']?.toString(),
+          );
+        } on Object {
           missing++;
         }
       }

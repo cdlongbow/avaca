@@ -488,8 +488,17 @@ class LibraryFolderScanner {
               FileSystemEntityType.link) {
         continue;
       }
-      final snapshot = await _filesystem.snapshot(entity.path);
       final fileName = path.basename(entity.path);
+      final extension = path.extension(fileName).toLowerCase();
+      final extensionWithoutDot = extension.startsWith('.')
+          ? extension.substring(1)
+          : extension;
+      if (!LibraryFilenameParser.supportedExtensions.contains(
+        extensionWithoutDot,
+      )) {
+        continue;
+      }
+      final snapshot = await _filesystem.snapshot(entity.path);
       entries.add(
         LibraryScanEntry(
           sourcePath: _filesystem.absolutePath(entity.path),

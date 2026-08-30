@@ -843,6 +843,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get libraryImportTitle => 'Folder scrape and media import';
 
   @override
+  String get libraryImportOpen => 'Import videos';
+
+  @override
   String get libraryImportSelectFolder => 'Select scrape folder';
 
   @override
@@ -868,6 +871,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get libraryImportManualCode => 'Manual code correction';
 
   @override
+  String get libraryImportStatusReady => 'Ready to process';
+
+  @override
+  String get libraryImportStatusNeedsCorrection => 'Needs code correction';
+
+  @override
   String libraryImportSelected(int count) {
     return '$count files selected';
   }
@@ -878,7 +887,72 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get libraryImportSource => 'Source folder';
+
+  @override
+  String get libraryImportDestination => 'Destination LibraryRoot';
+
+  @override
+  String get libraryImportSelectAll => 'Select all recognizable';
+
+  @override
+  String get libraryImportClearAll => 'Clear all';
+
+  @override
+  String get libraryImportReview => 'Review selected';
+
+  @override
+  String get libraryImportBackToScan => 'Back to scan';
+
+  @override
+  String get libraryImportCommit => 'Commit to Library';
+
+  @override
+  String get libraryImportReviewTitle => 'Review import';
+
+  @override
+  String get libraryImportPrimaryPerformer => 'Primary performer';
+
+  @override
+  String get libraryImportChoosePrimary => 'Choose primary performer';
+
+  @override
+  String get libraryImportPrimaryRequired =>
+      'Choose a primary performer before committing.';
+
+  @override
+  String get libraryImportReviewNoItems =>
+      'No selected media is ready for review.';
+
+  @override
+  String get libraryImportReviewWork => 'Work';
+
+  @override
+  String get libraryImportReviewMedia => 'Media';
+
+  @override
+  String get libraryImportReviewDestination => 'Destination';
+
+  @override
+  String get libraryImportReviewIssues => 'Review issues';
+
+  @override
+  String get libraryImportCommitBlocked =>
+      'Commit is blocked until every selected item is ready.';
+
+  @override
+  String get libraryImportNoRecognizable =>
+      'No recognizable video files were found.';
+
+  @override
   String get libraryMediaTitle => 'Media files';
+
+  @override
+  String get libraryMediaPlay => 'Play media';
+
+  @override
+  String get libraryMediaUnavailable =>
+      'Media is unavailable; repair the Library entry.';
 
   @override
   String get libraryMediaPart => 'Part';

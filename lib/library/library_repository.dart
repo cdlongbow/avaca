@@ -34,8 +34,9 @@ class LibraryRepository {
   final PortableIdGenerator _idGenerator;
 
   Future<List<LibraryActressCandidate>> findActressCandidates(
-    Iterable<String> names,
-  ) async {
+    Iterable<String> names, {
+    bool ensurePortableIds = true,
+  }) async {
     final database = await db.database;
     final result = <int, LibraryActressCandidate>{};
     for (final rawName in names) {
@@ -47,7 +48,12 @@ class LibraryRepository {
         [name],
       );
       for (final row in canonicalRows) {
-        final candidate = await _candidateFromRow(database, row, false);
+        final candidate = await _candidateFromRow(
+          database,
+          row,
+          false,
+          ensurePortableId: ensurePortableIds,
+        );
         result[candidate.id] = candidate;
       }
       final aliasRows = await database.rawQuery(
@@ -57,7 +63,12 @@ class LibraryRepository {
         [name],
       );
       for (final row in aliasRows) {
-        final candidate = await _candidateFromRow(database, row, true);
+        final candidate = await _candidateFromRow(
+          database,
+          row,
+          true,
+          ensurePortableId: ensurePortableIds,
+        );
         result[candidate.id] = result[candidate.id] ?? candidate;
       }
     }
@@ -74,13 +85,14 @@ class LibraryRepository {
   Future<LibraryActressCandidate> _candidateFromRow(
     DatabaseExecutor executor,
     Map<String, Object?> row,
-    bool matchedByAlias,
-  ) async {
+    bool matchedByAlias, {
+    required bool ensurePortableId,
+  }) async {
     final id = (row['id'] as num?)?.toInt();
     final name = row['name']?.toString().trim() ?? '';
     if (id == null || name.isEmpty) throw StateError('invalid actress row');
     var portableId = row['portable_id']?.toString().trim() ?? '';
-    if (portableId.isEmpty) {
+    if (portableId.isEmpty && ensurePortableId) {
       portableId = _idGenerator.next();
       await executor.update(
         'actresses',
@@ -602,7 +614,7 @@ class LibraryRepository {
     }
     final rows = await executor.query(
       'actresses',
-      columns: const ['id'],
+      columns: const ['id', 'portable_id'],
       where: 'name = ? COLLATE NOCASE',
       whereArgs: [cleanName],
     );
@@ -611,7 +623,17 @@ class LibraryRepository {
     }
     if (rows.isNotEmpty) {
       final id = (rows.single['id'] as num).toInt();
-      await _ensureActressPortableId(executor, id);
+      final current = rows.single['portable_id']?.toString().trim() ?? '';
+      if (current.isEmpty && portableId != null && portableId.isNotEmpty) {
+        await executor.update(
+          'actresses',
+          {'portable_id': portableId},
+          where: 'id = ?',
+          whereArgs: [id],
+        );
+      } else {
+        await _ensureActressPortableId(executor, id);
+      }
       return id;
     }
     return executor.insert('actresses', {

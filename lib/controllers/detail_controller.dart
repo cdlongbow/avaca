@@ -7,6 +7,7 @@ import 'package:avaca/l10n/app_localizations.dart';
 import '../components/app_snackbar.dart';
 import '../components/image_cropper.dart';
 import '../core/database.dart';
+import '../library/library_collection_service.dart';
 
 final class DetailActressData {
   DetailActressData({
@@ -135,12 +136,18 @@ final class DetailEditState {
 }
 
 class DetailController extends ChangeNotifier {
-  DetailController({required this.db, required this.actressId});
+  DetailController({
+    required this.db,
+    required this.actressId,
+    this.collectionService,
+  });
 
   final AppDatabase db;
   final int actressId;
+  final LibraryCollectionService? collectionService;
 
   bool isEditing = false;
+  bool isAvailable = true;
   int workCount = 0;
   DetailActressData actressData = const DetailActressData.empty();
   List<String> currentAttrs = [];
@@ -151,6 +158,17 @@ class DetailController extends ChangeNotifier {
 
   // 初始化頁面資料，並同步目前的分類屬性。
   Future<void> init() async {
+    if (collectionService != null &&
+        await collectionService!.getActressById(actressId) == null) {
+      isAvailable = false;
+      actressData = const DetailActressData.empty();
+      currentAttrs = [];
+      actressAliases = const [];
+      workCount = 0;
+      _notifyIfActive();
+      return;
+    }
+    isAvailable = true;
     actressData = await _loadActressData();
     currentAttrs = _parseAttrs(actressData.mainType);
     await refreshWorkCount(notify: false);
@@ -162,6 +180,17 @@ class DetailController extends ChangeNotifier {
     if (isEditing) {
       return;
     }
+    if (collectionService != null &&
+        await collectionService!.getActressById(actressId) == null) {
+      isAvailable = false;
+      actressData = const DetailActressData.empty();
+      currentAttrs = [];
+      actressAliases = const [];
+      workCount = 0;
+      _notifyIfActive();
+      return;
+    }
+    isAvailable = true;
     actressData = await _loadActressData();
     currentAttrs = _parseAttrs(actressData.mainType);
     actressAliases = actressData.aliases;
@@ -189,7 +218,9 @@ class DetailController extends ChangeNotifier {
 
   Future<void> refreshWorkCount({bool notify = true}) async {
     try {
-      workCount = await db.getWorkCountForActress(actressId);
+      workCount =
+          await (collectionService?.getWorkCountForActress(actressId) ??
+              db.getWorkCountForActress(actressId));
     } catch (_) {
       workCount = 0;
     }

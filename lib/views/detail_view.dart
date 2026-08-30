@@ -8,6 +8,7 @@ import '../components/adaptive_page_layout.dart';
 import '../components/app_snackbar.dart';
 import '../controllers/detail_controller.dart';
 import '../core/database.dart';
+import '../library/library_collection_service.dart';
 import '../core/layout.dart';
 
 const double _detailControlRadius = 6.0;
@@ -30,10 +31,16 @@ ButtonStyle _detailOutlinedButtonStyle({Color? foregroundColor}) {
 }
 
 class DetailView extends StatefulWidget {
-  const DetailView({super.key, required this.db, required this.actressId});
+  const DetailView({
+    super.key,
+    required this.db,
+    required this.actressId,
+    this.collectionService,
+  });
 
   final AppDatabase db;
   final int actressId;
+  final LibraryCollectionService? collectionService;
 
   @override
   State<DetailView> createState() => _DetailViewState();
@@ -282,7 +289,11 @@ class _DetailViewState extends State<DetailView> {
   void initState() {
     super.initState();
 
-    controller = DetailController(db: widget.db, actressId: widget.actressId);
+    controller = DetailController(
+      db: widget.db,
+      actressId: widget.actressId,
+      collectionService: widget.collectionService,
+    );
     controller.addListener(_handleControllerChanged);
 
     initFuture = _initialize();
@@ -416,6 +427,15 @@ class _DetailViewState extends State<DetailView> {
                   ),
                 ],
               ),
+            ),
+          );
+        }
+
+        if (!controller.isAvailable) {
+          return Scaffold(
+            appBar: AppBar(leading: const AlignedAppBarBackButton()),
+            body: Center(
+              child: Text(AppLocalizations.of(context).dataNotFound),
             ),
           );
         }

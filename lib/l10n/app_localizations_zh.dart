@@ -806,6 +806,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get libraryImportTitle => '資料夾刮削與媒體入庫';
 
   @override
+  String get libraryImportOpen => '匯入影片';
+
+  @override
   String get libraryImportSelectFolder => '選擇刮削資料夾';
 
   @override
@@ -830,6 +833,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get libraryImportManualCode => '手動修正番號';
 
   @override
+  String get libraryImportStatusReady => '可處理';
+
+  @override
+  String get libraryImportStatusNeedsCorrection => '需要修正番號';
+
+  @override
   String libraryImportSelected(int count) {
     return '已選取 $count 個檔案';
   }
@@ -840,7 +849,67 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get libraryImportSource => '來源資料夾';
+
+  @override
+  String get libraryImportDestination => '目的地 LibraryRoot';
+
+  @override
+  String get libraryImportSelectAll => '選取所有可辨識檔案';
+
+  @override
+  String get libraryImportClearAll => '清除全部';
+
+  @override
+  String get libraryImportReview => '檢查已選取項目';
+
+  @override
+  String get libraryImportBackToScan => '返回掃描';
+
+  @override
+  String get libraryImportCommit => '正式匯入 Library';
+
+  @override
+  String get libraryImportReviewTitle => '檢查匯入內容';
+
+  @override
+  String get libraryImportPrimaryPerformer => '主女優';
+
+  @override
+  String get libraryImportChoosePrimary => '選擇主女優';
+
+  @override
+  String get libraryImportPrimaryRequired => '正式匯入前必須選擇主女優。';
+
+  @override
+  String get libraryImportReviewNoItems => '沒有可供檢查的已選取媒體。';
+
+  @override
+  String get libraryImportReviewWork => '作品';
+
+  @override
+  String get libraryImportReviewMedia => '媒體';
+
+  @override
+  String get libraryImportReviewDestination => '目的地';
+
+  @override
+  String get libraryImportReviewIssues => '檢查問題';
+
+  @override
+  String get libraryImportCommitBlocked => '所有已選取項目準備完成前，不能正式匯入。';
+
+  @override
+  String get libraryImportNoRecognizable => '找不到可辨識的影片檔案。';
+
+  @override
   String get libraryMediaTitle => '媒體檔案';
+
+  @override
+  String get libraryMediaPlay => '播放媒體';
+
+  @override
+  String get libraryMediaUnavailable => '媒體檔案無法使用，請修復 Library 項目。';
 
   @override
   String get libraryMediaPart => '分段';
@@ -1711,6 +1780,9 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get libraryImportTitle => '文件夹刮削与媒体入库';
 
   @override
+  String get libraryImportOpen => '导入影片';
+
+  @override
   String get libraryImportSelectFolder => '选择刮削文件夹';
 
   @override
@@ -1735,6 +1807,12 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get libraryImportManualCode => '手动修正番号';
 
   @override
+  String get libraryImportStatusReady => '可处理';
+
+  @override
+  String get libraryImportStatusNeedsCorrection => '需要修正番号';
+
+  @override
   String libraryImportSelected(int count) {
     return '已选择 $count 个文件';
   }
@@ -1746,6 +1824,12 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get libraryMediaTitle => '媒体文件';
+
+  @override
+  String get libraryMediaPlay => '播放媒体';
+
+  @override
+  String get libraryMediaUnavailable => '媒体文件不可用，请修复 Library 项目。';
 
   @override
   String get libraryMediaPart => '分段';
@@ -2616,6 +2700,9 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get libraryImportTitle => '資料夾刮削與媒體入庫';
 
   @override
+  String get libraryImportOpen => '匯入影片';
+
+  @override
   String get libraryImportSelectFolder => '選擇刮削資料夾';
 
   @override
@@ -2640,6 +2727,12 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get libraryImportManualCode => '手動修正番號';
 
   @override
+  String get libraryImportStatusReady => '可處理';
+
+  @override
+  String get libraryImportStatusNeedsCorrection => '需要修正番號';
+
+  @override
   String libraryImportSelected(int count) {
     return '已選取 $count 個檔案';
   }
@@ -2650,7 +2743,67 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   }
 
   @override
+  String get libraryImportSource => '來源資料夾';
+
+  @override
+  String get libraryImportDestination => '目的地 LibraryRoot';
+
+  @override
+  String get libraryImportSelectAll => '選取所有可辨識檔案';
+
+  @override
+  String get libraryImportClearAll => '清除全部';
+
+  @override
+  String get libraryImportReview => '檢查已選取項目';
+
+  @override
+  String get libraryImportBackToScan => '返回掃描';
+
+  @override
+  String get libraryImportCommit => '正式匯入 Library';
+
+  @override
+  String get libraryImportReviewTitle => '檢查匯入內容';
+
+  @override
+  String get libraryImportPrimaryPerformer => '主女優';
+
+  @override
+  String get libraryImportChoosePrimary => '選擇主女優';
+
+  @override
+  String get libraryImportPrimaryRequired => '正式匯入前必須選擇主女優。';
+
+  @override
+  String get libraryImportReviewNoItems => '沒有可供檢查的已選取媒體。';
+
+  @override
+  String get libraryImportReviewWork => '作品';
+
+  @override
+  String get libraryImportReviewMedia => '媒體';
+
+  @override
+  String get libraryImportReviewDestination => '目的地';
+
+  @override
+  String get libraryImportReviewIssues => '檢查問題';
+
+  @override
+  String get libraryImportCommitBlocked => '所有已選取項目準備完成前，不能正式匯入。';
+
+  @override
+  String get libraryImportNoRecognizable => '找不到可辨識的影片檔案。';
+
+  @override
   String get libraryMediaTitle => '媒體檔案';
+
+  @override
+  String get libraryMediaPlay => '播放媒體';
+
+  @override
+  String get libraryMediaUnavailable => '媒體檔案無法使用，請修復 Library 項目。';
 
   @override
   String get libraryMediaPart => '分段';

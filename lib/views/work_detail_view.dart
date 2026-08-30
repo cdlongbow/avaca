@@ -8,7 +8,10 @@ import '../components/adaptive_page_layout.dart';
 import '../core/database.dart';
 import '../core/layout.dart';
 import '../l10n/app_localizations.dart';
+import '../library/library_media_locator.dart';
+import '../library/library_repository.dart';
 import '../models/work_storage.dart';
+import '../player/player_launcher.dart';
 
 class WorkDetailView extends StatefulWidget {
   const WorkDetailView({
@@ -28,15 +31,57 @@ class WorkDetailView extends StatefulWidget {
 
 class _WorkDetailViewState extends State<WorkDetailView> {
   late final Future<Map<String, Object?>?> workFuture;
+  late final LibraryRepository _libraryRepository;
+  late final LibraryMediaLocator _libraryLocator;
+  late final PlayerLauncher _playerLauncher;
   WorkStorageRecord? _storageRecord;
+  bool _playerBusy = false;
 
   @override
   void initState() {
     super.initState();
-    workFuture = widget.db.getWorkById(
+    _libraryRepository = LibraryRepository(db: widget.db);
+    _libraryLocator = LibraryMediaLocator();
+    _playerLauncher = PlayerLauncher(locator: _libraryLocator);
+    workFuture = _loadWorkWithHealthyMedia();
+  }
+
+  Future<Map<String, Object?>?> _loadWorkWithHealthyMedia() async {
+    final work = await widget.db.getWorkById(
       widget.workId,
       currentActressId: widget.currentActressId,
     );
+    if (work == null || !_isLibraryManaged(work)) return work;
+
+    final rawMedia = work['library_media'];
+    if (rawMedia is! List || rawMedia.isEmpty) return null;
+    final root = await _libraryRepository.activeLibraryRoot();
+    final workPath = work['library_relative_path']?.toString() ?? '';
+    final healthyMedia = <Map<String, Object?>>[];
+    if (root == null || root.trim().isEmpty || workPath.trim().isEmpty) {
+      return null;
+    }
+    for (final value in rawMedia.whereType<Map>()) {
+      final media = Map<String, Object?>.from(value);
+      if (media['portable_id']?.toString().trim().isEmpty ?? true) {
+        continue;
+      }
+      try {
+        await _libraryLocator.resolveMedia(
+          libraryRoot: root,
+          workRelativePath: workPath,
+          mediaRelativePath: media['relative_path']?.toString() ?? '',
+          mediaPortableId: media['portable_id']?.toString(),
+        );
+        healthyMedia.add(media);
+      } on Object {
+        // A broken media row remains visible in Data Health, but it must not
+        // present an unplayable item as part of the normal Work detail.
+      }
+    }
+    if (healthyMedia.isEmpty) return null;
+    work['library_media'] = List.unmodifiable(healthyMedia);
+    return work;
   }
 
   @override
@@ -288,9 +333,51 @@ class _WorkDetailViewState extends State<WorkDetailView> {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       dense: true,
+      enabled: !_playerBusy,
+      onTap: () => _playLibraryMedia(media),
+      leading: const Icon(Icons.play_circle_outline),
+      trailing: Tooltip(
+        message: l10n.libraryMediaPlay,
+        child: const Icon(Icons.play_arrow),
+      ),
       title: Text(fileName),
       subtitle: details.isEmpty ? null : Text(details.join(' · ')),
     );
+  }
+
+  Future<void> _playLibraryMedia(Map<String, Object?> media) async {
+    if (_playerBusy) return;
+    final l10n = AppLocalizations.of(context);
+    setState(() => _playerBusy = true);
+    try {
+      final root = await _libraryRepository.activeLibraryRoot();
+      if (root == null || root.trim().isEmpty) {
+        throw const LibraryLocatorFailure('active LibraryRoot is unavailable');
+      }
+      final work = await workFuture;
+      if (!mounted) return;
+      if (work == null) {
+        throw const LibraryLocatorFailure('Work is unavailable');
+      }
+      await _playerLauncher.launch(
+        context: context,
+        workCode: work['code']?.toString() ?? '',
+        libraryRoot: root,
+        workRelativePath: work['library_relative_path']?.toString() ?? '',
+        mediaRelativePath: media['relative_path']?.toString() ?? '',
+        mediaPortableId: media['portable_id']?.toString(),
+        localizations: l10n,
+      );
+    } on Object catch (error) {
+      if (mounted) {
+        AppSnackBar.showError(
+          context,
+          '${l10n.libraryMediaUnavailable}: $error',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _playerBusy = false);
+    }
   }
 
   bool _isLibraryManaged(Map<String, Object?> work) {

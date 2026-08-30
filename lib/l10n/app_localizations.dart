@@ -1627,6 +1627,12 @@ abstract class AppLocalizations {
   /// **'資料夾刮削與媒體入庫'**
   String get libraryImportTitle;
 
+  /// No description provided for @libraryImportOpen.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'匯入影片'**
+  String get libraryImportOpen;
+
   /// No description provided for @libraryImportSelectFolder.
   ///
   /// In zh_TW, this message translates to:
@@ -1675,6 +1681,18 @@ abstract class AppLocalizations {
   /// **'手動修正番號'**
   String get libraryImportManualCode;
 
+  /// No description provided for @libraryImportStatusReady.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'可處理'**
+  String get libraryImportStatusReady;
+
+  /// No description provided for @libraryImportStatusNeedsCorrection.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'需要修正番號'**
+  String get libraryImportStatusNeedsCorrection;
+
   /// No description provided for @libraryImportSelected.
   ///
   /// In zh_TW, this message translates to:
@@ -1687,11 +1705,131 @@ abstract class AppLocalizations {
   /// **'匯入結果：成功 {succeeded}、重複 {duplicate}、失敗 {failed}'**
   String libraryImportResult(int succeeded, int duplicate, int failed);
 
+  /// No description provided for @libraryImportSource.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'來源資料夾'**
+  String get libraryImportSource;
+
+  /// No description provided for @libraryImportDestination.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'目的地 LibraryRoot'**
+  String get libraryImportDestination;
+
+  /// No description provided for @libraryImportSelectAll.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'選取所有可辨識檔案'**
+  String get libraryImportSelectAll;
+
+  /// No description provided for @libraryImportClearAll.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'清除全部'**
+  String get libraryImportClearAll;
+
+  /// No description provided for @libraryImportReview.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'檢查已選取項目'**
+  String get libraryImportReview;
+
+  /// No description provided for @libraryImportBackToScan.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'返回掃描'**
+  String get libraryImportBackToScan;
+
+  /// No description provided for @libraryImportCommit.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'正式匯入 Library'**
+  String get libraryImportCommit;
+
+  /// No description provided for @libraryImportReviewTitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'檢查匯入內容'**
+  String get libraryImportReviewTitle;
+
+  /// No description provided for @libraryImportPrimaryPerformer.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'主女優'**
+  String get libraryImportPrimaryPerformer;
+
+  /// No description provided for @libraryImportChoosePrimary.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'選擇主女優'**
+  String get libraryImportChoosePrimary;
+
+  /// No description provided for @libraryImportPrimaryRequired.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'正式匯入前必須選擇主女優。'**
+  String get libraryImportPrimaryRequired;
+
+  /// No description provided for @libraryImportReviewNoItems.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'沒有可供檢查的已選取媒體。'**
+  String get libraryImportReviewNoItems;
+
+  /// No description provided for @libraryImportReviewWork.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'作品'**
+  String get libraryImportReviewWork;
+
+  /// No description provided for @libraryImportReviewMedia.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'媒體'**
+  String get libraryImportReviewMedia;
+
+  /// No description provided for @libraryImportReviewDestination.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'目的地'**
+  String get libraryImportReviewDestination;
+
+  /// No description provided for @libraryImportReviewIssues.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'檢查問題'**
+  String get libraryImportReviewIssues;
+
+  /// No description provided for @libraryImportCommitBlocked.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'所有已選取項目準備完成前，不能正式匯入。'**
+  String get libraryImportCommitBlocked;
+
+  /// No description provided for @libraryImportNoRecognizable.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'找不到可辨識的影片檔案。'**
+  String get libraryImportNoRecognizable;
+
   /// No description provided for @libraryMediaTitle.
   ///
   /// In zh_TW, this message translates to:
   /// **'媒體檔案'**
   String get libraryMediaTitle;
+
+  /// No description provided for @libraryMediaPlay.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'播放媒體'**
+  String get libraryMediaPlay;
+
+  /// No description provided for @libraryMediaUnavailable.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'媒體檔案無法使用，請修復 Library 項目。'**
+  String get libraryMediaUnavailable;
 
   /// No description provided for @libraryMediaPart.
   ///

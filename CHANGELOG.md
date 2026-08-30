@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.10.1 - 2026-08-31
+
+- Re-centered the normal Collection on physically imported, locatable media;
+  metadata-only works and actresses are no longer exposed as collection data.
+- Added the folder scan, filename correction, selection, review, explicit
+  primary-performer, and two-stage Library import/commit journey with
+  collision, recovery, and source-preserving safety checks.
+- Routed imported media through a shared portable locator into the existing
+  Player Core, while keeping Remote outside normal product UX until a
+  production-safe provider is available.
+
 ## 0.10.0 - 2026-08-30
 
 - Added portable library import and maintenance flows with durable import

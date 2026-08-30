@@ -7,7 +7,9 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:avaca/core/database.dart';
 import 'package:avaca/library/library_exact_resolver.dart';
 import 'package:avaca/library/library_filesystem.dart';
+import 'package:avaca/library/library_image_downloader.dart';
 import 'package:avaca/library/library_import_service.dart';
+import 'package:avaca/library/library_maintenance_service.dart';
 import 'package:avaca/library/library_info_store.dart';
 import 'package:avaca/library/library_media_probe.dart';
 import 'package:avaca/library/library_models.dart';
@@ -67,6 +69,7 @@ void main() {
           sourceFolder: sourceRoot.path,
           libraryRoot: libraryRoot.path,
           selectedEntries: [selected],
+          primaryActressSelector: (_) => 'Actress A',
         );
         expect(plan.issues, isEmpty);
         final preflight = await service.preflight(plan);
@@ -95,12 +98,946 @@ void main() {
           )),
           hasLength(1),
         );
+        final work = (await database.query(
+          'works',
+          where: 'library_managed = 1',
+        )).single;
+        final primaryActressId = (work['primary_actress_id'] as num).toInt();
+        expect(
+          (await database.query(
+            'actresses',
+            columns: const ['name'],
+            where: 'id = ?',
+            whereArgs: [primaryActressId],
+          )).single['name'],
+          'Actress A',
+        );
+        expect(
+          (await database.rawQuery(
+            '''
+            SELECT a.name
+            FROM actresses a
+            INNER JOIN actress_works aw ON aw.actress_id = a.id
+            WHERE aw.work_id = ?
+            ORDER BY a.name COLLATE NOCASE ASC
+            ''',
+            [work['id']],
+          )).map((row) => row['name']),
+          ['Actress A', 'Actress B'],
+        );
+        expect(
+          (await database.query(
+            'work_performers',
+            columns: const ['name'],
+            where: 'work_id = ?',
+            whereArgs: [work['id']],
+            orderBy: 'name COLLATE NOCASE ASC',
+          )).map((row) => row['name']),
+          ['Actress A', 'Actress B'],
+        );
       } finally {
         await db?.close();
         if (root.existsSync()) await root.delete(recursive: true);
       }
     },
   );
+
+  test(
+    'review blocks multi-performer Work until a primary is explicit',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'avaca_library_primary_review_',
+      );
+      final databaseRoot = Directory(p.join(root.path, 'db'))..createSync();
+      final sourceRoot = Directory(p.join(root.path, 'source'))..createSync();
+      final libraryRoot = Directory(p.join(root.path, 'library'))..createSync();
+      final sourceFile = File(p.join(sourceRoot.path, 'ABC-123.mp4'))
+        ..writeAsStringSync('primary review fixture');
+      AppDatabase? db;
+      try {
+        db = AppDatabase.forTesting(
+          baseDir: databaseRoot.path,
+          databaseFactory: databaseFactoryFfi,
+        );
+        await db.init();
+        final service = _fixtureService(db, _fixtureDetails(code: 'ABC-123'));
+        final entry = (await LibraryFolderScanner().scan(
+          sourceRoot.path,
+        )).single.copyWith(selected: true);
+
+        final plan = await service.buildPlan(
+          sourceFolder: sourceRoot.path,
+          libraryRoot: libraryRoot.path,
+          selectedEntries: [entry],
+        );
+
+        expect(plan.items, isEmpty);
+        expect(
+          plan.issues.single.message,
+          contains('multiple performers require an explicit primary actress'),
+        );
+        expect(sourceFile.existsSync(), isTrue);
+      } finally {
+        await db?.close();
+        if (root.existsSync()) await root.delete(recursive: true);
+      }
+    },
+  );
+
+  test('review lookup is read-only until successful commit', () async {
+    final root = await Directory.systemTemp.createTemp(
+      'avaca_library_review_read_only_',
+    );
+    final databaseRoot = Directory(p.join(root.path, 'db'))..createSync();
+    final sourceRoot = Directory(p.join(root.path, 'source'))..createSync();
+    final libraryRoot = Directory(p.join(root.path, 'library'))..createSync();
+    final sourceFile = File(p.join(sourceRoot.path, 'ABC-123.mp4'))
+      ..writeAsStringSync('review read-only fixture');
+    AppDatabase? db;
+    try {
+      db = AppDatabase.forTesting(
+        baseDir: databaseRoot.path,
+        databaseFactory: databaseFactoryFfi,
+      );
+      await db.init();
+      final database = await db.database;
+      final actressId = await database.insert('actresses', {
+        'name': 'Actress A',
+      });
+      final service = _fixtureService(db, _fixtureDetails(code: 'ABC-123'));
+      final entry = (await LibraryFolderScanner().scan(
+        sourceRoot.path,
+      )).single.copyWith(selected: true);
+
+      final plan = await service.buildPlan(
+        sourceFolder: sourceRoot.path,
+        libraryRoot: libraryRoot.path,
+        selectedEntries: [entry],
+        primaryActressSelector: (_) => 'Actress A',
+      );
+
+      expect(plan.issues, isEmpty);
+      final row = (await database.query(
+        'actresses',
+        where: 'id = ?',
+        whereArgs: [actressId],
+      )).single;
+      expect(row['portable_id'], isNull);
+      expect(sourceFile.existsSync(), isTrue);
+
+      final preflight = await service.preflight(plan);
+      final cancelled = await service.execute(
+        plan,
+        preflight,
+        isCancelled: () => true,
+      );
+      expect(cancelled.items.single.state, LibraryImportResultState.cancelled);
+      expect(
+        (await database.query(
+          'actresses',
+          where: 'id = ?',
+          whereArgs: [actressId],
+        )).single['portable_id'],
+        isNull,
+      );
+      expect(sourceFile.existsSync(), isTrue);
+
+      final committed = await service.execute(plan, preflight);
+      expect(committed.succeededCount, 1);
+      expect(
+        (await database.query(
+          'actresses',
+          where: 'id = ?',
+          whereArgs: [actressId],
+        )).single['portable_id'],
+        isA<String>(),
+      );
+      expect(sourceFile.existsSync(), isFalse);
+    } finally {
+      await db?.close();
+      if (root.existsSync()) await root.delete(recursive: true);
+    }
+  });
+
+  test(
+    'preflight failure does not assign a portable Actress identity',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'avaca_library_review_failure_identity_',
+      );
+      final databaseRoot = Directory(p.join(root.path, 'db'))..createSync();
+      final sourceRoot = Directory(p.join(root.path, 'source'))..createSync();
+      final libraryRoot = Directory(p.join(root.path, 'library'))..createSync();
+      final sourceFile = File(p.join(sourceRoot.path, 'ABC-123.mp4'))
+        ..writeAsStringSync('review failure identity fixture');
+      AppDatabase? db;
+      try {
+        db = AppDatabase.forTesting(
+          baseDir: databaseRoot.path,
+          databaseFactory: databaseFactoryFfi,
+        );
+        await db.init();
+        final database = await db.database;
+        final actressId = await database.insert('actresses', {
+          'name': 'Actress A',
+        });
+        final service = _fixtureService(
+          db,
+          _fixtureDetails(code: 'ABC-123'),
+          diskSpaceChecker: (_, _) async => false,
+        );
+        final entry = (await LibraryFolderScanner().scan(
+          sourceRoot.path,
+        )).single.copyWith(selected: true);
+        final plan = await service.buildPlan(
+          sourceFolder: sourceRoot.path,
+          libraryRoot: libraryRoot.path,
+          selectedEntries: [entry],
+          primaryActressSelector: (_) => 'Actress A',
+        );
+        final preflight = await service.preflight(plan);
+        expect(preflight.isReady, isFalse);
+        await expectLater(
+          service.execute(plan, preflight),
+          throwsA(isA<StateError>()),
+        );
+        expect(
+          (await database.query(
+            'actresses',
+            where: 'id = ?',
+            whereArgs: [actressId],
+          )).single['portable_id'],
+          isNull,
+        );
+        expect(sourceFile.existsSync(), isTrue);
+        expect(await database.query('import_operations'), isEmpty);
+      } finally {
+        await db?.close();
+        if (root.existsSync()) await root.delete(recursive: true);
+      }
+    },
+  );
+
+  test(
+    'commit refuses any review issue before journal or filesystem mutation',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'avaca_library_atomic_review_',
+      );
+      final databaseRoot = Directory(p.join(root.path, 'db'))..createSync();
+      final sourceRoot = Directory(p.join(root.path, 'source'))..createSync();
+      final libraryRoot = Directory(p.join(root.path, 'library'))..createSync();
+      final sourceFile = File(p.join(sourceRoot.path, 'ABC-123.mp4'))
+        ..writeAsStringSync('atomic review fixture');
+      AppDatabase? db;
+      try {
+        db = AppDatabase.forTesting(
+          baseDir: databaseRoot.path,
+          databaseFactory: databaseFactoryFfi,
+        );
+        await db.init();
+        final repository = _CountingLibraryRepository(db: db);
+        final service = _fixtureService(
+          db,
+          _fixtureDetails(code: 'ABC-123'),
+          repository: repository,
+        );
+        final entry = (await LibraryFolderScanner().scan(
+          sourceRoot.path,
+        )).single.copyWith(selected: true);
+        final plan = await service.buildPlan(
+          sourceFolder: sourceRoot.path,
+          libraryRoot: libraryRoot.path,
+          selectedEntries: [entry],
+          primaryActressSelector: (_) => 'Actress A',
+        );
+        final preflight = await service.preflight(plan);
+        final blockedPlan = LibraryImportPlan(
+          sourceFolder: plan.sourceFolder,
+          libraryRoot: plan.libraryRoot,
+          items: plan.items,
+          issues: const [
+            LibraryPlanIssue(
+              sourcePath: 'review',
+              code: 'ABC-123',
+              message: 'review issue',
+            ),
+          ],
+          fingerprint: plan.fingerprint,
+          revision: plan.revision,
+        );
+
+        await expectLater(
+          service.execute(blockedPlan, preflight),
+          throwsA(isA<StateError>()),
+        );
+        final mismatchedPlan = LibraryImportPlan(
+          sourceFolder: plan.sourceFolder,
+          libraryRoot: plan.libraryRoot,
+          items: plan.items,
+          issues: const [],
+          fingerprint: 'different-reviewed-plan',
+          revision: plan.revision,
+        );
+        await expectLater(
+          service.execute(mismatchedPlan, preflight),
+          throwsA(isA<StateError>()),
+        );
+        final itemErrorReport = LibraryPreflightReport(
+          items: [
+            LibraryPreflightItem(
+              item: plan.items.single,
+              duplicateMedia: false,
+              error: 'item preflight failed',
+            ),
+          ],
+          errors: const [],
+          diskSpaceChecked: true,
+          planFingerprint: plan.fingerprint,
+          revision: plan.revision,
+        );
+        await expectLater(
+          service.execute(plan, itemErrorReport),
+          throwsA(isA<StateError>()),
+        );
+        final globalErrorReport = LibraryPreflightReport(
+          items: preflight.items,
+          errors: const [
+            LibraryPlanIssue(
+              sourcePath: 'review',
+              code: 'ABC-123',
+              message: 'global preflight error',
+            ),
+          ],
+          diskSpaceChecked: true,
+          planFingerprint: plan.fingerprint,
+          revision: plan.revision,
+        );
+        await expectLater(
+          service.execute(plan, globalErrorReport),
+          throwsA(isA<StateError>()),
+        );
+        final staleReport = LibraryPreflightReport(
+          items: preflight.items,
+          errors: const [],
+          diskSpaceChecked: true,
+          planFingerprint: plan.fingerprint,
+          revision: plan.revision + 1,
+        );
+        await expectLater(
+          service.execute(plan, staleReport),
+          throwsA(isA<StateError>()),
+        );
+        final emptyReport = LibraryPreflightReport(
+          items: const [],
+          errors: const [],
+          diskSpaceChecked: true,
+          planFingerprint: plan.fingerprint,
+          revision: plan.revision,
+        );
+        await expectLater(
+          service.execute(plan, emptyReport),
+          throwsA(isA<StateError>()),
+        );
+        final emptyPlan = LibraryImportPlan(
+          sourceFolder: plan.sourceFolder,
+          libraryRoot: plan.libraryRoot,
+          items: const [],
+          issues: const [],
+          fingerprint: plan.fingerprint,
+          revision: plan.revision,
+        );
+        await expectLater(
+          service.execute(emptyPlan, emptyReport),
+          throwsA(isA<StateError>()),
+        );
+        final invalidPrimaryPlan = await service.buildPlan(
+          sourceFolder: sourceRoot.path,
+          libraryRoot: libraryRoot.path,
+          selectedEntries: [entry],
+          primaryActressSelector: (_) => 'Unknown Actress',
+        );
+        final invalidPrimaryReport = LibraryPreflightReport(
+          items: const [],
+          errors: const [],
+          diskSpaceChecked: true,
+          planFingerprint: invalidPrimaryPlan.fingerprint,
+          revision: invalidPrimaryPlan.revision,
+        );
+        await expectLater(
+          service.execute(invalidPrimaryPlan, invalidPrimaryReport),
+          throwsA(isA<StateError>()),
+        );
+        final database = await db.database;
+        expect(await database.query('import_operations'), isEmpty);
+        expect(await database.query('library_roots'), isEmpty);
+        expect(await database.query('media_files'), isEmpty);
+        expect(await database.query('actresses'), isEmpty);
+        expect(sourceFile.existsSync(), isTrue);
+        expect(
+          Directory(
+            p.join(libraryRoot.path, 'Actress A', 'ABC-123'),
+          ).existsSync(),
+          isFalse,
+        );
+        expect(repository.setActiveLibraryRootCalls, 0);
+        expect(repository.createImportOperationCalls, 0);
+        expect(repository.commitInfoDocumentCalls, 0);
+      } finally {
+        await db?.close();
+        if (root.existsSync()) await root.delete(recursive: true);
+      }
+    },
+  );
+
+  test(
+    'different hashes for one normalized destination fail before commit',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'avaca_library_destination_collision_',
+      );
+      final databaseRoot = Directory(p.join(root.path, 'db'))..createSync();
+      final sourceRoot = Directory(p.join(root.path, 'source'))..createSync();
+      final libraryRoot = Directory(p.join(root.path, 'library'))..createSync();
+      final firstFile = File(p.join(sourceRoot.path, 'ABC-123 [first].mp4'))
+        ..writeAsBytesSync([1, 2, 3]);
+      final secondFile = File(p.join(sourceRoot.path, 'ABC-123 [second].mp4'))
+        ..writeAsBytesSync([4, 5, 6]);
+      AppDatabase? db;
+      try {
+        db = AppDatabase.forTesting(
+          baseDir: databaseRoot.path,
+          databaseFactory: databaseFactoryFfi,
+        );
+        await db.init();
+        final repository = _CountingLibraryRepository(db: db);
+        final service = _fixtureService(
+          db,
+          _fixtureDetails(code: 'ABC-123'),
+          repository: repository,
+        );
+        final entries = await LibraryFolderScanner().scan(sourceRoot.path);
+        final plan = await service.buildPlan(
+          sourceFolder: sourceRoot.path,
+          libraryRoot: libraryRoot.path,
+          selectedEntries: entries.map(
+            (entry) => entry.copyWith(selected: true),
+          ),
+          primaryActressSelector: (_) => 'Actress A',
+        );
+        expect(plan.issues, isEmpty);
+        expect(plan.items, hasLength(2));
+        final preflight = await service.preflight(plan);
+        expect(preflight.isReady, isFalse);
+        expect(
+          preflight.items.where((item) => item.error != null),
+          hasLength(1),
+        );
+        expect(
+          preflight.items.singleWhere((item) => item.error != null).error,
+          contains('collision'),
+        );
+
+        await expectLater(
+          service.execute(plan, preflight),
+          throwsA(isA<StateError>()),
+        );
+
+        final database = await db.database;
+        expect(repository.setActiveLibraryRootCalls, 0);
+        expect(repository.createImportOperationCalls, 0);
+        expect(await database.query('library_roots'), isEmpty);
+        expect(await database.query('import_operations'), isEmpty);
+        expect(await database.query('media_files'), isEmpty);
+        expect(firstFile.existsSync(), isTrue);
+        expect(secondFile.existsSync(), isTrue);
+        expect(
+          Directory(
+            p.join(libraryRoot.path, 'Actress A', 'ABC-123'),
+          ).existsSync(),
+          isFalse,
+        );
+      } finally {
+        await db?.close();
+        if (root.existsSync()) await root.delete(recursive: true);
+      }
+    },
+  );
+
+  test(
+    'same-hash multipart entries keep one physical media and preserve duplicate source',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'avaca_library_multipart_dedupe_',
+      );
+      final databaseRoot = Directory(p.join(root.path, 'db'))..createSync();
+      final sourceRoot = Directory(p.join(root.path, 'source'))..createSync();
+      final libraryRoot = Directory(p.join(root.path, 'library'))..createSync();
+      final bytes = <int>[7, 11, 13, 17];
+      final firstFile = File(p.join(sourceRoot.path, 'ABC-123-CD1.mp4'))
+        ..writeAsBytesSync(bytes);
+      final secondFile = File(p.join(sourceRoot.path, 'ABC-123-CD2.mp4'))
+        ..writeAsBytesSync(bytes);
+      AppDatabase? db;
+      try {
+        db = AppDatabase.forTesting(
+          baseDir: databaseRoot.path,
+          databaseFactory: databaseFactoryFfi,
+        );
+        await db.init();
+        final service = _fixtureService(db, _fixtureDetails(code: 'ABC-123'));
+        final entries = await LibraryFolderScanner().scan(sourceRoot.path);
+        final plan = await service.buildPlan(
+          sourceFolder: sourceRoot.path,
+          libraryRoot: libraryRoot.path,
+          selectedEntries: entries.map(
+            (entry) => entry.copyWith(selected: true),
+          ),
+          primaryActressSelector: (_) => 'Actress A',
+        );
+        expect(plan.items, hasLength(2));
+        expect(plan.items.map((item) => item.entry.parseResult.partNumber), [
+          1,
+          2,
+        ]);
+        final preflight = await service.preflight(plan);
+        expect(preflight.isReady, isTrue);
+        expect(preflight.items.map((item) => item.duplicateMedia), [
+          false,
+          true,
+        ]);
+
+        final result = await service.execute(plan, preflight);
+
+        expect(result.succeededCount, 1);
+        expect(result.duplicateCount, 1);
+        expect(firstFile.existsSync(), isFalse);
+        expect(secondFile.existsSync(), isTrue);
+        final database = await db.database;
+        final mediaRows = await database.query('media_files');
+        expect(mediaRows, hasLength(1));
+        expect(mediaRows.single['relative_path'], 'ABC-123-CD1.mp4');
+      } finally {
+        await db?.close();
+        if (root.existsSync()) await root.delete(recursive: true);
+      }
+    },
+  );
+
+  test('destination folder appearing after preflight is not adopted', () async {
+    final root = await Directory.systemTemp.createTemp(
+      'avaca_library_destination_toctou_',
+    );
+    final databaseRoot = Directory(p.join(root.path, 'db'))..createSync();
+    final sourceRoot = Directory(p.join(root.path, 'source'))..createSync();
+    final libraryRoot = Directory(p.join(root.path, 'library'))..createSync();
+    final sourceFile = File(p.join(sourceRoot.path, 'ABC-123.mp4'))
+      ..writeAsStringSync('toctou fixture');
+    AppDatabase? db;
+    try {
+      db = AppDatabase.forTesting(
+        baseDir: databaseRoot.path,
+        databaseFactory: databaseFactoryFfi,
+      );
+      await db.init();
+      final service = _fixtureService(db, _fixtureDetails(code: 'ABC-123'));
+      final entry = (await LibraryFolderScanner().scan(
+        sourceRoot.path,
+      )).single.copyWith(selected: true);
+      final plan = await service.buildPlan(
+        sourceFolder: sourceRoot.path,
+        libraryRoot: libraryRoot.path,
+        selectedEntries: [entry],
+        primaryActressSelector: (_) => 'Actress A',
+      );
+      final preflight = await service.preflight(plan);
+      expect(preflight.isReady, isTrue);
+      final destinationWork = Directory(
+        p.join(libraryRoot.path, plan.items.single.destinationRelativePath),
+      )..createSync(recursive: true);
+
+      final result = await service.execute(plan, preflight);
+
+      expect(result.items.single.state, LibraryImportResultState.failed);
+      expect(sourceFile.existsSync(), isTrue);
+      expect(destinationWork.existsSync(), isTrue);
+      expect(
+        File(p.join(destinationWork.path, 'info.json')).existsSync(),
+        isFalse,
+      );
+      final database = await db.database;
+      expect(await database.query('media_files'), isEmpty);
+      expect(
+        (await database.query('import_operations')).single['state'],
+        LibraryImportOperationState.failed.value,
+      );
+    } finally {
+      await db?.close();
+      if (root.existsSync()) await root.delete(recursive: true);
+    }
+  });
+
+  test(
+    'media appearing in an existing Work after preflight is never overwritten',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'avaca_library_media_toctou_',
+      );
+      final databaseRoot = Directory(p.join(root.path, 'db'))..createSync();
+      final sourceRoot = Directory(p.join(root.path, 'source'))..createSync();
+      final libraryRoot = Directory(p.join(root.path, 'library'))..createSync();
+      final sourceFile = File(p.join(sourceRoot.path, 'ABC-123.mp4'))
+        ..writeAsStringSync('toctou media fixture');
+      AppDatabase? db;
+      try {
+        db = AppDatabase.forTesting(
+          baseDir: databaseRoot.path,
+          databaseFactory: databaseFactoryFfi,
+        );
+        await db.init();
+        final service = _fixtureService(db, _fixtureDetails(code: 'ABC-123'));
+        final entry = (await LibraryFolderScanner().scan(
+          sourceRoot.path,
+        )).single.copyWith(selected: true);
+        final plan = await service.buildPlan(
+          sourceFolder: sourceRoot.path,
+          libraryRoot: libraryRoot.path,
+          selectedEntries: [entry],
+          primaryActressSelector: (_) => 'Actress A',
+        );
+        final preflight = await service.preflight(plan);
+        expect(preflight.isReady, isTrue);
+        final destinationWork = Directory(
+          p.join(libraryRoot.path, plan.items.single.destinationRelativePath),
+        );
+        await LibraryInfoStore().write(
+          destinationWork,
+          LibraryInfoDocument(
+            schemaVersion: 1,
+            workId: plan.items.single.workPortableId,
+            code: 'ABC-123',
+            metadata: const {'title': 'External Work'},
+            primaryActressId: plan.items.single.primaryActressId,
+            performers: plan.items.single.performers,
+            images: const {},
+            media: const [],
+            scrape: const {'source': 'external'},
+            libraryRelativePath: plan.items.single.destinationRelativePath,
+          ),
+        );
+        final destinationMedia = File(
+          p.join(destinationWork.path, 'ABC-123.mp4'),
+        )..writeAsStringSync('external media must survive');
+        final originalDestinationBytes = await destinationMedia.readAsBytes();
+
+        final result = await service.execute(plan, preflight);
+
+        expect(result.items.single.state, LibraryImportResultState.failed);
+        expect(sourceFile.existsSync(), isTrue);
+        expect(await destinationMedia.readAsBytes(), originalDestinationBytes);
+        final database = await db.database;
+        expect(await database.query('media_files'), isEmpty);
+      } finally {
+        await db?.close();
+        if (root.existsSync()) await root.delete(recursive: true);
+      }
+    },
+  );
+
+  test(
+    'final portable hash failure keeps the copy on the repair path',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'avaca_library_final_hash_failure_',
+      );
+      final databaseRoot = Directory(p.join(root.path, 'db'))..createSync();
+      final sourceRoot = Directory(p.join(root.path, 'source'))..createSync();
+      final libraryRoot = Directory(p.join(root.path, 'library'))..createSync();
+      final sourceFile = File(p.join(sourceRoot.path, 'ABC-123.mp4'))
+        ..writeAsStringSync('final hash fixture');
+      AppDatabase? db;
+      try {
+        db = AppDatabase.forTesting(
+          baseDir: databaseRoot.path,
+          databaseFactory: databaseFactoryFfi,
+        );
+        await db.init();
+        final service = _fixtureService(
+          db,
+          _fixtureDetails(code: 'ABC-123'),
+          filesystem: _FailFinalHashFilesystem(),
+        );
+        final entry = (await LibraryFolderScanner().scan(
+          sourceRoot.path,
+        )).single.copyWith(selected: true);
+        final plan = await service.buildPlan(
+          sourceFolder: sourceRoot.path,
+          libraryRoot: libraryRoot.path,
+          selectedEntries: [entry],
+          primaryActressSelector: (_) => 'Actress A',
+        );
+        final preflight = await service.preflight(plan);
+        final result = await service.execute(plan, preflight);
+
+        expect(
+          result.items.single.state,
+          LibraryImportResultState.repairRequired,
+        );
+        expect(sourceFile.existsSync(), isTrue);
+        expect(
+          File(
+            p.join(libraryRoot.path, 'Actress A', 'ABC-123', 'ABC-123.mp4'),
+          ).existsSync(),
+          isTrue,
+        );
+        final database = await db.database;
+        expect(await database.query('media_files'), isEmpty);
+        expect(
+          (await database.query('import_operations')).single['state'],
+          LibraryImportOperationState.repairRequired.value,
+        );
+      } finally {
+        await db?.close();
+        if (root.existsSync()) await root.delete(recursive: true);
+      }
+    },
+  );
+
+  test(
+    'database indexing failure preserves portable media and source for repair',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'avaca_library_index_failure_',
+      );
+      final databaseRoot = Directory(p.join(root.path, 'db'))..createSync();
+      final sourceRoot = Directory(p.join(root.path, 'source'))..createSync();
+      final libraryRoot = Directory(p.join(root.path, 'library'))..createSync();
+      final sourceFile = File(p.join(sourceRoot.path, 'ABC-123.mp4'))
+        ..writeAsStringSync('index failure fixture');
+      AppDatabase? db;
+      try {
+        db = AppDatabase.forTesting(
+          baseDir: databaseRoot.path,
+          databaseFactory: databaseFactoryFfi,
+        );
+        await db.init();
+        final service = _fixtureService(
+          db,
+          _fixtureDetails(code: 'ABC-123'),
+          repository: _FailingCommitRepository(db: db),
+        );
+        final entry = (await LibraryFolderScanner().scan(
+          sourceRoot.path,
+        )).single.copyWith(selected: true);
+        final plan = await service.buildPlan(
+          sourceFolder: sourceRoot.path,
+          libraryRoot: libraryRoot.path,
+          selectedEntries: [entry],
+          primaryActressSelector: (_) => 'Actress A',
+        );
+        final preflight = await service.preflight(plan);
+        final result = await service.execute(plan, preflight);
+
+        expect(
+          result.items.single.state,
+          LibraryImportResultState.repairRequired,
+        );
+        expect(sourceFile.existsSync(), isTrue);
+        expect(
+          File(
+            p.join(libraryRoot.path, 'Actress A', 'ABC-123', 'ABC-123.mp4'),
+          ).existsSync(),
+          isTrue,
+        );
+        final database = await db.database;
+        expect(await database.query('media_files'), isEmpty);
+        expect(
+          (await database.query('import_operations')).single['state'],
+          LibraryImportOperationState.repairRequired.value,
+        );
+      } finally {
+        await db?.close();
+        if (root.existsSync()) await root.delete(recursive: true);
+      }
+    },
+  );
+
+  test(
+    'source changed before cleanup is preserved while portable commit is repairable',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'avaca_library_source_changed_',
+      );
+      final databaseRoot = Directory(p.join(root.path, 'db'))..createSync();
+      final sourceRoot = Directory(p.join(root.path, 'source'))..createSync();
+      final libraryRoot = Directory(p.join(root.path, 'library'))..createSync();
+      final sourceFile = File(p.join(sourceRoot.path, 'ABC-123.mp4'))
+        ..writeAsStringSync('source before cleanup');
+      AppDatabase? db;
+      try {
+        db = AppDatabase.forTesting(
+          baseDir: databaseRoot.path,
+          databaseFactory: databaseFactoryFfi,
+        );
+        await db.init();
+        final service = _fixtureService(
+          db,
+          _fixtureDetails(code: 'ABC-123'),
+          imageDownloader: _MutatingImageDownloader(sourceFile),
+        );
+        final entry = (await LibraryFolderScanner().scan(
+          sourceRoot.path,
+        )).single.copyWith(selected: true);
+        final plan = await service.buildPlan(
+          sourceFolder: sourceRoot.path,
+          libraryRoot: libraryRoot.path,
+          selectedEntries: [entry],
+          primaryActressSelector: (_) => 'Actress A',
+        );
+        final preflight = await service.preflight(plan);
+        final result = await service.execute(plan, preflight);
+
+        expect(
+          result.items.single.state,
+          LibraryImportResultState.repairRequired,
+        );
+        expect(sourceFile.existsSync(), isTrue);
+        expect(await sourceFile.readAsString(), 'source changed during import');
+        expect(
+          File(
+            p.join(libraryRoot.path, 'Actress A', 'ABC-123', 'ABC-123.mp4'),
+          ).existsSync(),
+          isTrue,
+        );
+        final database = await db.database;
+        expect(await database.query('media_files'), hasLength(1));
+        expect(
+          (await database.query('import_operations')).single['state'],
+          LibraryImportOperationState.repairRequired.value,
+        );
+      } finally {
+        await db?.close();
+        if (root.existsSync()) await root.delete(recursive: true);
+      }
+    },
+  );
+
+  test(
+    'linking failure occurs before source cleanup and is restart-safe',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'avaca_library_link_failure_',
+      );
+      final databaseRoot = Directory(p.join(root.path, 'db'))..createSync();
+      final sourceRoot = Directory(p.join(root.path, 'source'))..createSync();
+      final libraryRoot = Directory(p.join(root.path, 'library'))..createSync();
+      final sourceFile = File(p.join(sourceRoot.path, 'ABC-123.mp4'))
+        ..writeAsStringSync('link failure fixture');
+      AppDatabase? db;
+      try {
+        db = AppDatabase.forTesting(
+          baseDir: databaseRoot.path,
+          databaseFactory: databaseFactoryFfi,
+        );
+        await db.init();
+        final service = _fixtureService(
+          db,
+          _fixtureDetails(code: 'ABC-123'),
+          shortcutManager: const _FailingShortcutManager(),
+        );
+        final entry = (await LibraryFolderScanner().scan(
+          sourceRoot.path,
+        )).single.copyWith(selected: true);
+        final plan = await service.buildPlan(
+          sourceFolder: sourceRoot.path,
+          libraryRoot: libraryRoot.path,
+          selectedEntries: [entry],
+          primaryActressSelector: (_) => 'Actress A',
+        );
+        final preflight = await service.preflight(plan);
+        final result = await service.execute(plan, preflight);
+
+        expect(
+          result.items.single.state,
+          LibraryImportResultState.repairRequired,
+        );
+        expect(sourceFile.existsSync(), isTrue);
+        expect(await (await db.database).query('media_files'), hasLength(1));
+      } finally {
+        await db?.close();
+        if (root.existsSync()) await root.delete(recursive: true);
+      }
+    },
+  );
+
+  test('import recovery cleans pre-commit staging idempotently', () async {
+    final root = await Directory.systemTemp.createTemp(
+      'avaca_library_recovery_',
+    );
+    final databaseRoot = Directory(p.join(root.path, 'db'))..createSync();
+    final libraryRoot = Directory(p.join(root.path, 'library'))..createSync();
+    AppDatabase? db;
+    try {
+      db = AppDatabase.forTesting(
+        baseDir: databaseRoot.path,
+        databaseFactory: databaseFactoryFfi,
+      );
+      await db.init();
+      final repository = LibraryRepository(db: db);
+      final operationId = await repository.createImportOperation(
+        libraryRoot: libraryRoot.path,
+        planFingerprint: 'recovery-fixture',
+      );
+      final staging = Directory(
+        p.join(libraryRoot.path, '.__avaca_importing', operationId),
+      )..createSync(recursive: true);
+      File(p.join(staging.path, 'stale.tmp')).writeAsStringSync('stale');
+      final committedOperationId = await repository.createImportOperation(
+        libraryRoot: libraryRoot.path,
+        planFingerprint: 'committed-recovery-fixture',
+      );
+      await repository.updateImportOperation(
+        operationId: committedOperationId,
+        state: LibraryImportOperationState.portableCommitted,
+        committed: true,
+      );
+      final committedMedia = File(p.join(libraryRoot.path, 'keep.mp4'))
+        ..writeAsStringSync('portable copy must survive recovery');
+      final recovery = LibraryImportRecoveryService(
+        repository: repository,
+        filesystem: LibraryFilesystem(),
+      );
+
+      final first = await recovery.recover();
+      final second = await recovery.recover();
+
+      expect(first.cleaned, 1);
+      expect(first.repairRequired, 1);
+      expect(second.cleaned, 0);
+      expect(second.repairRequired, 0);
+      expect(staging.existsSync(), isFalse);
+      expect(committedMedia.existsSync(), isTrue);
+      expect(
+        (await (await db.database).query(
+          'import_operations',
+          where: 'id = ?',
+          whereArgs: [operationId],
+        )).single['state'],
+        LibraryImportOperationState.cancelledBeforeCommit.value,
+      );
+      expect(
+        (await (await db.database).query(
+          'import_operations',
+          where: 'id = ?',
+          whereArgs: [committedOperationId],
+        )).single['state'],
+        LibraryImportOperationState.repairRequired.value,
+      );
+    } finally {
+      await db?.close();
+      if (root.existsSync()) await root.delete(recursive: true);
+    }
+  });
 
   test('database v2 adds portable ids and media journal tables', () async {
     final root = await Directory.systemTemp.createTemp('avaca_library_schema_');
@@ -250,6 +1187,7 @@ void main() {
           sourceFolder: sourceRoot.path,
           libraryRoot: libraryRoot.path,
           selectedEntries: [entry],
+          primaryActressSelector: (_) => 'Actress A',
         );
         final preflight = await service.preflight(plan);
         final result = await service.execute(
@@ -308,6 +1246,7 @@ void main() {
           sourceFolder: sourceOne.path,
           libraryRoot: libraryRoot.path,
           selectedEntries: [firstEntry],
+          primaryActressSelector: (_) => 'Actress A',
         );
         final firstPreflight = await service.preflight(firstPlan);
         await service.execute(firstPlan, firstPreflight);
@@ -320,6 +1259,7 @@ void main() {
           sourceFolder: sourceTwo.path,
           libraryRoot: libraryRoot.path,
           selectedEntries: [secondEntry],
+          primaryActressSelector: (_) => 'Actress A',
         );
         final secondPreflight = await service.preflight(secondPlan);
         expect(secondPreflight.items.single.duplicateMedia, isTrue);
@@ -518,6 +1458,109 @@ class _RecordingShortcutManager implements LibraryShortcutManager {
   }) async {}
 }
 
+class _CountingLibraryRepository extends LibraryRepository {
+  _CountingLibraryRepository({required super.db});
+
+  var setActiveLibraryRootCalls = 0;
+  var createImportOperationCalls = 0;
+  var commitInfoDocumentCalls = 0;
+
+  @override
+  Future<String> setActiveLibraryRoot(String rootPath) {
+    setActiveLibraryRootCalls++;
+    return super.setActiveLibraryRoot(rootPath);
+  }
+
+  @override
+  Future<String> createImportOperation({
+    required String libraryRoot,
+    required String planFingerprint,
+    Iterable<Map<String, Object?>> items = const [],
+  }) {
+    createImportOperationCalls++;
+    return super.createImportOperation(
+      libraryRoot: libraryRoot,
+      planFingerprint: planFingerprint,
+      items: items,
+    );
+  }
+
+  @override
+  Future<LibraryWorkCommitResult> commitInfoDocument(
+    LibraryInfoDocument document, {
+    required String libraryRoot,
+    String? importOperationId,
+  }) {
+    commitInfoDocumentCalls++;
+    return super.commitInfoDocument(
+      document,
+      libraryRoot: libraryRoot,
+      importOperationId: importOperationId,
+    );
+  }
+}
+
+class _FailFinalHashFilesystem extends LibraryFilesystem {
+  @override
+  Future<String> hashFile(String filePath) {
+    final normalized = filePath.toLowerCase().replaceAll('\\', '/');
+    if (normalized.endsWith('/actress a/abc-123/abc-123.mp4')) {
+      throw StateError('simulated final hash failure');
+    }
+    return super.hashFile(filePath);
+  }
+}
+
+class _FailingCommitRepository extends LibraryRepository {
+  _FailingCommitRepository({required super.db});
+
+  @override
+  Future<LibraryWorkCommitResult> commitInfoDocument(
+    LibraryInfoDocument document, {
+    required String libraryRoot,
+    String? importOperationId,
+  }) async {
+    throw StateError('simulated database indexing failure');
+  }
+}
+
+class _MutatingImageDownloader implements LibraryImageDownloader {
+  _MutatingImageDownloader(this.sourceFile);
+
+  final File sourceFile;
+  var _mutated = false;
+
+  @override
+  Future<LibraryImageDownloadResult> download({
+    required ScrapeWorkDetails details,
+    required String destinationDirectory,
+  }) async {
+    if (!_mutated) {
+      _mutated = true;
+      sourceFile.writeAsStringSync('source changed during import');
+    }
+    return const LibraryImageDownloadResult();
+  }
+
+  @override
+  void close() {}
+}
+
+class _FailingShortcutManager implements LibraryShortcutManager {
+  const _FailingShortcutManager();
+
+  @override
+  bool get isSupported => true;
+
+  @override
+  Future<void> createDirectoryShortcut({
+    required String linkPath,
+    required String targetPath,
+  }) async {
+    throw StateError('simulated performer link failure');
+  }
+}
+
 ScrapeWorkDetails _fixtureDetails({required String code}) => ScrapeWorkDetails(
   source: ScrapeSourceId.javbus,
   code: code,
@@ -531,17 +1574,24 @@ ScrapeWorkDetails _fixtureDetails({required String code}) => ScrapeWorkDetails(
 
 LibraryImportService _fixtureService(
   AppDatabase db,
-  ScrapeWorkDetails details,
-) {
+  ScrapeWorkDetails details, {
+  LibraryRepository? repository,
+  Future<bool> Function(String root, int requiredBytes)? diskSpaceChecker,
+  LibraryFilesystem? filesystem,
+  LibraryShortcutManager? shortcutManager,
+  LibraryImageDownloader? imageDownloader,
+}) {
   return LibraryImportService(
-    repository: LibraryRepository(db: db),
+    repository: repository ?? LibraryRepository(db: db),
     resolver: LibraryExactWorkResolver(
       sources: {ScrapeSourceId.javbus: _FakeSource(details)},
       priority: const [ScrapeSourceId.javbus],
     ),
     mediaProbe: const _FakeProbe(),
-    filesystem: LibraryFilesystem(),
-    shortcutManager: const _RecordingShortcutManager(),
+    filesystem: filesystem ?? LibraryFilesystem(),
+    shortcutManager: shortcutManager ?? const _RecordingShortcutManager(),
+    imageDownloader: imageDownloader,
+    diskSpaceChecker: diskSpaceChecker,
   );
 }
 

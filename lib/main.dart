@@ -14,7 +14,6 @@ import 'library/library_repository.dart';
 import 'remote/remote_coordinator.dart';
 import 'services/update_cache_service.dart';
 import 'services/update_startup_marker.dart';
-import 'views/add_view.dart';
 import 'views/data_health_view.dart';
 import 'views/detail_view.dart';
 import 'views/home_view.dart';
@@ -22,6 +21,7 @@ import 'views/settings_view.dart';
 import 'views/software_update_view.dart';
 import 'views/works_view.dart';
 import 'views/library_import_view.dart';
+import 'library/library_collection_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -44,9 +44,11 @@ Future<void> main() async {
   final remoteServiceCoordinator = RemoteServiceCoordinator.forApp(
     baseDir: db.baseDir,
   );
+  final collectionService = LibraryCollectionService(db: db);
   runApp(
     AvacaApp(
       db: db,
+      collectionService: collectionService,
       enableAutomaticUpdateCheck: true,
       remoteServiceCoordinator: remoteServiceCoordinator,
     ),
@@ -57,12 +59,14 @@ class AvacaApp extends StatefulWidget {
   const AvacaApp({
     super.key,
     required this.db,
+    this.collectionService,
     this.softwareUpdateController,
     this.enableAutomaticUpdateCheck = false,
     this.remoteServiceCoordinator,
   });
 
   final AppDatabase db;
+  final LibraryCollectionService? collectionService;
   final SoftwareUpdateController? softwareUpdateController;
   final bool enableAutomaticUpdateCheck;
   final RemoteServiceCoordinator? remoteServiceCoordinator;
@@ -319,11 +323,9 @@ class _AvacaAppState extends State<AvacaApp> with WidgetsBindingObserver {
     final name = settings.name ?? '/';
 
     if (name == '/') {
-      return _page(HomeView(db: widget.db));
-    }
-
-    if (name == '/add') {
-      return _page(AddView(db: widget.db));
+      return _page(
+        HomeView(db: widget.db, collectionService: widget.collectionService),
+      );
     }
 
     if (name == '/library-import') {
@@ -355,7 +357,13 @@ class _AvacaAppState extends State<AvacaApp> with WidgetsBindingObserver {
       final id = int.tryParse(name.split('/').last);
 
       if (id != null) {
-        return _page(DetailView(db: widget.db, actressId: id));
+        return _page(
+          DetailView(
+            db: widget.db,
+            actressId: id,
+            collectionService: widget.collectionService,
+          ),
+        );
       }
     }
 
@@ -363,7 +371,13 @@ class _AvacaAppState extends State<AvacaApp> with WidgetsBindingObserver {
       final id = int.tryParse(name.split('/').last);
 
       if (id != null) {
-        return _page(WorksView(db: widget.db, actressId: id));
+        return _page(
+          WorksView(
+            db: widget.db,
+            actressId: id,
+            collectionService: widget.collectionService,
+          ),
+        );
       }
     }
 
@@ -371,7 +385,9 @@ class _AvacaAppState extends State<AvacaApp> with WidgetsBindingObserver {
       return _page(DataHealthView(db: widget.db));
     }
 
-    return _page(HomeView(db: widget.db));
+    return _page(
+      HomeView(db: widget.db, collectionService: widget.collectionService),
+    );
   }
 
   MaterialPageRoute<void> _page(Widget child) {

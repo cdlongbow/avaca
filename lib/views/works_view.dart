@@ -8,6 +8,7 @@ import '../components/app_snackbar.dart';
 import '../controllers/works_controller.dart';
 import '../core/database.dart';
 import '../core/layout.dart';
+import '../library/library_collection_service.dart';
 import '../l10n/app_localizations.dart';
 import '../models/work_storage.dart';
 import '../controllers/settings_controller.dart';
@@ -16,10 +17,16 @@ import 'work_detail_view.dart';
 enum _WorksMenuAction { search, filterStored, filterNotStored, filterAll }
 
 class WorksView extends StatefulWidget {
-  const WorksView({super.key, required this.db, required this.actressId});
+  const WorksView({
+    super.key,
+    required this.db,
+    required this.actressId,
+    this.collectionService,
+  });
 
   final AppDatabase db;
   final int actressId;
+  final LibraryCollectionService? collectionService;
 
   @override
   State<WorksView> createState() => _WorksViewState();
@@ -42,7 +49,11 @@ class _WorksViewState extends State<WorksView> {
   void initState() {
     super.initState();
 
-    controller = WorksController(db: widget.db, actressId: widget.actressId);
+    controller = WorksController(
+      db: widget.db,
+      actressId: widget.actressId,
+      collectionService: widget.collectionService,
+    );
 
     settingsController = SettingsController(db: widget.db);
 

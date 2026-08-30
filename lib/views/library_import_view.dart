@@ -2,26 +2,35 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as path;
 
 import '../core/database.dart';
 import '../l10n/app_localizations.dart';
 import '../library/library_exact_resolver.dart';
 import '../library/library_filesystem.dart';
+import '../library/library_filename_parser.dart';
 import '../library/library_image_downloader.dart';
 import '../library/library_import_service.dart';
+import '../library/library_import_session.dart';
 import '../library/library_media_probe.dart';
-import '../library/library_filename_parser.dart';
-import '../library/library_info_store.dart';
-import '../library/library_models.dart';
 import '../library/library_repository.dart';
 import '../library/library_source_factory.dart';
 import '../models/scrape_source_id.dart';
 import '../services/scrape/scrape_source.dart';
 
 class LibraryImportView extends StatefulWidget {
-  const LibraryImportView({super.key, required this.db});
+  const LibraryImportView({
+    super.key,
+    required this.db,
+    this.directoryPicker,
+    this.repository,
+    this.scanner,
+  });
 
   final AppDatabase db;
+  final Future<String?> Function()? directoryPicker;
+  final LibraryRepository? repository;
+  final LibraryFolderScanner? scanner;
 
   @override
   State<LibraryImportView> createState() => _LibraryImportViewState();
@@ -30,11 +39,15 @@ class LibraryImportView extends StatefulWidget {
 class _LibraryImportViewState extends State<LibraryImportView> {
   final LibraryFilesystem _filesystem = LibraryFilesystem();
   final LibraryFilenameParser _parser = const LibraryFilenameParser();
+  final LibraryImportSession _session = LibraryImportSession();
+  final Map<String, TextEditingController> _manualCodeControllers = {};
   late final LibraryFolderScanner _scanner;
   late final LibraryRepository _repository;
-  String? _sourceFolder;
-  String? _libraryRoot;
-  List<LibraryScanEntry> _entries = const [];
+
+  LibraryImportPlan? _reviewPlan;
+  LibraryPreflightReport? _preflight;
+  final Map<String, String?> _primaryByWorkCode = {};
+  bool _reviewing = false;
   bool _busy = false;
   String? _message;
   LibraryImportBatchResult? _result;
@@ -42,51 +55,49 @@ class _LibraryImportViewState extends State<LibraryImportView> {
   @override
   void initState() {
     super.initState();
-    _scanner = LibraryFolderScanner(parser: _parser, filesystem: _filesystem);
-    _repository = LibraryRepository(db: widget.db);
+    _scanner =
+        widget.scanner ??
+        LibraryFolderScanner(parser: _parser, filesystem: _filesystem);
+    _repository = widget.repository ?? LibraryRepository(db: widget.db);
     _restoreRoot();
+  }
+
+  @override
+  void dispose() {
+    for (final controller in _manualCodeControllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
   }
 
   Future<void> _restoreRoot() async {
     final root = await _repository.activeLibraryRoot();
     if (!mounted) return;
-    setState(() => _libraryRoot = root);
+    _session.setLibraryRoot(root);
+    setState(() {});
   }
 
   Future<void> _selectFolder({required bool libraryRoot}) async {
-    final selected = await FilePicker.getDirectoryPath();
+    final selected =
+        await (widget.directoryPicker?.call() ?? FilePicker.getDirectoryPath());
     if (selected == null || selected.trim().isEmpty || !mounted) return;
-    setState(() {
-      if (libraryRoot) {
-        _libraryRoot = selected;
-      } else {
-        _sourceFolder = selected;
-        _entries = const [];
-        _result = null;
-      }
-      _message = null;
-    });
     if (libraryRoot) {
-      await _repository.setActiveLibraryRoot(
-        _filesystem.absolutePath(selected),
-      );
-      try {
-        final report = await LibraryReindexService(
-          repository: _repository,
-          filesystem: _filesystem,
-        ).reindex(selected);
-        if (mounted && report.errors.isNotEmpty) {
-          setState(() => _message = report.errors.join('\n'));
-        }
-      } on Object catch (error) {
-        if (mounted) setState(() => _message = '$error');
-      }
+      _session.setLibraryRoot(selected);
+      _clearReviewState();
+    } else {
+      _session.setSourceFolder(selected);
+      _disposeManualCodeControllers();
+      _clearReviewState();
     }
+    setState(() {
+      _message = null;
+      _result = null;
+    });
   }
 
   Future<void> _scan() async {
     final localizations = AppLocalizations.of(context);
-    final source = _sourceFolder;
+    final source = _session.sourceFolder;
     if (source == null) {
       setState(() => _message = localizations.libraryImportNoFolder);
       return;
@@ -95,11 +106,18 @@ class _LibraryImportViewState extends State<LibraryImportView> {
       _busy = true;
       _message = null;
       _result = null;
+      _clearReviewState();
     });
     try {
       final entries = await _scanner.scan(source);
       if (!mounted) return;
-      setState(() => _entries = entries);
+      _session.setEntries(entries);
+      _replaceManualCodeControllers();
+      setState(() {
+        if (entries.isEmpty) {
+          _message = localizations.libraryImportNoRecognizable;
+        }
+      });
     } on Object catch (error) {
       if (mounted) setState(() => _message = '$error');
     } finally {
@@ -108,27 +126,29 @@ class _LibraryImportViewState extends State<LibraryImportView> {
   }
 
   void _toggleEntry(int index, bool selected) {
-    setState(() {
-      final next = [..._entries];
-      next[index] = next[index].copyWith(selected: selected);
-      _entries = next;
-    });
+    _session.setSelected(index, selected);
+    setState(() {});
+  }
+
+  void _selectAllRecognizable() {
+    _session.selectAllRecognizable();
+    setState(() {});
+  }
+
+  void _clearSelection() {
+    _session.clearSelection();
+    setState(() {});
   }
 
   void _applyManualCode(int index, String value) {
-    setState(() {
-      final next = [..._entries];
-      next[index] = next[index].copyWith(
-        parseResult: _parser.applyManualCode(next[index].parseResult, value),
-      );
-      _entries = next;
-    });
+    _session.applyManualCode(index, value);
+    setState(() {});
   }
 
-  Future<void> _startImport() async {
+  Future<void> _reviewSelected() async {
     final localizations = AppLocalizations.of(context);
-    final source = _sourceFolder;
-    final root = _libraryRoot;
+    final source = _session.sourceFolder;
+    final root = _session.libraryRoot;
     if (source == null) {
       setState(() => _message = localizations.libraryImportNoFolder);
       return;
@@ -137,8 +157,8 @@ class _LibraryImportViewState extends State<LibraryImportView> {
       setState(() => _message = localizations.libraryImportNoRoot);
       return;
     }
-    final selected = _entries.where((entry) => entry.selected).toList();
-    if (selected.isEmpty) {
+    _flushManualCodes();
+    if (_session.selectedEntries.isEmpty) {
       setState(() => _message = localizations.libraryImportSelected(0));
       return;
     }
@@ -146,11 +166,139 @@ class _LibraryImportViewState extends State<LibraryImportView> {
       _busy = true;
       _message = null;
       _result = null;
+      _preflight = null;
     });
+    try {
+      final plan = await _withImportService(
+        (service) => service.buildPlan(
+          sourceFolder: source,
+          libraryRoot: root,
+          selectedEntries: _session.selectedEntries,
+          revision: _session.revision,
+          // Review may show unresolved primary choices. Commit always
+          // rebuilds with an explicit choice for multi-performer Works.
+          allowImplicitPrimary: true,
+        ),
+      );
+      if (!mounted) return;
+      _reviewPlan = plan;
+      _primaryByWorkCode
+        ..clear()
+        ..addAll(_initialPrimaryChoices(plan));
+      setState(() => _reviewing = true);
+    } on Object catch (error) {
+      if (mounted) setState(() => _message = '$error');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _commit() async {
+    final localizations = AppLocalizations.of(context);
+    final source = _session.sourceFolder;
+    final root = _session.libraryRoot;
+    if (source == null) {
+      setState(() => _message = localizations.libraryImportNoFolder);
+      return;
+    }
+    if (root == null) {
+      setState(() => _message = localizations.libraryImportNoRoot);
+      return;
+    }
+    final reviewPlan = _reviewPlan;
+    if (reviewPlan == null) {
+      await _reviewSelected();
+      return;
+    }
+    _flushManualCodes();
+    final missingPrimary = _missingPrimaryCodes(reviewPlan);
+    if (missingPrimary.isNotEmpty) {
+      setState(
+        () => _message =
+            '${localizations.libraryImportPrimaryRequired}\n${missingPrimary.join(', ')}',
+      );
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _message = null;
+      _preflight = null;
+    });
+    try {
+      final result = await _withImportService((service) async {
+        final plan = await service.buildPlan(
+          sourceFolder: source,
+          libraryRoot: root,
+          selectedEntries: _session.selectedEntries,
+          revision: _session.revision,
+          primaryActressSelector: (details) =>
+              _primaryByWorkCode[details.code.trim().toUpperCase()],
+        );
+        if (plan.issues.isNotEmpty) {
+          if (mounted) {
+            setState(() {
+              _reviewPlan = plan;
+              _preflight = null;
+              _message = plan.issues.join('\n');
+            });
+          }
+          return null;
+        }
+        final preflight = await service.preflight(plan);
+        if (!mounted) return null;
+        if (!preflight.isReady) {
+          setState(() {
+            _reviewPlan = plan;
+            _preflight = preflight;
+            _message = [
+              localizations.libraryImportCommitBlocked,
+              ...preflight.errors.map((issue) => issue.toString()),
+              ...preflight.items
+                  .where((item) => item.error != null)
+                  .map((item) => '${item.item.details.code}: ${item.error}'),
+            ].join('\n');
+          });
+          return null;
+        }
+        return service.execute(plan, preflight);
+      });
+      if (!mounted || result == null) return;
+      setState(() {
+        _result = result;
+        _reviewing = false;
+        _reviewPlan = null;
+        _preflight = null;
+      });
+    } on Object catch (error) {
+      if (mounted) setState(() => _message = '$error');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _choosePrimary(String code, String value) {
+    _primaryByWorkCode[code] = value;
+    setState(() {
+      _preflight = null;
+      _message = null;
+    });
+  }
+
+  void _backToScan() {
+    setState(() {
+      _reviewing = false;
+      _preflight = null;
+      _message = null;
+    });
+  }
+
+  Future<T> _withImportService<T>(
+    Future<T> Function(LibraryImportService service) action,
+  ) async {
     final factory = LibrarySourceFactory(db: widget.db);
     Map<ScrapeSourceId, ScrapeSource>? sources;
-    WorkImageLibraryDownloader? imageDownloader;
     final probe = FfmpegKitMediaProbe();
+    final imageDownloader = WorkImageLibraryDownloader();
     try {
       sources = await factory.createSources();
       final service = LibraryImportService(
@@ -161,127 +309,373 @@ class _LibraryImportViewState extends State<LibraryImportView> {
         shortcutManager: Platform.isWindows
             ? const WindowsShortcutManager()
             : const NoopShortcutManager(),
-        imageDownloader: imageDownloader = WorkImageLibraryDownloader(),
+        imageDownloader: imageDownloader,
       );
-      final plan = await service.buildPlan(
-        sourceFolder: source,
-        libraryRoot: root,
-        selectedEntries: selected,
-      );
-      final preflight = await service.preflight(plan);
-      final result = await service.execute(plan, preflight);
-      if (mounted) setState(() => _result = result);
-    } on Object catch (error) {
-      if (mounted) setState(() => _message = '$error');
+      return await action(service);
     } finally {
       for (final sourceAdapter in sources?.values ?? const <ScrapeSource>[]) {
         sourceAdapter.close();
       }
-      imageDownloader?.close();
+      imageDownloader.close();
       probe.close();
-      if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Map<String, String?> _initialPrimaryChoices(LibraryImportPlan plan) {
+    final namesByCode = _performerNamesByCode(plan);
+    return <String, String?>{
+      for (final entry in namesByCode.entries)
+        entry.key: entry.value.length == 1 ? entry.value.single : null,
+    };
+  }
+
+  Map<String, List<String>> _performerNamesByCode(LibraryImportPlan plan) {
+    final namesByCode = <String, List<String>>{};
+    for (final item in plan.items) {
+      final code = item.details.code.trim().toUpperCase();
+      final names = namesByCode.putIfAbsent(code, () => <String>[]);
+      for (final performer in item.performers) {
+        final name = performer['name']?.toString().trim();
+        if (name != null &&
+            name.isNotEmpty &&
+            !names.any(
+              (existing) => existing.toLowerCase() == name.toLowerCase(),
+            )) {
+          names.add(name);
+        }
+      }
+    }
+    return namesByCode;
+  }
+
+  List<String> _missingPrimaryCodes(LibraryImportPlan plan) {
+    final namesByCode = _performerNamesByCode(plan);
+    return [
+      for (final entry in namesByCode.entries)
+        if (entry.value.length > 1 &&
+            (_primaryByWorkCode[entry.key]?.trim().isEmpty ?? true))
+          entry.key,
+    ];
+  }
+
+  void _flushManualCodes() {
+    for (var index = 0; index < _session.entries.length; index++) {
+      final entry = _session.entries[index];
+      final controller = _manualCodeControllers[entry.sourcePath];
+      if (controller != null && controller.text != entry.parseResult.code) {
+        _session.applyManualCode(index, controller.text);
+      }
+    }
+  }
+
+  void _replaceManualCodeControllers() {
+    _disposeManualCodeControllers();
+    for (final entry in _session.entries) {
+      _manualCodeControllers[entry.sourcePath] = TextEditingController(
+        text: entry.parseResult.code ?? '',
+      );
+    }
+  }
+
+  void _disposeManualCodeControllers() {
+    for (final controller in _manualCodeControllers.values) {
+      controller.dispose();
+    }
+    _manualCodeControllers.clear();
+  }
+
+  void _clearReviewState() {
+    _reviewing = false;
+    _reviewPlan = null;
+    _preflight = null;
+    _primaryByWorkCode.clear();
   }
 
   @override
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
-    final selectedCount = _entries.where((entry) => entry.selected).length;
     return Scaffold(
-      appBar: AppBar(title: Text(localizations.libraryImportTitle)),
+      appBar: AppBar(
+        title: Text(
+          _reviewing
+              ? localizations.libraryImportReviewTitle
+              : localizations.libraryImportTitle,
+        ),
+      ),
       body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-              child: Text(
-                localizations.libraryImportPhase1ReadOnly,
-                style: Theme.of(context).textTheme.bodyMedium,
+        child: _reviewing
+            ? _buildReview(localizations)
+            : _buildScan(localizations),
+      ),
+    );
+  }
+
+  Widget _buildScan(AppLocalizations localizations) {
+    final selectedCount = _session.selectedCount;
+    final hasEntries = _session.entries.isNotEmpty;
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Text(
+            localizations.libraryImportPhase1ReadOnly,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: _busy
+                    ? null
+                    : () => _selectFolder(libraryRoot: false),
+                icon: const Icon(Icons.folder_open),
+                label: Text(localizations.libraryImportSelectFolder),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  OutlinedButton.icon(
-                    onPressed: _busy
-                        ? null
-                        : () => _selectFolder(libraryRoot: false),
-                    icon: const Icon(Icons.folder_open),
-                    label: Text(localizations.libraryImportSelectFolder),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: _busy
-                        ? null
-                        : () => _selectFolder(libraryRoot: true),
-                    icon: const Icon(Icons.library_books_outlined),
-                    label: Text(localizations.libraryImportSelectRoot),
-                  ),
-                  FilledButton.icon(
-                    onPressed: _busy ? null : _scan,
-                    icon: const Icon(Icons.search),
-                    label: Text(localizations.libraryImportScan),
-                  ),
-                ],
+              OutlinedButton.icon(
+                onPressed: _busy
+                    ? null
+                    : () => _selectFolder(libraryRoot: true),
+                icon: const Icon(Icons.library_books_outlined),
+                label: Text(localizations.libraryImportSelectRoot),
               ),
-            ),
-            _pathSummary(localizations),
-            if (_message != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 4,
-                ),
-                child: SelectableText(
-                  _message!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
+              FilledButton.icon(
+                onPressed: _busy ? null : _scan,
+                icon: const Icon(Icons.search),
+                label: Text(localizations.libraryImportScan),
               ),
-            Expanded(child: _buildEntries(localizations)),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      localizations.libraryImportSelected(selectedCount),
-                    ),
-                  ),
-                  FilledButton(
-                    onPressed: _busy ? null : _startImport,
-                    child: _busy
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Text(localizations.libraryImportConfirm),
-                  ),
-                ],
+              OutlinedButton(
+                onPressed: !_busy && hasEntries ? _selectAllRecognizable : null,
+                child: Text(localizations.libraryImportSelectAll),
               ),
-            ),
-            if (_result != null)
-              Padding(
-                padding: const EdgeInsets.only(left: 16, right: 16, bottom: 8),
+              OutlinedButton(
+                onPressed: !_busy && hasEntries ? _clearSelection : null,
+                child: Text(localizations.libraryImportClearAll),
+              ),
+            ],
+          ),
+        ),
+        _pathSummary(localizations),
+        if (_message != null) _errorMessage(),
+        Expanded(child: _buildEntries(localizations)),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(localizations.libraryImportSelected(selectedCount)),
+              ),
+              FilledButton.icon(
+                onPressed: _busy || selectedCount == 0 ? null : _reviewSelected,
+                icon: const Icon(Icons.rate_review_outlined),
+                label: Text(localizations.libraryImportReview),
+              ),
+            ],
+          ),
+        ),
+        if (_result != null) _resultSummary(localizations),
+      ],
+    );
+  }
+
+  Widget _buildReview(AppLocalizations localizations) {
+    final plan = _reviewPlan;
+    if (plan == null || plan.items.isEmpty) {
+      return Column(
+        children: [
+          if (_message != null) _errorMessage(),
+          if (plan?.issues.isNotEmpty ?? false)
+            Card(
+              color: Theme.of(context).colorScheme.errorContainer,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      localizations.libraryImportResult(
-                        _result!.succeededCount,
-                        _result!.duplicateCount,
-                        _result!.failedCount,
-                      ),
-                    ),
-                    for (final item in _result!.items)
-                      Text('${item.code}: ${item.message}'),
+                    Text(localizations.libraryImportReviewIssues),
+                    for (final issue in plan!.issues) Text(issue.toString()),
                   ],
+                ),
+              ),
+            ),
+          Expanded(
+            child: Center(
+              child: Text(localizations.libraryImportReviewNoItems),
+            ),
+          ),
+          _reviewActions(localizations),
+        ],
+      );
+    }
+    final groups = <String, List<LibraryImportPlanItem>>{};
+    for (final item in plan.items) {
+      groups
+          .putIfAbsent(item.details.code.trim().toUpperCase(), () => [])
+          .add(item);
+    }
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              '${localizations.libraryImportSource}: ${_session.sourceFolder ?? '-'}\n'
+              '${localizations.libraryImportDestination}: ${_session.libraryRoot ?? '-'}',
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ),
+        if (_message != null) _errorMessage(),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            children: [
+              if (plan.issues.isNotEmpty)
+                Card(
+                  color: Theme.of(context).colorScheme.errorContainer,
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(localizations.libraryImportReviewIssues),
+                        for (final issue in plan.issues) Text(issue.toString()),
+                      ],
+                    ),
+                  ),
+                ),
+              for (final entry in groups.entries)
+                _reviewWorkCard(entry.key, entry.value, localizations),
+              if (_preflight != null && !_preflight!.isReady)
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(localizations.libraryImportCommitBlocked),
+                        for (final issue in _preflight!.errors)
+                          Text(issue.toString()),
+                        for (final item in _preflight!.items)
+                          if (item.error != null)
+                            Text('${item.item.details.code}: ${item.error}'),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        _reviewActions(localizations),
+      ],
+    );
+  }
+
+  Widget _reviewWorkCard(
+    String code,
+    List<LibraryImportPlanItem> items,
+    AppLocalizations localizations,
+  ) {
+    final first = items.first;
+    final performerNames = <String>[];
+    for (final item in items) {
+      for (final performer in item.performers) {
+        final name = performer['name']?.toString().trim();
+        if (name != null &&
+            name.isNotEmpty &&
+            !performerNames.any(
+              (existing) => existing.toLowerCase() == name.toLowerCase(),
+            )) {
+          performerNames.add(name);
+        }
+      }
+    }
+    final primary = _primaryByWorkCode[code];
+    final destination = primary == null || primary.trim().isEmpty
+        ? '-'
+        : '${_filesystem.safeSegment(primary)}/${_filesystem.safeSegment(code)}';
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '$code · ${first.details.title}',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${localizations.libraryImportReviewDestination}: $destination',
+            ),
+            const SizedBox(height: 8),
+            if (performerNames.length <= 1)
+              Text(
+                '${localizations.libraryImportPrimaryPerformer}: '
+                '${performerNames.firstOrNull ?? '-'}',
+              )
+            else ...[
+              Text(localizations.libraryImportPrimaryPerformer),
+              DropdownButton<String>(
+                isExpanded: true,
+                value: performerNames.contains(primary) ? primary : null,
+                hint: Text(localizations.libraryImportChoosePrimary),
+                items: [
+                  for (final name in performerNames)
+                    DropdownMenuItem<String>(value: name, child: Text(name)),
+                ],
+                onChanged: _busy
+                    ? null
+                    : (value) {
+                        if (value != null) _choosePrimary(code, value);
+                      },
+              ),
+            ],
+            const Divider(),
+            Text('${localizations.libraryImportReviewMedia}: ${items.length}'),
+            for (final item in items)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  '${path.basename(item.entry.sourcePath)} → '
+                  '${item.normalizedFileName} · '
+                  '${item.entry.parseResult.variantToken ?? '-'} · '
+                  '${item.entry.parseResult.partLabel ?? '-'}',
                 ),
               ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _reviewActions(AppLocalizations localizations) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      child: Row(
+        children: [
+          OutlinedButton(
+            onPressed: _busy ? null : _backToScan,
+            child: Text(localizations.libraryImportBackToScan),
+          ),
+          const Spacer(),
+          FilledButton.icon(
+            onPressed: _busy ? null : _commit,
+            icon: _busy
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.save_alt),
+            label: Text(localizations.libraryImportCommit),
+          ),
+        ],
       ),
     );
   }
@@ -292,8 +686,8 @@ class _LibraryImportViewState extends State<LibraryImportView> {
       child: Align(
         alignment: Alignment.centerLeft,
         child: Text(
-          '${localizations.libraryImportSelectFolder}: ${_sourceFolder ?? '-'}\n'
-          '${localizations.libraryImportSelectRoot}: ${_libraryRoot ?? '-'}',
+          '${localizations.libraryImportSource}: ${_session.sourceFolder ?? '-'}\n'
+          '${localizations.libraryImportDestination}: ${_session.libraryRoot ?? '-'}',
           maxLines: 3,
           overflow: TextOverflow.ellipsis,
         ),
@@ -301,17 +695,29 @@ class _LibraryImportViewState extends State<LibraryImportView> {
     );
   }
 
+  Widget _errorMessage() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: SelectableText(
+        _message!,
+        style: TextStyle(color: Theme.of(context).colorScheme.error),
+      ),
+    );
+  }
+
   Widget _buildEntries(AppLocalizations localizations) {
-    if (_entries.isEmpty) {
+    final entries = _session.entries;
+    if (entries.isEmpty) {
       return Center(child: Text(localizations.libraryImportNoFolder));
     }
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      itemCount: _entries.length,
+      itemCount: entries.length,
       itemBuilder: (context, index) {
-        final entry = _entries[index];
+        final entry = entries[index];
         final parsed = entry.parseResult;
         final importable = parsed.isImportable;
+        final controller = _manualCodeControllers[entry.sourcePath];
         return Card(
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
@@ -319,11 +725,12 @@ class _LibraryImportViewState extends State<LibraryImportView> {
               children: [
                 CheckboxListTile(
                   value: entry.selected,
-                  onChanged: importable
+                  onChanged: !_busy
                       ? (value) => _toggleEntry(index, value ?? false)
                       : null,
                   title: Text(entry.originalFileName),
                   subtitle: Text(
+                    '${importable ? localizations.libraryImportStatusReady : localizations.libraryImportStatusNeedsCorrection} · '
                     '${parsed.code ?? '-'} · ${parsed.variantToken ?? '-'} · '
                     '${parsed.partLabel ?? '-'}\n${parsed.diagnostic}',
                   ),
@@ -331,15 +738,21 @@ class _LibraryImportViewState extends State<LibraryImportView> {
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(56, 0, 16, 8),
-                  child: TextFormField(
-                    key: ValueKey('${entry.sourcePath}:${parsed.code}'),
-                    initialValue: parsed.code ?? '',
-                    enabled: !_busy,
-                    decoration: InputDecoration(
-                      labelText: localizations.libraryImportManualCode,
-                      isDense: true,
+                  child: Focus(
+                    onFocusChange: (hasFocus) {
+                      if (!hasFocus && controller != null) {
+                        _applyManualCode(index, controller.text);
+                      }
+                    },
+                    child: TextField(
+                      controller: controller,
+                      enabled: !_busy,
+                      decoration: InputDecoration(
+                        labelText: localizations.libraryImportManualCode,
+                        isDense: true,
+                      ),
+                      onChanged: (value) => _applyManualCode(index, value),
                     ),
-                    onFieldSubmitted: (value) => _applyManualCode(index, value),
                   ),
                 ),
               ],
@@ -347,6 +760,27 @@ class _LibraryImportViewState extends State<LibraryImportView> {
           ),
         );
       },
+    );
+  }
+
+  Widget _resultSummary(AppLocalizations localizations) {
+    final result = _result!;
+    return Padding(
+      padding: const EdgeInsets.only(left: 16, right: 16, bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            localizations.libraryImportResult(
+              result.succeededCount,
+              result.duplicateCount,
+              result.failedCount,
+            ),
+          ),
+          for (final item in result.items)
+            Text('${item.code}: ${item.message}'),
+        ],
+      ),
     );
   }
 }
