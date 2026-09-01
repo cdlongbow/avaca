@@ -67,4 +67,26 @@ void main() {
     expect(session.libraryRoot, 'C:/library');
     expect(session.entries, isEmpty);
   });
+
+  test(
+    'reconciliation removes only succeeded sources and clears retained selection',
+    () {
+      final session = LibraryImportSession();
+      session.setEntries(<LibraryScanEntry>[
+        entry('ABC00123.mp4'),
+        entry('DEF00456.mp4'),
+      ]);
+      session.setSelected(0, true);
+      session.setSelected(1, true);
+      session.applyManualCode(1, 'DEF00457');
+
+      session.reconcileAfterImport(<String>['C:/source/ABC00123.mp4']);
+
+      expect(session.entries, hasLength(1));
+      expect(session.entries.single.sourcePath, 'C:/source/DEF00456.mp4');
+      expect(session.entries.single.parseResult.normalizedCode, 'DEF-457');
+      expect(session.entries.single.selected, isFalse);
+      expect(session.selectedCount, 0);
+    },
+  );
 }

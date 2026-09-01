@@ -10,6 +10,7 @@ import 'core/keyboard_dismiss_navigator_observer.dart';
 import 'controllers/software_update_controller.dart';
 import 'library/library_filesystem.dart';
 import 'library/library_maintenance_service.dart';
+import 'library/library_operation_gate.dart';
 import 'library/library_repository.dart';
 import 'remote/remote_coordinator.dart';
 import 'services/update_cache_service.dart';
@@ -28,17 +29,20 @@ Future<void> main() async {
 
   final db = AppDatabase();
   await db.init();
-  unawaited(
-    LibraryImportRecoveryService(
-      repository: LibraryRepository(db: db),
-      filesystem: LibraryFilesystem(),
-    ).recover().then<void>(
-      (_) {},
-      onError: (Object error, StackTrace stackTrace) {
-        debugPrint('Library import recovery failed: ${error.runtimeType}');
-      },
-    ),
-  );
+  final libraryOperationGate = LibraryOperationGate.forDatabase(db);
+  try {
+    await libraryOperationGate.run(
+      () => LibraryImportRecoveryService(
+        repository: LibraryRepository(db: db),
+        filesystem: LibraryFilesystem(),
+      ).recover(),
+    );
+  } on Object catch (error) {
+    // Recovery is fail-closed for Library mutations, but a recoverable
+    // database must still be able to open so Data Health can explain the
+    // repair state to the user.
+    debugPrint('Library import recovery failed: ${error.runtimeType}');
+  }
   await markWindowsStartupSuccess();
 
   final remoteServiceCoordinator = RemoteServiceCoordinator.forApp(

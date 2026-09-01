@@ -26,6 +26,39 @@ class LibraryWorkCommitResult {
   final List<String> mediaIds;
 }
 
+/// The DB-authoritative identity needed to resolve one managed media file.
+///
+/// Nullable fields are intentional: a corrupt or legacy row must reach the
+/// resolver so it can fail closed with a useful reason instead of falling
+/// back to caller-provided paths.
+class LibraryManagedMediaLookup {
+  const LibraryManagedMediaLookup({
+    required this.mediaRowId,
+    required this.mediaPortableId,
+    required this.workId,
+    required this.libraryManaged,
+    required this.workPortableId,
+    required this.workCode,
+    required this.libraryRoot,
+    required this.workRelativePath,
+    required this.mediaRelativePath,
+    required this.fileSizeBytes,
+    required this.sha256,
+  });
+
+  final int mediaRowId;
+  final String mediaPortableId;
+  final int workId;
+  final bool libraryManaged;
+  final String? workPortableId;
+  final String? workCode;
+  final String? libraryRoot;
+  final String? workRelativePath;
+  final String? mediaRelativePath;
+  final int? fileSizeBytes;
+  final String? sha256;
+}
+
 class LibraryRepository {
   LibraryRepository({required this.db, PortableIdGenerator? idGenerator})
     : _idGenerator = idGenerator ?? PortableIdGenerator();
@@ -194,6 +227,63 @@ class LibraryRepository {
       limit: 1,
     );
     return (rows.firstOrNull?['id'] as num?)?.toInt();
+  }
+
+  /// Looks up a media identity without accepting any filesystem path from the
+  /// caller. The active root is read from the same DB snapshot as the media
+  /// and parent Work fields.
+  Future<LibraryManagedMediaLookup?> lookupMediaByPortableId(
+    String portableId,
+  ) async {
+    final value = portableId.trim();
+    if (value.isEmpty) return null;
+    final database = await db.database;
+    final rows = await database.rawQuery(
+      '''
+      SELECT mf.id AS media_row_id,
+             mf.portable_id AS media_portable_id,
+             mf.work_id AS work_id,
+             mf.file_size_bytes AS file_size_bytes,
+             mf.sha256 AS sha256,
+             mf.relative_path AS media_relative_path,
+             w.library_managed AS library_managed,
+             w.portable_id AS work_portable_id,
+             w.code AS work_code,
+             w.library_relative_path AS work_relative_path,
+             (
+               SELECT path
+               FROM library_roots
+               WHERE is_active = 1
+               ORDER BY modified_at DESC
+               LIMIT 1
+             ) AS library_root
+      FROM media_files mf
+      INNER JOIN works w ON w.id = mf.work_id
+      WHERE mf.portable_id = ? COLLATE BINARY
+      ''',
+      [value],
+    );
+    if (rows.length != 1) return null;
+    final row = rows.single;
+    final mediaRowId = (row['media_row_id'] as num?)?.toInt();
+    final workId = (row['work_id'] as num?)?.toInt();
+    final mediaId = row['media_portable_id']?.toString().trim() ?? '';
+    if (mediaRowId == null || workId == null || mediaId.isEmpty) {
+      return null;
+    }
+    return LibraryManagedMediaLookup(
+      mediaRowId: mediaRowId,
+      mediaPortableId: mediaId,
+      workId: workId,
+      libraryManaged: (row['library_managed'] as num?)?.toInt() == 1,
+      workPortableId: row['work_portable_id']?.toString().trim(),
+      workCode: row['work_code']?.toString().trim(),
+      libraryRoot: row['library_root']?.toString().trim(),
+      workRelativePath: row['work_relative_path']?.toString().trim(),
+      mediaRelativePath: row['media_relative_path']?.toString().trim(),
+      fileSizeBytes: (row['file_size_bytes'] as num?)?.toInt(),
+      sha256: row['sha256']?.toString().trim(),
+    );
   }
 
   Future<LibraryWorkCommitResult> commitInfoDocument(

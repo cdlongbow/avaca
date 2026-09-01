@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit_config.dart';
 import 'package:ffmpeg_kit_flutter_new/ffprobe_kit.dart';
 import 'package:ffmpeg_kit_flutter_new/return_code.dart';
+import 'package:ffmpeg_kit_flutter_new/media_information_session.dart';
 
 import 'library_models.dart';
 
@@ -11,6 +13,8 @@ abstract interface class LibraryMediaProbe {
 }
 
 class FfmpegKitMediaProbe implements LibraryMediaProbe {
+  static const Duration _probeTimeout = Duration(seconds: 30);
+
   const FfmpegKitMediaProbe({
     this.backendVersion = 'ffmpeg_kit_flutter_new/4.6.2',
   });
@@ -20,12 +24,59 @@ class FfmpegKitMediaProbe implements LibraryMediaProbe {
   @override
   Future<MediaProbeResult> probe(String filePath) async {
     try {
-      final session = await FFprobeKit.getMediaInformation(filePath);
-      final returnCode = await session.getReturnCode();
+      final completed = Completer<MediaInformationSession>();
+      final session = await MediaInformationSession.create(
+        [
+          '-v',
+          'error',
+          '-hide_banner',
+          '-print_format',
+          'json',
+          '-show_format',
+          '-show_streams',
+          '-show_chapters',
+          '-i',
+          filePath,
+        ],
+        (finished) {
+          if (!completed.isCompleted) completed.complete(finished);
+        },
+      );
+      try {
+        await FFmpegKitConfig.asyncGetMediaInformationExecute(session).timeout(
+          _probeTimeout,
+          onTimeout: () => throw TimeoutException(
+            'ffprobe launch timed out after ${_probeTimeout.inSeconds}s',
+          ),
+        );
+      } on TimeoutException catch (error) {
+        await session.cancel().catchError((_) {});
+        return _error(error.message ?? 'ffprobe startup timed out');
+      }
+      final finished = await completed.future.timeout(
+        _probeTimeout,
+        onTimeout: () async {
+          await session.cancel();
+          throw TimeoutException(
+            'ffprobe timed out after ${_probeTimeout.inSeconds}s',
+          );
+        },
+      );
+      final returnCode = await finished.getReturnCode();
       if (!ReturnCode.isSuccess(returnCode)) {
         return _error('ffprobe returned ${returnCode ?? 'no return code'}');
       }
-      final information = session.getMediaInformation();
+      var information =
+          finished.getMediaInformation() ?? session.getMediaInformation();
+      if (information == null) {
+        final sessions = await FFprobeKit.listMediaInformationSessions();
+        for (final candidate in sessions) {
+          if (candidate.getSessionId() == finished.getSessionId()) {
+            information = candidate.getMediaInformation();
+            break;
+          }
+        }
+      }
       if (information == null) {
         return _error('ffprobe returned no media information');
       }

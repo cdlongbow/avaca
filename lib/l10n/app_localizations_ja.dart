@@ -367,6 +367,10 @@ class AppLocalizationsJa extends AppLocalizations {
   String get deleteWorksWarning => '選択した作品を全体から削除し、他の女優からの作品リンクも削除します。';
 
   @override
+  String get libraryCollectionDeleteUnavailable =>
+      'Library 管理の Collection 項目は削除できません。';
+
+  @override
   String worksDeleted(int count) {
     return '$count 件の作品を削除しました';
   }
@@ -839,6 +843,10 @@ class AppLocalizationsJa extends AppLocalizations {
   String get libraryImportNoRoot => '先にライブラリルートを選択してください。';
 
   @override
+  String get libraryImportMediaAccessRequired =>
+      '選択したフォルダー内の動画を AVACA が読み取れるように許可してから、もう一度スキャンしてください。';
+
+  @override
   String get libraryImportManualCode => '番号を手動修正';
 
   @override
@@ -856,6 +864,44 @@ class AppLocalizationsJa extends AppLocalizations {
   String libraryImportResult(int succeeded, int duplicate, int failed) {
     return '取り込み結果：成功 $succeeded、重複 $duplicate、失敗 $failed';
   }
+
+  @override
+  String libraryImportProgress(
+    int index,
+    int total,
+    String code,
+    String filename,
+    String phase,
+  ) {
+    return '項目 $index/$total · $code · $filename · $phase';
+  }
+
+  @override
+  String libraryImportProgressPhase(String phase) {
+    String _temp0 = intl.Intl.selectLogic(phase, {
+      'resolving': '解決中',
+      'hashing': 'ハッシュ計算',
+      'probing': 'メディア情報取得',
+      'preflight': '事前確認',
+      'staging': '一時保存',
+      'copying': 'コピー中',
+      'verifying': '検証中',
+      'portableCommit': 'Library メディア作成',
+      'indexing': 'インデックス作成',
+      'linking': 'リンク作成',
+      'sourceCleanup': 'ソース整理',
+      'succeeded': '成功',
+      'duplicate': '重複',
+      'failed': '失敗',
+      'cancelled': 'キャンセル',
+      'repairRequired': '要修復',
+      'other': '処理中',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get libraryImportNoPending => '保留中の取り込み項目はありません。';
 
   @override
   String get libraryImportSource => '來源資料夾';
@@ -1350,6 +1396,10 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
   String get deleteWorksWarning => '選択した作品を全体から削除し、他の女優からの作品リンクも削除します。';
 
   @override
+  String get libraryCollectionDeleteUnavailable =>
+      'Library 管理の Collection 項目は削除できません。';
+
+  @override
   String worksDeleted(int count) {
     return '$count 件の作品を削除しました';
   }
@@ -1822,6 +1872,10 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
   String get libraryImportNoRoot => '先にライブラリルートを選択してください。';
 
   @override
+  String get libraryImportMediaAccessRequired =>
+      '選択したフォルダー内の動画を AVACA が読み取れるように許可してから、もう一度スキャンしてください。';
+
+  @override
   String get libraryImportManualCode => '番号を手動修正';
 
   @override
@@ -1839,6 +1893,44 @@ class AppLocalizationsJaJp extends AppLocalizationsJa {
   String libraryImportResult(int succeeded, int duplicate, int failed) {
     return '取り込み結果：成功 $succeeded、重複 $duplicate、失敗 $failed';
   }
+
+  @override
+  String libraryImportProgress(
+    int index,
+    int total,
+    String code,
+    String filename,
+    String phase,
+  ) {
+    return '項目 $index/$total · $code · $filename · $phase';
+  }
+
+  @override
+  String libraryImportProgressPhase(String phase) {
+    String _temp0 = intl.Intl.selectLogic(phase, {
+      'resolving': '解決中',
+      'hashing': 'ハッシュ計算',
+      'probing': 'メディア情報取得',
+      'preflight': '事前確認',
+      'staging': '一時保存',
+      'copying': 'コピー中',
+      'verifying': '検証中',
+      'portableCommit': 'Library メディア作成',
+      'indexing': 'インデックス作成',
+      'linking': 'リンク作成',
+      'sourceCleanup': 'ソース整理',
+      'succeeded': '成功',
+      'duplicate': '重複',
+      'failed': '失敗',
+      'cancelled': 'キャンセル',
+      'repairRequired': '要修復',
+      'other': '処理中',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get libraryImportNoPending => '保留中の取り込み項目はありません。';
 
   @override
   String get libraryMediaTitle => 'メディアファイル';

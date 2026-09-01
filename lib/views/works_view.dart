@@ -149,7 +149,7 @@ class _WorksViewState extends State<WorksView> {
   }
 
   void _toggleSelection(Map<String, Object?> work) {
-    if (deletionBusy) {
+    if (widget.collectionService != null || deletionBusy) {
       return;
     }
 
@@ -167,7 +167,9 @@ class _WorksViewState extends State<WorksView> {
   }
 
   Future<void> _openDeleteConfirmation() async {
-    if (deletionBusy || selectedWorkIds.isEmpty) {
+    if (widget.collectionService != null ||
+        deletionBusy ||
+        selectedWorkIds.isEmpty) {
       return;
     }
 
@@ -213,7 +215,9 @@ class _WorksViewState extends State<WorksView> {
   }
 
   Future<void> _deleteSelectedWorks() async {
-    if (deletionBusy || selectedWorkIds.isEmpty) {
+    if (widget.collectionService != null ||
+        deletionBusy ||
+        selectedWorkIds.isEmpty) {
       return;
     }
 
@@ -288,7 +292,7 @@ class _WorksViewState extends State<WorksView> {
               title: Text(_buildTitle(context)),
 
               actions: [
-                if (isSelecting)
+                if (widget.collectionService == null && isSelecting)
                   IconButton(
                     key: const Key('works-delete-action'),
 
@@ -348,37 +352,39 @@ class _WorksViewState extends State<WorksView> {
             ],
           ),
         ),
-        const PopupMenuDivider(),
-        PopupMenuItem<_WorksMenuAction>(
-          key: const Key('works-filter-stored-menu-item'),
-          value: _WorksMenuAction.filterStored,
-          enabled: enabled,
-          child: _buildStorageFilterMenuRow(
-            l10n.workStorageFilterStored,
-            WorkStorageFilter.stored,
-            Icons.bookmark,
+        if (widget.collectionService == null) ...[
+          const PopupMenuDivider(),
+          PopupMenuItem<_WorksMenuAction>(
+            key: const Key('works-filter-stored-menu-item'),
+            value: _WorksMenuAction.filterStored,
+            enabled: enabled,
+            child: _buildStorageFilterMenuRow(
+              l10n.workStorageFilterStored,
+              WorkStorageFilter.stored,
+              Icons.bookmark,
+            ),
           ),
-        ),
-        PopupMenuItem<_WorksMenuAction>(
-          key: const Key('works-filter-not-stored-menu-item'),
-          value: _WorksMenuAction.filterNotStored,
-          enabled: enabled,
-          child: _buildStorageFilterMenuRow(
-            l10n.workStorageFilterNotStored,
-            WorkStorageFilter.notStored,
-            Icons.bookmark_border,
+          PopupMenuItem<_WorksMenuAction>(
+            key: const Key('works-filter-not-stored-menu-item'),
+            value: _WorksMenuAction.filterNotStored,
+            enabled: enabled,
+            child: _buildStorageFilterMenuRow(
+              l10n.workStorageFilterNotStored,
+              WorkStorageFilter.notStored,
+              Icons.bookmark_border,
+            ),
           ),
-        ),
-        PopupMenuItem<_WorksMenuAction>(
-          key: const Key('works-filter-all-menu-item'),
-          value: _WorksMenuAction.filterAll,
-          enabled: enabled,
-          child: _buildStorageFilterMenuRow(
-            l10n.workStorageFilterAll,
-            WorkStorageFilter.all,
-            Icons.video_library_outlined,
+          PopupMenuItem<_WorksMenuAction>(
+            key: const Key('works-filter-all-menu-item'),
+            value: _WorksMenuAction.filterAll,
+            enabled: enabled,
+            child: _buildStorageFilterMenuRow(
+              l10n.workStorageFilterAll,
+              WorkStorageFilter.all,
+              Icons.video_library_outlined,
+            ),
           ),
-        ),
+        ],
       ],
     );
   }
@@ -599,7 +605,9 @@ class _WorksViewState extends State<WorksView> {
                       }
                     },
 
-                    onLongPress: () => _toggleSelection(work),
+                    onLongPress: widget.collectionService == null
+                        ? () => _toggleSelection(work)
+                        : null,
                   ),
                 );
               },
@@ -623,6 +631,7 @@ class _WorksViewState extends State<WorksView> {
           db: widget.db,
           workId: workId,
           currentActressId: widget.actressId,
+          collectionService: widget.collectionService,
         ),
       ),
     );
@@ -639,13 +648,13 @@ class _WorkCard extends StatelessWidget {
     required this.work,
     required this.selected,
     required this.onTap,
-    required this.onLongPress,
+    this.onLongPress,
   });
 
   final Map<String, Object?> work;
   final bool selected;
   final VoidCallback onTap;
-  final VoidCallback onLongPress;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {

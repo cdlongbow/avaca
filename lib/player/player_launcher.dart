@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
-import '../library/library_media_locator.dart';
+import '../library/library_media_resolver.dart';
 import 'controllers/avaca_player_controller.dart';
 import 'models/player_launch_request.dart';
 import 'models/player_media_source.dart';
@@ -16,28 +16,26 @@ import 'widgets/player_ui_labels.dart';
 /// screen is pushed when the managed file is unavailable or unsafe.
 final class PlayerLauncher {
   PlayerLauncher({
-    LibraryMediaLocator? locator,
+    required this.mediaResolver,
     PlayerPlatform Function()? platformFactory,
-  }) : locator = locator ?? LibraryMediaLocator(),
-       platformFactory = platformFactory ?? MethodChannelPlayerPlatform.new;
+  }) : platformFactory = platformFactory ?? MethodChannelPlayerPlatform.new;
 
-  final LibraryMediaLocator locator;
+  final LibraryMediaResolver mediaResolver;
   final PlayerPlatform Function() platformFactory;
 
   Future<void> launch({
     required BuildContext context,
     required String workCode,
-    required String libraryRoot,
-    required String workRelativePath,
-    required String mediaRelativePath,
-    required String? mediaPortableId,
+    required String mediaPortableId,
+    int? expectedWorkId,
+    String? expectedWorkPortableId,
     required AppLocalizations localizations,
   }) async {
-    final resolved = await locator.resolveMedia(
-      libraryRoot: libraryRoot,
-      workRelativePath: workRelativePath,
-      mediaRelativePath: mediaRelativePath,
-      mediaPortableId: mediaPortableId,
+    final resolved = await mediaResolver.resolveByPortableId(
+      mediaPortableId,
+      expectedWorkId: expectedWorkId,
+      expectedWorkPortableId: expectedWorkPortableId,
+      verifyIntegrity: true,
     );
     if (!context.mounted) return;
     final request = PlayerLaunchRequest(

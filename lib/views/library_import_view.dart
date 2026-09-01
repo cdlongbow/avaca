@@ -6,6 +6,7 @@ import 'package:path/path.dart' as path;
 
 import '../core/database.dart';
 import '../l10n/app_localizations.dart';
+import '../library/library_android_storage_access.dart';
 import '../library/library_exact_resolver.dart';
 import '../library/library_filesystem.dart';
 import '../library/library_filename_parser.dart';
@@ -13,6 +14,7 @@ import '../library/library_image_downloader.dart';
 import '../library/library_import_service.dart';
 import '../library/library_import_session.dart';
 import '../library/library_media_probe.dart';
+import '../library/library_operation_gate.dart';
 import '../library/library_repository.dart';
 import '../library/library_source_factory.dart';
 import '../models/scrape_source_id.dart';
@@ -25,12 +27,14 @@ class LibraryImportView extends StatefulWidget {
     this.directoryPicker,
     this.repository,
     this.scanner,
+    this.operationGate,
   });
 
   final AppDatabase db;
   final Future<String?> Function()? directoryPicker;
   final LibraryRepository? repository;
   final LibraryFolderScanner? scanner;
+  final LibraryOperationGate? operationGate;
 
   @override
   State<LibraryImportView> createState() => _LibraryImportViewState();
@@ -38,6 +42,8 @@ class LibraryImportView extends StatefulWidget {
 
 class _LibraryImportViewState extends State<LibraryImportView> {
   final LibraryFilesystem _filesystem = LibraryFilesystem();
+  final LibraryAndroidStorageAccess _androidStorageAccess =
+      const LibraryAndroidStorageAccess();
   final LibraryFilenameParser _parser = const LibraryFilenameParser();
   final LibraryImportSession _session = LibraryImportSession();
   final Map<String, TextEditingController> _manualCodeControllers = {};
@@ -51,6 +57,11 @@ class _LibraryImportViewState extends State<LibraryImportView> {
   bool _busy = false;
   String? _message;
   LibraryImportBatchResult? _result;
+  LibraryImportProgress? _progress;
+  LibraryOperationGate? _operationGate;
+
+  LibraryOperationGate get _gate => _operationGate ??=
+      widget.operationGate ?? LibraryOperationGate.forDatabase(widget.db);
 
   @override
   void initState() {
@@ -72,8 +83,14 @@ class _LibraryImportViewState extends State<LibraryImportView> {
 
   Future<void> _restoreRoot() async {
     final root = await _repository.activeLibraryRoot();
+    final fallbackRoot = Platform.isAndroid
+        ? path.join(widget.db.baseDir, 'library')
+        : null;
+    if (root == null && fallbackRoot != null) {
+      await Directory(fallbackRoot).create(recursive: true);
+    }
     if (!mounted) return;
-    _session.setLibraryRoot(root);
+    _session.setLibraryRoot(root ?? fallbackRoot);
     setState(() {});
   }
 
@@ -92,6 +109,7 @@ class _LibraryImportViewState extends State<LibraryImportView> {
     setState(() {
       _message = null;
       _result = null;
+      _progress = null;
     });
   }
 
@@ -106,9 +124,18 @@ class _LibraryImportViewState extends State<LibraryImportView> {
       _busy = true;
       _message = null;
       _result = null;
+      _progress = null;
       _clearReviewState();
     });
     try {
+      if (!await _androidStorageAccess.ensureMediaReadAccess()) {
+        if (mounted) {
+          setState(
+            () => _message = localizations.libraryImportMediaAccessRequired,
+          );
+        }
+        return;
+      }
       final entries = await _scanner.scan(source);
       if (!mounted) return;
       _session.setEntries(entries);
@@ -167,6 +194,7 @@ class _LibraryImportViewState extends State<LibraryImportView> {
       _message = null;
       _result = null;
       _preflight = null;
+      _progress = null;
     });
     try {
       final plan = await _withImportService(
@@ -175,6 +203,7 @@ class _LibraryImportViewState extends State<LibraryImportView> {
           libraryRoot: root,
           selectedEntries: _session.selectedEntries,
           revision: _session.revision,
+          onProgress: _handleProgress,
           // Review may show unresolved primary choices. Commit always
           // rebuilds with an explicit choice for multi-performer Works.
           allowImplicitPrimary: true,
@@ -185,7 +214,12 @@ class _LibraryImportViewState extends State<LibraryImportView> {
       _primaryByWorkCode
         ..clear()
         ..addAll(_initialPrimaryChoices(plan));
-      setState(() => _reviewing = true);
+      setState(() {
+        _reviewing = true;
+        // The plan is complete; do not leave the last build phase (usually
+        // `probing`) rendered as if it were still active in Review.
+        _progress = null;
+      });
     } on Object catch (error) {
       if (mounted) setState(() => _message = '$error');
     } finally {
@@ -223,51 +257,65 @@ class _LibraryImportViewState extends State<LibraryImportView> {
       _busy = true;
       _message = null;
       _preflight = null;
+      _progress = null;
     });
     try {
-      final result = await _withImportService((service) async {
-        final plan = await service.buildPlan(
-          sourceFolder: source,
-          libraryRoot: root,
-          selectedEntries: _session.selectedEntries,
-          revision: _session.revision,
-          primaryActressSelector: (details) =>
-              _primaryByWorkCode[details.code.trim().toUpperCase()],
-        );
-        if (plan.issues.isNotEmpty) {
-          if (mounted) {
+      final result = await _gate.run(
+        () => _withImportService((service) async {
+          final plan = await service.buildPlan(
+            sourceFolder: source,
+            libraryRoot: root,
+            selectedEntries: _session.selectedEntries,
+            revision: _session.revision,
+            primaryActressSelector: (details) =>
+                _primaryByWorkCode[details.code.trim().toUpperCase()],
+            onProgress: _handleProgress,
+          );
+          if (plan.issues.isNotEmpty) {
+            if (mounted) {
+              setState(() {
+                _reviewPlan = plan;
+                _preflight = null;
+                _message = plan.issues.join('\n');
+              });
+            }
+            return null;
+          }
+          final preflight = await service.preflight(
+            plan,
+            onProgress: _handleProgress,
+          );
+          if (!mounted) return null;
+          if (!preflight.isReady) {
             setState(() {
               _reviewPlan = plan;
-              _preflight = null;
-              _message = plan.issues.join('\n');
+              _preflight = preflight;
+              _message = [
+                localizations.libraryImportCommitBlocked,
+                ...preflight.errors.map((issue) => issue.toString()),
+                ...preflight.items
+                    .where((item) => item.error != null)
+                    .map((item) => '${item.item.details.code}: ${item.error}'),
+              ].join('\n');
             });
+            return null;
           }
-          return null;
-        }
-        final preflight = await service.preflight(plan);
-        if (!mounted) return null;
-        if (!preflight.isReady) {
-          setState(() {
-            _reviewPlan = plan;
-            _preflight = preflight;
-            _message = [
-              localizations.libraryImportCommitBlocked,
-              ...preflight.errors.map((issue) => issue.toString()),
-              ...preflight.items
-                  .where((item) => item.error != null)
-                  .map((item) => '${item.item.details.code}: ${item.error}'),
-            ].join('\n');
-          });
-          return null;
-        }
-        return service.execute(plan, preflight);
-      });
+          return service.execute(plan, preflight, onProgress: _handleProgress);
+        }),
+      );
       if (!mounted || result == null) return;
+      _session.reconcileAfterImport(
+        result.items
+            .where((item) => item.state == LibraryImportResultState.succeeded)
+            .map((item) => item.sourcePath),
+      );
+      _replaceManualCodeControllers();
       setState(() {
         _result = result;
         _reviewing = false;
         _reviewPlan = null;
         _preflight = null;
+        _primaryByWorkCode.clear();
       });
     } on Object catch (error) {
       if (mounted) setState(() => _message = '$error');
@@ -282,6 +330,11 @@ class _LibraryImportViewState extends State<LibraryImportView> {
       _preflight = null;
       _message = null;
     });
+  }
+
+  void _handleProgress(LibraryImportProgress progress) {
+    if (!mounted) return;
+    setState(() => _progress = progress);
   }
 
   void _backToScan() {
@@ -459,6 +512,7 @@ class _LibraryImportViewState extends State<LibraryImportView> {
           ),
         ),
         _pathSummary(localizations),
+        if (_progress != null) _progressBanner(localizations),
         if (_message != null) _errorMessage(),
         Expanded(child: _buildEntries(localizations)),
         Padding(
@@ -486,6 +540,7 @@ class _LibraryImportViewState extends State<LibraryImportView> {
     if (plan == null || plan.items.isEmpty) {
       return Column(
         children: [
+          if (_progress != null) _progressBanner(localizations),
           if (_message != null) _errorMessage(),
           if (plan?.issues.isNotEmpty ?? false)
             Card(
@@ -530,6 +585,7 @@ class _LibraryImportViewState extends State<LibraryImportView> {
             ),
           ),
         ),
+        if (_progress != null) _progressBanner(localizations),
         if (_message != null) _errorMessage(),
         Expanded(
           child: ListView(
@@ -705,10 +761,36 @@ class _LibraryImportViewState extends State<LibraryImportView> {
     );
   }
 
+  Widget _progressBanner(AppLocalizations localizations) {
+    final progress = _progress!;
+    return Padding(
+      key: const Key('library-import-progress'),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          localizations.libraryImportProgress(
+            progress.itemIndex,
+            progress.itemCount,
+            progress.code,
+            progress.sourceFileName,
+            localizations.libraryImportProgressPhase(progress.phase.name),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildEntries(AppLocalizations localizations) {
     final entries = _session.entries;
     if (entries.isEmpty) {
-      return Center(child: Text(localizations.libraryImportNoFolder));
+      return Center(
+        child: Text(
+          _result == null
+              ? localizations.libraryImportNoFolder
+              : localizations.libraryImportNoPending,
+        ),
+      );
     }
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),

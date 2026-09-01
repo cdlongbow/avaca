@@ -44,6 +44,7 @@ class LibraryImportPlanItem {
     required this.performers,
     required this.destinationRelativePath,
     required this.normalizedFileName,
+    this.itemIndex = 1,
   });
 
   final LibraryScanEntry entry;
@@ -58,6 +59,7 @@ class LibraryImportPlanItem {
   final List<Map<String, Object?>> performers;
   final String destinationRelativePath;
   final String normalizedFileName;
+  final int itemIndex;
 
   Map<String, Object?> toJournalJson() => {
     'code': details.code,
@@ -70,6 +72,7 @@ class LibraryImportPlanItem {
     'performers': performers,
     'destinationRelativePath': destinationRelativePath,
     'normalizedFileName': normalizedFileName,
+    'itemIndex': itemIndex,
     'sourceSha256': sourceSha256,
     'sourceSizeBytes': sourceSnapshot.sizeBytes,
     'sourceModifiedAt': sourceSnapshot.modifiedAt?.toUtc().toIso8601String(),
@@ -87,6 +90,7 @@ class LibraryImportPlan {
     required this.issues,
     required this.fingerprint,
     this.revision = 0,
+    this.totalSelected = 0,
   });
 
   final String sourceFolder;
@@ -95,6 +99,9 @@ class LibraryImportPlan {
   final List<LibraryPlanIssue> issues;
   final String fingerprint;
   final int revision;
+  final int totalSelected;
+
+  int get progressItemCount => totalSelected > 0 ? totalSelected : items.length;
 
   bool get isUsable => items.isNotEmpty && issues.isEmpty;
 }
@@ -181,7 +188,47 @@ class LibraryImportBatchResult {
 
 typedef LibraryPrimaryActressSelector =
     String? Function(ScrapeWorkDetails details);
-typedef LibraryProgressCallback = void Function(String code, String step);
+
+enum LibraryImportProgressPhase {
+  resolving,
+  hashing,
+  probing,
+  preflight,
+  staging,
+  copying,
+  verifying,
+  portableCommit,
+  indexing,
+  linking,
+  sourceCleanup,
+  succeeded,
+  duplicate,
+  failed,
+  cancelled,
+  repairRequired,
+}
+
+class LibraryImportProgress {
+  const LibraryImportProgress({
+    required this.itemIndex,
+    required this.itemCount,
+    required this.code,
+    required this.sourceFileName,
+    required this.phase,
+    this.resultState,
+  });
+
+  final int itemIndex;
+  final int itemCount;
+  final String code;
+  final String sourceFileName;
+  final LibraryImportProgressPhase phase;
+  final LibraryImportResultState? resultState;
+
+  bool get isTerminal => resultState != null;
+}
+
+typedef LibraryProgressCallback = void Function(LibraryImportProgress progress);
 
 /// Coordinates the confirmed scrape -> probe -> preflight -> filesystem
 /// journal -> portable index pipeline.
@@ -217,6 +264,7 @@ class LibraryImportService {
     LibraryPrimaryActressSelector? primaryActressSelector,
     int revision = 0,
     bool allowImplicitPrimary = false,
+    LibraryProgressCallback? onProgress,
   }) async {
     final source = filesystem.absolutePath(sourceFolder);
     final root = filesystem.absolutePath(libraryRoot);
@@ -238,8 +286,22 @@ class LibraryImportService {
     final actressIdsByName = <String, String>{};
     final resolutionsByCode = <String, LibraryResolutionResult>{};
     final selected = selectedEntries.where((entry) => entry.selected).toList();
-    for (final entry in selected) {
+    for (
+      var selectedIndex = 0;
+      selectedIndex < selected.length;
+      selectedIndex++
+    ) {
+      final entry = selected[selectedIndex];
       final parsed = entry.parseResult;
+      final progressCode = parsed.normalizedCode ?? entry.originalFileName;
+      _emitProgress(
+        onProgress,
+        itemIndex: selectedIndex + 1,
+        itemCount: selected.length,
+        code: progressCode,
+        sourceFileName: entry.originalFileName,
+        phase: LibraryImportProgressPhase.resolving,
+      );
       if (!parsed.isImportable || parsed.normalizedCode == null) {
         issues.add(
           LibraryPlanIssue(
@@ -247,6 +309,15 @@ class LibraryImportService {
             code: parsed.normalizedCode,
             message: parsed.diagnostic,
           ),
+        );
+        _emitProgress(
+          onProgress,
+          itemIndex: selectedIndex + 1,
+          itemCount: selected.length,
+          code: progressCode,
+          sourceFileName: entry.originalFileName,
+          phase: LibraryImportProgressPhase.failed,
+          resultState: LibraryImportResultState.failed,
         );
         continue;
       }
@@ -302,8 +373,24 @@ class LibraryImportService {
         }
         primaryByCode[code] = primaryName;
 
+        _emitProgress(
+          onProgress,
+          itemIndex: selectedIndex + 1,
+          itemCount: selected.length,
+          code: code,
+          sourceFileName: entry.originalFileName,
+          phase: LibraryImportProgressPhase.hashing,
+        );
         final sourceSnapshot = await filesystem.snapshot(entry.sourcePath);
         final sourceHash = await filesystem.hashFile(entry.sourcePath);
+        _emitProgress(
+          onProgress,
+          itemIndex: selectedIndex + 1,
+          itemCount: selected.length,
+          code: code,
+          sourceFileName: entry.originalFileName,
+          phase: LibraryImportProgressPhase.probing,
+        );
         final probe = await mediaProbe.probe(entry.sourcePath);
         if (!probe.isUsable) {
           throw StateError(
@@ -357,6 +444,7 @@ class LibraryImportService {
             performers: List.unmodifiable(performerRecords),
             destinationRelativePath: destinationRelativePath,
             normalizedFileName: normalizedFileName,
+            itemIndex: selectedIndex + 1,
           ),
         );
       } on Object catch (error) {
@@ -366,6 +454,15 @@ class LibraryImportService {
             code: code,
             message: '$error',
           ),
+        );
+        _emitProgress(
+          onProgress,
+          itemIndex: selectedIndex + 1,
+          itemCount: selected.length,
+          code: code,
+          sourceFileName: entry.originalFileName,
+          phase: LibraryImportProgressPhase.failed,
+          resultState: LibraryImportResultState.failed,
         );
       }
     }
@@ -387,16 +484,28 @@ class LibraryImportService {
       issues: List.unmodifiable(issues),
       fingerprint: fingerprint,
       revision: revision,
+      totalSelected: selected.length,
     );
   }
 
-  Future<LibraryPreflightReport> preflight(LibraryImportPlan plan) async {
+  Future<LibraryPreflightReport> preflight(
+    LibraryImportPlan plan, {
+    LibraryProgressCallback? onProgress,
+  }) async {
     final errors = <LibraryPlanIssue>[];
     final preflightItems = <LibraryPreflightItem>[];
     final destinationFiles = <String, LibraryImportPlanItem>{};
     final plannedHashes = <String>{};
     var requiredBytes = 0;
     for (final item in plan.items) {
+      _emitProgress(
+        onProgress,
+        itemIndex: item.itemIndex,
+        itemCount: plan.progressItemCount,
+        code: item.details.code,
+        sourceFileName: item.entry.originalFileName,
+        phase: LibraryImportProgressPhase.preflight,
+      );
       String? error;
       var duplicate = false;
       try {
@@ -586,6 +695,14 @@ class LibraryImportService {
       final preflightItem = report.items[index];
       final item = preflightItem.item;
       final journalId = (journalRows[index]['id'] as num).toInt();
+      _emitProgress(
+        onProgress,
+        itemIndex: item.itemIndex,
+        itemCount: plan.progressItemCount,
+        code: item.details.code,
+        sourceFileName: item.entry.originalFileName,
+        phase: LibraryImportProgressPhase.preflight,
+      );
       if (preflightItem.error != null) {
         await repository.updateImportItem(
           itemId: journalId,
@@ -600,6 +717,15 @@ class LibraryImportService {
             state: LibraryImportResultState.failed,
             message: preflightItem.error!,
           ),
+        );
+        _emitProgress(
+          onProgress,
+          itemIndex: item.itemIndex,
+          itemCount: plan.progressItemCount,
+          code: item.details.code,
+          sourceFileName: item.entry.originalFileName,
+          phase: LibraryImportProgressPhase.failed,
+          resultState: LibraryImportResultState.failed,
         );
         continue;
       }
@@ -618,6 +744,15 @@ class LibraryImportService {
             message: 'cancelled before portable commit',
           ),
         );
+        _emitProgress(
+          onProgress,
+          itemIndex: item.itemIndex,
+          itemCount: plan.progressItemCount,
+          code: item.details.code,
+          sourceFileName: item.entry.originalFileName,
+          phase: LibraryImportProgressPhase.cancelled,
+          resultState: LibraryImportResultState.cancelled,
+        );
         continue;
       }
       if (preflightItem.duplicateMedia) {
@@ -635,9 +770,17 @@ class LibraryImportService {
                 'same file hash already exists; source was not copied or deleted',
           ),
         );
+        _emitProgress(
+          onProgress,
+          itemIndex: item.itemIndex,
+          itemCount: plan.progressItemCount,
+          code: item.details.code,
+          sourceFileName: item.entry.originalFileName,
+          phase: LibraryImportProgressPhase.duplicate,
+          resultState: LibraryImportResultState.duplicateMedia,
+        );
         continue;
       }
-      onProgress?.call(item.details.code, 'staging');
       final stagingItem = Directory(
         path.join(
           plan.libraryRoot,
@@ -664,6 +807,14 @@ class LibraryImportService {
           operationId: operationId,
           state: LibraryImportOperationState.staging,
         );
+        _emitProgress(
+          onProgress,
+          itemIndex: item.itemIndex,
+          itemCount: plan.progressItemCount,
+          code: item.details.code,
+          sourceFileName: item.entry.originalFileName,
+          phase: LibraryImportProgressPhase.staging,
+        );
         await filesystem.validateNoSymbolicLinks(
           plan.libraryRoot,
           stagingItem.path,
@@ -686,6 +837,14 @@ class LibraryImportService {
           operationId: operationId,
           state: LibraryImportOperationState.copying,
         );
+        _emitProgress(
+          onProgress,
+          itemIndex: item.itemIndex,
+          itemCount: plan.progressItemCount,
+          code: item.details.code,
+          sourceFileName: item.entry.originalFileName,
+          phase: LibraryImportProgressPhase.copying,
+        );
         final copiedHash = await filesystem.copyAndHash(
           item.entry.sourcePath,
           stagedMedia,
@@ -702,6 +861,14 @@ class LibraryImportService {
         await repository.updateImportOperation(
           operationId: operationId,
           state: LibraryImportOperationState.verifying,
+        );
+        _emitProgress(
+          onProgress,
+          itemIndex: item.itemIndex,
+          itemCount: plan.progressItemCount,
+          code: item.details.code,
+          sourceFileName: item.entry.originalFileName,
+          phase: LibraryImportProgressPhase.verifying,
         );
         final imageResult = await imageDownloader.download(
           details: item.details,
@@ -787,6 +954,14 @@ class LibraryImportService {
           state: LibraryImportOperationState.portableCommitted,
           committed: true,
         );
+        _emitProgress(
+          onProgress,
+          itemIndex: item.itemIndex,
+          itemCount: plan.progressItemCount,
+          code: item.details.code,
+          sourceFileName: item.entry.originalFileName,
+          phase: LibraryImportProgressPhase.portableCommit,
+        );
         final commit = await repository.commitInfoDocument(
           document,
           libraryRoot: plan.libraryRoot,
@@ -803,6 +978,14 @@ class LibraryImportService {
           operationId: operationId,
           state: LibraryImportOperationState.indexing,
         );
+        _emitProgress(
+          onProgress,
+          itemIndex: item.itemIndex,
+          itemCount: plan.progressItemCount,
+          code: item.details.code,
+          sourceFileName: item.entry.originalFileName,
+          phase: LibraryImportProgressPhase.indexing,
+        );
         await repository.updateImportItem(
           itemId: journalId,
           state: LibraryImportItemState.linking,
@@ -811,6 +994,14 @@ class LibraryImportService {
         await repository.updateImportOperation(
           operationId: operationId,
           state: LibraryImportOperationState.linking,
+        );
+        _emitProgress(
+          onProgress,
+          itemIndex: item.itemIndex,
+          itemCount: plan.progressItemCount,
+          code: item.details.code,
+          sourceFileName: item.entry.originalFileName,
+          phase: LibraryImportProgressPhase.linking,
         );
         await _buildPerformerLinks(
           item: item,
@@ -826,6 +1017,14 @@ class LibraryImportService {
         await repository.updateImportOperation(
           operationId: operationId,
           state: LibraryImportOperationState.sourceCleanupPending,
+        );
+        _emitProgress(
+          onProgress,
+          itemIndex: item.itemIndex,
+          itemCount: plan.progressItemCount,
+          code: item.details.code,
+          sourceFileName: item.entry.originalFileName,
+          phase: LibraryImportProgressPhase.sourceCleanup,
         );
         final currentSource = await filesystem.snapshot(item.entry.sourcePath);
         if (!currentSource.matches(item.sourceSnapshot) ||
@@ -853,6 +1052,15 @@ class LibraryImportService {
             state: LibraryImportResultState.succeeded,
             message: 'imported',
           ),
+        );
+        _emitProgress(
+          onProgress,
+          itemIndex: item.itemIndex,
+          itemCount: plan.progressItemCount,
+          code: item.details.code,
+          sourceFileName: item.entry.originalFileName,
+          phase: LibraryImportProgressPhase.succeeded,
+          resultState: LibraryImportResultState.succeeded,
         );
       } on Object catch (error) {
         final committed = portableCommitted;
@@ -882,6 +1090,19 @@ class LibraryImportService {
                 : LibraryImportResultState.failed,
             message: '$error',
           ),
+        );
+        _emitProgress(
+          onProgress,
+          itemIndex: item.itemIndex,
+          itemCount: plan.progressItemCount,
+          code: item.details.code,
+          sourceFileName: item.entry.originalFileName,
+          phase: committed
+              ? LibraryImportProgressPhase.repairRequired
+              : LibraryImportProgressPhase.failed,
+          resultState: committed
+              ? LibraryImportResultState.repairRequired
+              : LibraryImportResultState.failed,
         );
       } finally {
         try {
@@ -922,6 +1143,27 @@ class LibraryImportService {
       operationId: operationId,
       items: List.unmodifiable(results),
       planIssues: plan.issues,
+    );
+  }
+
+  void _emitProgress(
+    LibraryProgressCallback? onProgress, {
+    required int itemIndex,
+    required int itemCount,
+    required String code,
+    required String sourceFileName,
+    required LibraryImportProgressPhase phase,
+    LibraryImportResultState? resultState,
+  }) {
+    onProgress?.call(
+      LibraryImportProgress(
+        itemIndex: itemIndex,
+        itemCount: itemCount,
+        code: code,
+        sourceFileName: sourceFileName,
+        phase: phase,
+        resultState: resultState,
+      ),
     );
   }
 

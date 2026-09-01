@@ -120,12 +120,14 @@ final class LibraryLocatorFailure implements Exception {
     this.libraryRoot,
     this.workRelativePath,
     this.mediaRelativePath,
+    this.mediaPortableId,
   });
 
   final String message;
   final String? libraryRoot;
   final String? workRelativePath;
   final String? mediaRelativePath;
+  final String? mediaPortableId;
 
   @override
   String toString() => 'LibraryLocatorFailure: $message';

@@ -1,5 +1,6 @@
 import '../core/database.dart';
 import 'library_media_locator.dart';
+import 'library_media_resolver.dart';
 import 'library_repository.dart';
 
 /// Reads the normal product Collection from physically verifiable media.
@@ -7,17 +8,26 @@ import 'library_repository.dart';
 /// Legacy database queries remain available for migration, data transfer and
 /// health tooling. This service is the only query surface used by the normal
 /// Home → Actress → Work browsing path.
-final class LibraryCollectionService {
+class LibraryCollectionService {
   LibraryCollectionService({
     required this.db,
     LibraryRepository? repository,
     LibraryMediaLocator? locator,
+    LibraryMediaResolver? mediaResolver,
   }) : repository = repository ?? LibraryRepository(db: db),
-       locator = locator ?? LibraryMediaLocator();
+       locator = locator ?? LibraryMediaLocator() {
+    this.mediaResolver =
+        mediaResolver ??
+        LibraryMediaResolver(
+          repository: this.repository,
+          locator: this.locator,
+        );
+  }
 
   final AppDatabase db;
   final LibraryRepository repository;
   final LibraryMediaLocator locator;
+  late final LibraryMediaResolver mediaResolver;
 
   /// Returns an actress only when the normal Collection can resolve at least
   /// one of her indexed Library media files. Direct routes use this guard so
@@ -29,8 +39,6 @@ final class LibraryCollectionService {
     final rows = await database.rawQuery(
       '''
       SELECT DISTINCT a.id, a.name, a.img_path,
-             w.library_relative_path AS work_relative_path,
-             mf.relative_path AS media_relative_path,
              mf.portable_id AS media_portable_id
       FROM actresses a
       INNER JOIN actress_works aw ON aw.actress_id = a.id
@@ -45,9 +53,6 @@ final class LibraryCollectionService {
     );
     for (final row in rows) {
       if (await _mediaExists(
-        root: root,
-        workRelativePath: row['work_relative_path']?.toString() ?? '',
-        mediaRelativePath: row['media_relative_path']?.toString() ?? '',
         mediaPortableId: row['media_portable_id']?.toString(),
       )) {
         return _actressValues(row);
@@ -89,8 +94,6 @@ final class LibraryCollectionService {
     };
     final rows = await database.rawQuery('''
       SELECT DISTINCT a.id, a.name, a.img_path,
-             w.library_relative_path AS work_relative_path,
-             mf.relative_path AS media_relative_path,
              mf.portable_id AS media_portable_id
       FROM actresses a
       INNER JOIN actress_works aw ON aw.actress_id = a.id
@@ -106,9 +109,6 @@ final class LibraryCollectionService {
       final actressId = (row['id'] as num?)?.toInt();
       if (actressId == null || seen.contains(actressId)) continue;
       final healthy = await _mediaExists(
-        root: root,
-        workRelativePath: row['work_relative_path']?.toString() ?? '',
-        mediaRelativePath: row['media_relative_path']?.toString() ?? '',
         mediaPortableId: row['media_portable_id']?.toString(),
       );
       if (!healthy) continue;
@@ -126,8 +126,7 @@ final class LibraryCollectionService {
       '''
       SELECT DISTINCT w.id, w.code, w.title, w.release_date,
              w.duration_minutes, w.studio, w.publisher, w.series,
-             w.card_image_path, w.detail_image_path, w.is_stored,
-             w.storage_quality, w.storage_frame_rate, w.portable_id,
+             w.card_image_path, w.detail_image_path, w.portable_id,
              w.primary_actress_id, w.library_managed, w.library_relative_path
       FROM works w
       INNER JOIN actress_works aw ON aw.work_id = w.id
@@ -153,10 +152,8 @@ final class LibraryCollectionService {
       var healthy = false;
       for (final media in mediaRows) {
         if (await _mediaExists(
-          root: root,
-          workRelativePath: row['library_relative_path']?.toString() ?? '',
-          mediaRelativePath: media['relative_path']?.toString() ?? '',
           mediaPortableId: media['portable_id']?.toString(),
+          expectedWorkId: (row['id'] as num?)?.toInt(),
         )) {
           healthy = true;
           break;
@@ -170,18 +167,70 @@ final class LibraryCollectionService {
   Future<int> getWorkCountForActress(int actressId) async =>
       (await getWorksForActress(actressId)).length;
 
-  Future<bool> _mediaExists({
-    required String root,
-    required String workRelativePath,
-    required String mediaRelativePath,
-    String? mediaPortableId,
+  /// Loads a Work through the normal physical Collection admission boundary.
+  /// Legacy metadata-only Works are intentionally not returned.
+  Future<Map<String, Object?>?> getWorkById(
+    int workId, {
+    int? currentActressId,
   }) async {
+    final root = await repository.activeLibraryRoot();
+    if (root == null) return null;
+    if (currentActressId != null) {
+      final database = await db.database;
+      final relation = await database.query(
+        'actress_works',
+        columns: const ['work_id'],
+        where: 'actress_id = ? AND work_id = ?',
+        whereArgs: [currentActressId, workId],
+        limit: 1,
+      );
+      if (relation.isEmpty) return null;
+    }
+    final work = await db.getWorkById(
+      workId,
+      currentActressId: currentActressId,
+    );
+    if (work == null || !_isManaged(work['library_managed'])) return null;
+    final rawMedia = work['library_media'];
+    if (rawMedia is! List || rawMedia.isEmpty) return null;
+    final workPortableId = work['portable_id']?.toString();
+    final healthyMedia = <Map<String, Object?>>[];
+    for (final value in rawMedia.whereType<Map>()) {
+      final media = Map<String, Object?>.from(value);
+      final portableId = media['portable_id']?.toString().trim() ?? '';
+      if (portableId.isEmpty) continue;
+      try {
+        await mediaResolver.resolveByPortableId(
+          portableId,
+          expectedWorkId: workId,
+          expectedWorkPortableId: workPortableId,
+          verifyIntegrity: false,
+        );
+        healthyMedia.add(media);
+      } on Object {
+        // Broken media remains available to health tooling but is not an
+        // admission ticket for the normal Collection.
+      }
+    }
+    if (healthyMedia.isEmpty) return null;
+    work.remove('is_stored');
+    work.remove('storage_quality');
+    work.remove('storage_frame_rate');
+    work['library_media'] = List.unmodifiable(healthyMedia);
+    return work;
+  }
+
+  Future<bool> _mediaExists({
+    required String? mediaPortableId,
+    int? expectedWorkId,
+  }) async {
+    final id = mediaPortableId?.trim();
+    if (id == null || id.isEmpty) return false;
     try {
-      await locator.resolveMedia(
-        libraryRoot: root,
-        workRelativePath: workRelativePath,
-        mediaRelativePath: mediaRelativePath,
-        mediaPortableId: mediaPortableId,
+      await mediaResolver.resolveByPortableId(
+        id,
+        expectedWorkId: expectedWorkId,
+        verifyIntegrity: false,
       );
       return true;
     } on Object {
@@ -194,4 +243,7 @@ final class LibraryCollectionService {
     'name': row['name'],
     'img_path': row['img_path'],
   };
+
+  bool _isManaged(Object? value) =>
+      value is num ? value.toInt() == 1 : value == true;
 }

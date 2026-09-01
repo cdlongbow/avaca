@@ -31,17 +31,23 @@ class WorksController extends ChangeNotifier {
   List<Map<String, Object?>> get visibleWorks {
     final rawQuery = _searchQuery.trim();
 
-    final filteredWorks = switch (_storageFilter) {
-      WorkStorageFilter.all => works,
-      WorkStorageFilter.stored =>
-        works
-            .where((work) => WorkStorageRecord.fromDatabase(work).isStored)
-            .toList(growable: false),
-      WorkStorageFilter.notStored =>
-        works
-            .where((work) => !WorkStorageRecord.fromDatabase(work).isStored)
-            .toList(growable: false),
-    };
+    final filteredWorks = collectionService == null
+        ? switch (_storageFilter) {
+            WorkStorageFilter.all => works,
+            WorkStorageFilter.stored =>
+              works
+                  .where(
+                    (work) => WorkStorageRecord.fromDatabase(work).isStored,
+                  )
+                  .toList(growable: false),
+            WorkStorageFilter.notStored =>
+              works
+                  .where(
+                    (work) => !WorkStorageRecord.fromDatabase(work).isStored,
+                  )
+                  .toList(growable: false),
+          }
+        : works;
 
     if (rawQuery.isEmpty) {
       return filteredWorks;
@@ -62,6 +68,9 @@ class WorksController extends ChangeNotifier {
   }
 
   void changeStorageFilter(WorkStorageFilter value) {
+    if (collectionService != null) {
+      return;
+    }
     if (_storageFilter == value) {
       return;
     }

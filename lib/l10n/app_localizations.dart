@@ -805,6 +805,12 @@ abstract class AppLocalizations {
   /// **'選取的作品會從資料庫中全域移除，也會移除其他女優的作品連結。'**
   String get deleteWorksWarning;
 
+  /// No description provided for @libraryCollectionDeleteUnavailable.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'Library 收藏項目不提供刪除功能。'**
+  String get libraryCollectionDeleteUnavailable;
+
   /// No description provided for @worksDeleted.
   ///
   /// In zh_TW, this message translates to:
@@ -1675,6 +1681,12 @@ abstract class AppLocalizations {
   /// **'請先選擇收藏資料夾。'**
   String get libraryImportNoRoot;
 
+  /// No description provided for @libraryImportMediaAccessRequired.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'請允許 AVACA 讀取所選資料夾中的影片，再重新掃描。'**
+  String get libraryImportMediaAccessRequired;
+
   /// No description provided for @libraryImportManualCode.
   ///
   /// In zh_TW, this message translates to:
@@ -1704,6 +1716,30 @@ abstract class AppLocalizations {
   /// In zh_TW, this message translates to:
   /// **'匯入結果：成功 {succeeded}、重複 {duplicate}、失敗 {failed}'**
   String libraryImportResult(int succeeded, int duplicate, int failed);
+
+  /// No description provided for @libraryImportProgress.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'項目 {index}/{total} · {code} · {filename} · {phase}'**
+  String libraryImportProgress(
+    int index,
+    int total,
+    String code,
+    String filename,
+    String phase,
+  );
+
+  /// No description provided for @libraryImportProgressPhase.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'{phase, select, resolving {解析中} hashing {計算雜湊} probing {讀取媒體資訊} preflight {預檢查} staging {建立暫存} copying {複製中} verifying {驗證中} portableCommit {建立 Library 媒體} indexing {寫入索引} linking {建立連結} sourceCleanup {清理來源} succeeded {成功} duplicate {重複} failed {失敗} cancelled {已取消} repairRequired {需要修復} other {處理中}}'**
+  String libraryImportProgressPhase(String phase);
+
+  /// No description provided for @libraryImportNoPending.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'目前沒有待處理的匯入項目。'**
+  String get libraryImportNoPending;
 
   /// No description provided for @libraryImportSource.
   ///

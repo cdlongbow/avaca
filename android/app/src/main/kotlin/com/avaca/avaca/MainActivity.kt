@@ -1,6 +1,8 @@
 package com.avaca.avaca
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -18,6 +20,9 @@ import java.io.File
 
 class MainActivity : FlutterActivity() {
     private val updateChannelName = "com.avaca.avaca/software_update"
+    private val libraryStorageChannelName = "com.avaca.avaca/library_storage"
+    private val mediaReadPermissionRequestCode = 4201
+    private var pendingMediaReadPermissionResult: MethodChannel.Result? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -91,5 +96,51 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, libraryStorageChannelName)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "requestMediaReadAccess" -> requestMediaReadAccess(result)
+                    else -> result.notImplemented()
+                }
+            }
+    }
+
+    private fun requestMediaReadAccess(result: MethodChannel.Result) {
+        val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_VIDEO
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M ||
+            checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
+        ) {
+            result.success(true)
+            return
+        }
+        if (pendingMediaReadPermissionResult != null) {
+            result.error(
+                "PERMISSION_REQUEST_IN_PROGRESS",
+                "A media permission request is already in progress.",
+                null,
+            )
+            return
+        }
+        pendingMediaReadPermissionResult = result
+        requestPermissions(arrayOf(permission), mediaReadPermissionRequestCode)
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        if (requestCode == mediaReadPermissionRequestCode) {
+            val granted = grantResults.isNotEmpty() &&
+                grantResults.all { it == PackageManager.PERMISSION_GRANTED }
+            pendingMediaReadPermissionResult?.success(granted)
+            pendingMediaReadPermissionResult = null
+        }
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
     }
 }

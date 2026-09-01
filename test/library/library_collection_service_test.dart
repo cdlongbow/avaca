@@ -86,6 +86,14 @@ void main() {
                   whereArgs: ['Actress A'],
                 )).single['id']
                 as int;
+        final physicalWorkId =
+            (await database.query(
+                  'works',
+                  columns: const ['id'],
+                  where: 'code = ?',
+                  whereArgs: ['ABC-123'],
+                )).single['id']
+                as int;
         expect(
           (await collection.getWorksForActress(
             physicalActressId,
@@ -96,19 +104,20 @@ void main() {
           await collection.getActressById(physicalActressId),
           containsPair('name', 'Actress A'),
         );
+        final normalWork = await collection.getWorkById(
+          physicalWorkId,
+          currentActressId: physicalActressId,
+        );
+        expect(normalWork, isNotNull);
+        expect(normalWork!.containsKey('is_stored'), isFalse);
+        expect(normalWork.containsKey('storage_quality'), isFalse);
+        expect(normalWork.containsKey('storage_frame_rate'), isFalse);
 
         await database.update(
           'media_files',
           {'portable_id': ''},
           where: 'work_id = ?',
-          whereArgs: [
-            (await database.query(
-              'works',
-              columns: const ['id'],
-              where: 'code = ?',
-              whereArgs: ['ABC-123'],
-            )).single['id'],
-          ],
+          whereArgs: [physicalWorkId],
         );
         expect(await collection.getActresses(), isEmpty);
         expect(await collection.getActressById(physicalActressId), isNull);

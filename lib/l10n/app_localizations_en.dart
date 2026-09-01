@@ -370,6 +370,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'The selected works will be removed globally, including links from other actresses.';
 
   @override
+  String get libraryCollectionDeleteUnavailable =>
+      'Delete is unavailable for Library-managed Collection items.';
+
+  @override
   String worksDeleted(int count) {
     return 'Deleted $count works';
   }
@@ -868,6 +872,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get libraryImportNoRoot => 'Select a library root first.';
 
   @override
+  String get libraryImportMediaAccessRequired =>
+      'Allow AVACA to read videos in the selected folder, then scan again.';
+
+  @override
   String get libraryImportManualCode => 'Manual code correction';
 
   @override
@@ -885,6 +893,44 @@ class AppLocalizationsEn extends AppLocalizations {
   String libraryImportResult(int succeeded, int duplicate, int failed) {
     return 'Import result: $succeeded succeeded, $duplicate duplicate, $failed failed';
   }
+
+  @override
+  String libraryImportProgress(
+    int index,
+    int total,
+    String code,
+    String filename,
+    String phase,
+  ) {
+    return 'Item $index/$total · $code · $filename · $phase';
+  }
+
+  @override
+  String libraryImportProgressPhase(String phase) {
+    String _temp0 = intl.Intl.selectLogic(phase, {
+      'resolving': 'Resolving',
+      'hashing': 'Hashing',
+      'probing': 'Probing',
+      'preflight': 'Preflight',
+      'staging': 'Staging',
+      'copying': 'Copying',
+      'verifying': 'Verifying',
+      'portableCommit': 'Portable commit',
+      'indexing': 'Indexing',
+      'linking': 'Linking',
+      'sourceCleanup': 'Source cleanup',
+      'succeeded': 'Succeeded',
+      'duplicate': 'Duplicate',
+      'failed': 'Failed',
+      'cancelled': 'Cancelled',
+      'repairRequired': 'Repair required',
+      'other': 'Working',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get libraryImportNoPending => 'No pending import items remain.';
 
   @override
   String get libraryImportSource => 'Source folder';

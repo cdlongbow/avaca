@@ -5,18 +5,22 @@ import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:avaca/core/database.dart';
+import 'package:avaca/library/library_collection_service.dart';
 import 'package:avaca/library/library_exact_resolver.dart';
 import 'package:avaca/library/library_filesystem.dart';
 import 'package:avaca/library/library_image_downloader.dart';
 import 'package:avaca/library/library_import_service.dart';
+import 'package:avaca/library/library_import_session.dart';
 import 'package:avaca/library/library_maintenance_service.dart';
 import 'package:avaca/library/library_info_store.dart';
 import 'package:avaca/library/library_media_probe.dart';
+import 'package:avaca/library/library_media_resolver.dart';
 import 'package:avaca/library/library_models.dart';
 import 'package:avaca/library/library_repository.dart';
 import 'package:avaca/models/scrape_source_id.dart';
 import 'package:avaca/models/work.dart';
 import 'package:avaca/models/work_storage.dart';
+import 'package:avaca/player/player.dart';
 import 'package:avaca/services/scrape/scrape_models.dart';
 import 'package:avaca/services/scrape/scrape_source.dart';
 
@@ -63,6 +67,7 @@ void main() {
           filesystem: LibraryFilesystem(),
           shortcutManager: const _RecordingShortcutManager(),
         );
+        final progress = <LibraryImportProgress>[];
         final scan = await LibraryFolderScanner().scan(sourceRoot.path);
         final selected = scan.single.copyWith(selected: true);
         final plan = await service.buildPlan(
@@ -70,15 +75,46 @@ void main() {
           libraryRoot: libraryRoot.path,
           selectedEntries: [selected],
           primaryActressSelector: (_) => 'Actress A',
+          onProgress: progress.add,
         );
         expect(plan.issues, isEmpty);
-        final preflight = await service.preflight(plan);
+        final preflight = await service.preflight(
+          plan,
+          onProgress: progress.add,
+        );
         expect(preflight.isReady, isTrue);
 
-        final result = await service.execute(plan, preflight);
+        final result = await service.execute(
+          plan,
+          preflight,
+          onProgress: progress.add,
+        );
 
         expect(result.succeededCount, 1);
         expect(result.failedCount, 0);
+        expect(plan.progressItemCount, 1);
+        expect(progress, isNotEmpty);
+        expect(progress.every((item) => item.itemIndex == 1), isTrue);
+        expect(progress.every((item) => item.itemCount == 1), isTrue);
+        expect(
+          progress.map((item) => item.phase),
+          containsAll(<LibraryImportProgressPhase>[
+            LibraryImportProgressPhase.resolving,
+            LibraryImportProgressPhase.hashing,
+            LibraryImportProgressPhase.probing,
+            LibraryImportProgressPhase.preflight,
+            LibraryImportProgressPhase.staging,
+            LibraryImportProgressPhase.copying,
+            LibraryImportProgressPhase.verifying,
+            LibraryImportProgressPhase.portableCommit,
+            LibraryImportProgressPhase.indexing,
+            LibraryImportProgressPhase.linking,
+            LibraryImportProgressPhase.sourceCleanup,
+            LibraryImportProgressPhase.succeeded,
+          ]),
+        );
+        expect(progress.last.isTerminal, isTrue);
+        expect(progress.last.resultState, LibraryImportResultState.succeeded);
         expect(sourceFile.existsSync(), isFalse);
         final info = File(
           p.join(libraryRoot.path, 'Actress A', 'SSIS-123', 'info.json'),
@@ -135,6 +171,117 @@ void main() {
           )).map((row) => row['name']),
           ['Actress A', 'Actress B'],
         );
+      } finally {
+        await db?.close();
+        if (root.existsSync()) await root.delete(recursive: true);
+      }
+    },
+  );
+
+  test(
+    'confirmed import reaches physical Collection and existing Player by portable ID',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'avaca_library_golden_journey_',
+      );
+      final databaseRoot = Directory(p.join(root.path, 'db'))..createSync();
+      final sourceRoot = Directory(p.join(root.path, 'source'))..createSync();
+      final libraryRoot = Directory(p.join(root.path, 'library'))..createSync();
+      final sourceFile = File(p.join(sourceRoot.path, 'ABC-123.mp4'))
+        ..writeAsBytesSync(List<int>.generate(64, (index) => index));
+      final importSession = LibraryImportSession();
+      AppDatabase? db;
+      try {
+        db = AppDatabase.forTesting(
+          baseDir: databaseRoot.path,
+          databaseFactory: databaseFactoryFfi,
+        );
+        await db.init();
+        importSession.setSourceFolder(sourceRoot.path);
+        importSession.setLibraryRoot(libraryRoot.path);
+        importSession.setEntries(
+          await LibraryFolderScanner().scan(sourceRoot.path),
+        );
+        importSession.selectAllRecognizable();
+        expect(importSession.entries, hasLength(1));
+        expect(importSession.selectedCount, 1);
+
+        final service = _fixtureService(db, _fixtureDetails(code: 'ABC-123'));
+        final plan = await service.buildPlan(
+          sourceFolder: importSession.sourceFolder!,
+          libraryRoot: importSession.libraryRoot!,
+          selectedEntries: importSession.selectedEntries,
+          primaryActressSelector: (_) => 'Actress A',
+        );
+        expect(plan.issues, isEmpty);
+        expect(plan.items, hasLength(1));
+        expect(plan.items.single.details.code, 'ABC-123');
+
+        final preflight = await service.preflight(plan);
+        expect(preflight.isReady, isTrue);
+
+        final batch = await service.execute(plan, preflight);
+        expect(batch.succeededCount, 1);
+        expect(batch.failedCount, 0);
+        expect(sourceFile.existsSync(), isFalse);
+        importSession.reconcileAfterImport(
+          batch.items
+              .where((item) => item.state == LibraryImportResultState.succeeded)
+              .map((item) => item.sourcePath),
+        );
+        expect(importSession.entries, isEmpty);
+
+        final database = await db.database;
+        final workRow = (await database.query(
+          'works',
+          where: 'library_managed = 1',
+        )).single;
+        final workId = (workRow['id'] as num).toInt();
+        final collectionWork = await LibraryCollectionService(
+          db: db,
+        ).getWorkById(workId);
+        expect(collectionWork, isNotNull);
+        expect(collectionWork!.containsKey('is_stored'), isFalse);
+        expect(collectionWork.containsKey('storage_quality'), isFalse);
+        expect(collectionWork.containsKey('storage_frame_rate'), isFalse);
+        final collectionMedia = collectionWork['library_media'];
+        expect(collectionMedia, isA<List>());
+        final media = Map<String, Object?>.from(
+          (collectionMedia! as List).single as Map,
+        );
+        final mediaPortableId = media['portable_id']?.toString() ?? '';
+        expect(mediaPortableId, plan.items.single.mediaPortableId);
+
+        final resolved =
+            await LibraryMediaResolver(
+              repository: LibraryRepository(db: db),
+            ).resolveByPortableId(
+              mediaPortableId,
+              expectedWorkId: workId,
+              expectedWorkPortableId: workRow['portable_id']?.toString(),
+              verifyIntegrity: true,
+            );
+        expect(resolved.mediaPortableId, mediaPortableId);
+        expect(File(resolved.absolutePath).existsSync(), isTrue);
+
+        final platform = InMemoryPlayerPlatform(
+          duration: const Duration(seconds: 10),
+        );
+        final controller = AvacaPlayerController(platform: platform);
+        try {
+          await controller.open(
+            PlayerLaunchRequest(
+              workCode: workRow['code']?.toString() ?? '',
+              source: LocalPlayerMediaSource(resolved.absolutePath),
+            ),
+          );
+          await Future<void>.delayed(Duration.zero);
+          expect(platform.sessions, hasLength(1));
+          expect(controller.state.phase, PlayerPhase.ready);
+          expect(platform.sessions.single.closed, isFalse);
+        } finally {
+          await controller.close();
+        }
       } finally {
         await db?.close();
         if (root.existsSync()) await root.delete(recursive: true);

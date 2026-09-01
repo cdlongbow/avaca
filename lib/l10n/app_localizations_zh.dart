@@ -366,6 +366,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get deleteWorksWarning => '選取的作品會從資料庫中全域移除，也會移除其他女優的作品連結。';
 
   @override
+  String get libraryCollectionDeleteUnavailable => 'Library 收藏項目不提供刪除功能。';
+
+  @override
   String worksDeleted(int count) {
     return '已刪除 $count 部作品';
   }
@@ -830,6 +833,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get libraryImportNoRoot => '請先選擇收藏資料夾。';
 
   @override
+  String get libraryImportMediaAccessRequired => '請允許 AVACA 讀取所選資料夾中的影片，再重新掃描。';
+
+  @override
   String get libraryImportManualCode => '手動修正番號';
 
   @override
@@ -847,6 +853,44 @@ class AppLocalizationsZh extends AppLocalizations {
   String libraryImportResult(int succeeded, int duplicate, int failed) {
     return '匯入結果：成功 $succeeded、重複 $duplicate、失敗 $failed';
   }
+
+  @override
+  String libraryImportProgress(
+    int index,
+    int total,
+    String code,
+    String filename,
+    String phase,
+  ) {
+    return '項目 $index/$total · $code · $filename · $phase';
+  }
+
+  @override
+  String libraryImportProgressPhase(String phase) {
+    String _temp0 = intl.Intl.selectLogic(phase, {
+      'resolving': '解析中',
+      'hashing': '計算雜湊',
+      'probing': '讀取媒體資訊',
+      'preflight': '預檢查',
+      'staging': '建立暫存',
+      'copying': '複製中',
+      'verifying': '驗證中',
+      'portableCommit': '建立 Library 媒體',
+      'indexing': '寫入索引',
+      'linking': '建立連結',
+      'sourceCleanup': '清理來源',
+      'succeeded': '成功',
+      'duplicate': '重複',
+      'failed': '失敗',
+      'cancelled': '已取消',
+      'repairRequired': '需要修復',
+      'other': '處理中',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get libraryImportNoPending => '目前沒有待處理的匯入項目。';
 
   @override
   String get libraryImportSource => '來源資料夾';
@@ -1340,6 +1384,9 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get deleteWorksWarning => '选中的作品会从数据库中全局移除，也会移除其他女优的作品关联。';
 
   @override
+  String get libraryCollectionDeleteUnavailable => 'Library 收藏项目不提供删除功能。';
+
+  @override
   String worksDeleted(int count) {
     return '已删除 $count 部作品';
   }
@@ -1804,6 +1851,10 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get libraryImportNoRoot => '请先选择收藏文件夹。';
 
   @override
+  String get libraryImportMediaAccessRequired =>
+      '请允许 AVACA 读取所选文件夹中的视频，然后重新扫描。';
+
+  @override
   String get libraryImportManualCode => '手动修正番号';
 
   @override
@@ -1821,6 +1872,44 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String libraryImportResult(int succeeded, int duplicate, int failed) {
     return '导入结果：成功 $succeeded、重复 $duplicate、失败 $failed';
   }
+
+  @override
+  String libraryImportProgress(
+    int index,
+    int total,
+    String code,
+    String filename,
+    String phase,
+  ) {
+    return '项目 $index/$total · $code · $filename · $phase';
+  }
+
+  @override
+  String libraryImportProgressPhase(String phase) {
+    String _temp0 = intl.Intl.selectLogic(phase, {
+      'resolving': '解析中',
+      'hashing': '计算哈希',
+      'probing': '读取媒体信息',
+      'preflight': '预检',
+      'staging': '建立暂存',
+      'copying': '复制中',
+      'verifying': '验证中',
+      'portableCommit': '建立 Library 媒体',
+      'indexing': '写入索引',
+      'linking': '建立链接',
+      'sourceCleanup': '清理来源',
+      'succeeded': '成功',
+      'duplicate': '重复',
+      'failed': '失败',
+      'cancelled': '已取消',
+      'repairRequired': '需要修复',
+      'other': '处理中',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get libraryImportNoPending => '目前没有待处理的导入项目。';
 
   @override
   String get libraryMediaTitle => '媒体文件';
@@ -2258,6 +2347,9 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get deleteWorksWarning => '選取的作品會從資料庫中全域移除，也會移除其他女優的作品連結。';
+
+  @override
+  String get libraryCollectionDeleteUnavailable => 'Library 收藏項目不提供刪除功能。';
 
   @override
   String worksDeleted(int count) {
@@ -2724,6 +2816,9 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get libraryImportNoRoot => '請先選擇收藏資料夾。';
 
   @override
+  String get libraryImportMediaAccessRequired => '請允許 AVACA 讀取所選資料夾中的影片，再重新掃描。';
+
+  @override
   String get libraryImportManualCode => '手動修正番號';
 
   @override
@@ -2741,6 +2836,44 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String libraryImportResult(int succeeded, int duplicate, int failed) {
     return '匯入結果：成功 $succeeded、重複 $duplicate、失敗 $failed';
   }
+
+  @override
+  String libraryImportProgress(
+    int index,
+    int total,
+    String code,
+    String filename,
+    String phase,
+  ) {
+    return '項目 $index/$total · $code · $filename · $phase';
+  }
+
+  @override
+  String libraryImportProgressPhase(String phase) {
+    String _temp0 = intl.Intl.selectLogic(phase, {
+      'resolving': '解析中',
+      'hashing': '計算雜湊',
+      'probing': '讀取媒體資訊',
+      'preflight': '預檢查',
+      'staging': '建立暫存',
+      'copying': '複製中',
+      'verifying': '驗證中',
+      'portableCommit': '建立 Library 媒體',
+      'indexing': '寫入索引',
+      'linking': '建立連結',
+      'sourceCleanup': '清理來源',
+      'succeeded': '成功',
+      'duplicate': '重複',
+      'failed': '失敗',
+      'cancelled': '已取消',
+      'repairRequired': '需要修復',
+      'other': '處理中',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get libraryImportNoPending => '目前沒有待處理的匯入項目。';
 
   @override
   String get libraryImportSource => '來源資料夾';

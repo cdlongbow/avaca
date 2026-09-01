@@ -8,7 +8,9 @@ import '../components/adaptive_page_layout.dart';
 import '../core/database.dart';
 import '../core/layout.dart';
 import '../l10n/app_localizations.dart';
+import '../library/library_collection_service.dart';
 import '../library/library_media_locator.dart';
+import '../library/library_media_resolver.dart';
 import '../library/library_repository.dart';
 import '../models/work_storage.dart';
 import '../player/player_launcher.dart';
@@ -19,11 +21,13 @@ class WorkDetailView extends StatefulWidget {
     required this.db,
     required this.workId,
     this.currentActressId,
+    this.collectionService,
   });
 
   final AppDatabase db;
   final int workId;
   final int? currentActressId;
+  final LibraryCollectionService? collectionService;
 
   @override
   State<WorkDetailView> createState() => _WorkDetailViewState();
@@ -33,6 +37,7 @@ class _WorkDetailViewState extends State<WorkDetailView> {
   late final Future<Map<String, Object?>?> workFuture;
   late final LibraryRepository _libraryRepository;
   late final LibraryMediaLocator _libraryLocator;
+  late final LibraryMediaResolver _mediaResolver;
   late final PlayerLauncher _playerLauncher;
   WorkStorageRecord? _storageRecord;
   bool _playerBusy = false;
@@ -40,13 +45,28 @@ class _WorkDetailViewState extends State<WorkDetailView> {
   @override
   void initState() {
     super.initState();
-    _libraryRepository = LibraryRepository(db: widget.db);
-    _libraryLocator = LibraryMediaLocator();
-    _playerLauncher = PlayerLauncher(locator: _libraryLocator);
+    final collectionService = widget.collectionService;
+    _libraryRepository =
+        collectionService?.repository ?? LibraryRepository(db: widget.db);
+    _libraryLocator = collectionService?.locator ?? LibraryMediaLocator();
+    _mediaResolver =
+        collectionService?.mediaResolver ??
+        LibraryMediaResolver(
+          repository: _libraryRepository,
+          locator: _libraryLocator,
+        );
+    _playerLauncher = PlayerLauncher(mediaResolver: _mediaResolver);
     workFuture = _loadWorkWithHealthyMedia();
   }
 
   Future<Map<String, Object?>?> _loadWorkWithHealthyMedia() async {
+    final collectionService = widget.collectionService;
+    if (collectionService != null) {
+      return collectionService.getWorkById(
+        widget.workId,
+        currentActressId: widget.currentActressId,
+      );
+    }
     final work = await widget.db.getWorkById(
       widget.workId,
       currentActressId: widget.currentActressId,
@@ -350,10 +370,6 @@ class _WorkDetailViewState extends State<WorkDetailView> {
     final l10n = AppLocalizations.of(context);
     setState(() => _playerBusy = true);
     try {
-      final root = await _libraryRepository.activeLibraryRoot();
-      if (root == null || root.trim().isEmpty) {
-        throw const LibraryLocatorFailure('active LibraryRoot is unavailable');
-      }
       final work = await workFuture;
       if (!mounted) return;
       if (work == null) {
@@ -362,10 +378,9 @@ class _WorkDetailViewState extends State<WorkDetailView> {
       await _playerLauncher.launch(
         context: context,
         workCode: work['code']?.toString() ?? '',
-        libraryRoot: root,
-        workRelativePath: work['library_relative_path']?.toString() ?? '',
-        mediaRelativePath: media['relative_path']?.toString() ?? '',
-        mediaPortableId: media['portable_id']?.toString(),
+        mediaPortableId: media['portable_id']?.toString() ?? '',
+        expectedWorkId: widget.workId,
+        expectedWorkPortableId: work['portable_id']?.toString(),
         localizations: l10n,
       );
     } on Object catch (error) {

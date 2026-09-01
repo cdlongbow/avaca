@@ -78,6 +78,20 @@ final class LibraryImportSession {
     _bump();
   }
 
+  /// Removes only entries whose physical source was successfully imported.
+  ///
+  /// Unresolved results stay visible for retry or repair, but none of the
+  /// retained entries remains selected after a batch completes.
+  void reconcileAfterImport(Iterable<String> succeededSourcePaths) {
+    final succeeded = succeededSourcePaths.toSet();
+    _entries = List<LibraryScanEntry>.unmodifiable(
+      _entries
+          .where((entry) => !succeeded.contains(entry.sourcePath))
+          .map((entry) => entry.copyWith(selected: false)),
+    );
+    _bump();
+  }
+
   void applyManualCode(int index, String value) {
     final entry = _entryAt(index);
     final parseResult = _parser.applyManualCode(entry.parseResult, value);

@@ -241,6 +241,15 @@ class DetailController extends ChangeNotifier {
 
   // 刪除資料與相關圖片，成功後回到首頁。
   Future<void> executeDelete(BuildContext context) async {
+    if (collectionService != null) {
+      if (context.mounted) {
+        AppSnackBar.showError(
+          context,
+          AppLocalizations.of(context).libraryCollectionDeleteUnavailable,
+        );
+      }
+      return;
+    }
     final report = await db.deleteActressWithReport(actressId);
 
     if (report.databaseCommitted) {
