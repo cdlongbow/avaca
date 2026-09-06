@@ -183,6 +183,13 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Fetch pinned Windows player dependencies
+        shell: pwsh
+        run: >
+          pwsh -NoProfile -ExecutionPolicy Bypass -File
+          "${{ github.workspace }}\scripts\fetch_windows_player_dependencies.ps1"
+          -DependencyRoot "${{ github.workspace }}\windows\engine"
+
       - name: Verify Windows native toolchain
         shell: pwsh
         run: |
@@ -212,6 +219,69 @@ jobs:
           --build-name "${{ needs.metadata.outputs.version }}"
           --build-number "${{ needs.metadata.outputs.version_code }}"
 
+      - name: Verify pinned Flutter engine in Windows bundle
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $repoRoot = $env:GITHUB_WORKSPACE
+          $pinned = Join-Path $repoRoot 'windows/engine/flutter_windows.dll'
+          $releaseDir = Join-Path $repoRoot 'build/windows/x64/runner/Release'
+          $bundled = Join-Path $releaseDir 'flutter_windows.dll'
+          $pinnedImport = Join-Path $repoRoot 'windows/engine/flutter_windows.dll.lib'
+          $ephemeralImport = Join-Path $repoRoot 'windows/flutter/ephemeral/flutter_windows.dll.lib'
+
+          foreach ($path in @($pinned, $pinnedImport, $bundled, $ephemeralImport)) {
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+              throw "Pinned Flutter engine artifact is missing: $path"
+            }
+          }
+
+          $pinnedHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $pinned).Hash
+          $bundledHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $bundled).Hash
+          if ($pinnedHash -ne $bundledHash) {
+            throw "Windows bundle Flutter engine hash mismatch: pinned=$pinnedHash bundled=$bundledHash"
+          }
+
+          $pinnedImportHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $pinnedImport).Hash
+          $ephemeralImportHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $ephemeralImport).Hash
+          if ($pinnedImportHash -ne $ephemeralImportHash) {
+            throw "Windows bundle Flutter import library hash mismatch: pinned=$pinnedImportHash ephemeral=$ephemeralImportHash"
+          }
+
+          $expectedPlayerHashes = @{
+            'libmpv-2.dll' = '63FED593A9E1B3C7E170BB38FCDF73722FA3D73B7C068F303BF2985EEEC75367'
+            'libEGL.dll' = '3562C97F80C4EE79E9CD19881981A6C4BD69E26D04A9B0D88B54DDBFA334F58B'
+            'libGLESv2.dll' = '2B43130299CAD2156D20BBE5C2DBA3E6FF079A4F38E96D834FCDFDD3D68F4332'
+            'd3dcompiler_47.dll' = 'E407B9FFADEF47E87994DC488214F75405CF04EE99589F2315FC7AB99FD1DFE2'
+            'vk_swiftshader.dll' = '329912B23F6DD001981E3C18CF0F99B7E41F99F8B36EEAF629B1E3D298DFBF10'
+            'vulkan-1.dll' = '14323F145642B0C16DD2354A1158D823DE9EF5CB14FBB75AA3971A6E5FD42A0F'
+          }
+          foreach ($entry in $expectedPlayerHashes.GetEnumerator()) {
+            $runtimePath = Join-Path $releaseDir $entry.Key
+            if (-not (Test-Path -LiteralPath $runtimePath -PathType Leaf)) {
+              throw "Windows release bundle is missing player runtime: $runtimePath"
+            }
+            $runtimeHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $runtimePath).Hash.ToUpperInvariant()
+            if ($runtimeHash -ne $entry.Value) {
+              throw "Windows player runtime hash mismatch for $($entry.Key): expected=$($entry.Value) actual=$runtimeHash"
+            }
+            Write-Host "$($entry.Key) SHA-256: $runtimeHash"
+          }
+
+          foreach ($requiredPath in @(
+            (Join-Path $releaseDir 'avaca.exe'),
+            (Join-Path $releaseDir 'avaca_update.exe'),
+            (Join-Path $releaseDir 'data/flutter_assets'),
+            $bundled
+          )) {
+            if (-not (Test-Path -LiteralPath $requiredPath)) {
+              throw "Windows release bundle is incomplete: $requiredPath"
+            }
+          }
+
+          Write-Host "Pinned Flutter engine SHA-256: $pinnedHash"
+
       - name: Package versioned portable archive
         shell: pwsh
         run: |
@@ -224,7 +294,16 @@ jobs:
           $zipName = "avaca-$version.zip"
           $zipPath = Join-Path $dist $zipName
 
-          foreach ($requiredFile in @('avaca.exe', 'avaca_update.exe')) {
+          foreach ($requiredFile in @(
+            'avaca.exe',
+            'avaca_update.exe',
+            'libmpv-2.dll',
+            'libEGL.dll',
+            'libGLESv2.dll',
+            'd3dcompiler_47.dll',
+            'vk_swiftshader.dll',
+            'vulkan-1.dll'
+          )) {
             if (-not (Test-Path -LiteralPath (Join-Path $releaseDir $requiredFile) -PathType Leaf)) {
               throw "Windows release bundle is missing ${requiredFile}: $releaseDir"
             }
@@ -234,6 +313,12 @@ jobs:
           New-Item -ItemType Directory -Force -Path $packageRoot, $dist | Out-Null
           Copy-Item -Path (Join-Path $releaseDir '*') -Destination $packageRoot -Recurse -Force
           Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE 'README.md') -Destination (Join-Path $packageRoot 'README.md') -Force
+          Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE 'THIRD_PARTY_NOTICES.md') -Destination (Join-Path $packageRoot 'THIRD_PARTY_NOTICES.md') -Force
+          $licenseRoot = Join-Path $packageRoot 'licenses/avaca_player_native/windows'
+          New-Item -ItemType Directory -Force -Path $licenseRoot | Out-Null
+          Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE 'packages/avaca_player_native/windows/THIRD_PARTY_PROVENANCE.md') -Destination $licenseRoot -Force
+          Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE 'packages/avaca_player_native/windows/THIRD_PARTY_LICENSES.md') -Destination $licenseRoot -Force
+          Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE 'packages/avaca_player_native/windows/WINDOWS_PLAYER_DEPS.lock.json') -Destination $licenseRoot -Force
           Set-Content -LiteralPath (Join-Path $packageRoot 'version.txt') -Value $version -NoNewline -Encoding utf8
 
           Remove-Item -LiteralPath $zipPath -Force -ErrorAction SilentlyContinue

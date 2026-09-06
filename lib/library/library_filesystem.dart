@@ -225,7 +225,7 @@ class LibraryFilesystem {
   Future<String> copyAndHash(
     String sourcePath,
     String destinationPath, {
-    LibraryFileSnapshot? expectedSnapshot,
+    LibrarySourceSnapshot? expectedSnapshot,
     void Function(int bytes)? onBytes,
   }) async {
     final source = absolutePath(sourcePath);

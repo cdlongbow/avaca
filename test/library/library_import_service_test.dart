@@ -892,7 +892,7 @@ void main() {
   );
 
   test(
-    'final portable hash failure keeps the copy on the repair path',
+    'final portable hash failure keeps the copy after source cleanup',
     () async {
       final root = await Directory.systemTemp.createTemp(
         'avaca_library_final_hash_failure_',
@@ -930,7 +930,7 @@ void main() {
           result.items.single.state,
           LibraryImportResultState.repairRequired,
         );
-        expect(sourceFile.existsSync(), isTrue);
+        expect(sourceFile.existsSync(), isFalse);
         expect(
           File(
             p.join(libraryRoot.path, 'Actress A', 'ABC-123', 'ABC-123.mp4'),
@@ -951,7 +951,7 @@ void main() {
   );
 
   test(
-    'database indexing failure preserves portable media and source for repair',
+    'database indexing failure preserves portable media after source cleanup',
     () async {
       final root = await Directory.systemTemp.createTemp(
         'avaca_library_index_failure_',
@@ -989,7 +989,7 @@ void main() {
           result.items.single.state,
           LibraryImportResultState.repairRequired,
         );
-        expect(sourceFile.existsSync(), isTrue);
+        expect(sourceFile.existsSync(), isFalse);
         expect(
           File(
             p.join(libraryRoot.path, 'Actress A', 'ABC-123', 'ABC-123.mp4'),
@@ -1010,7 +1010,7 @@ void main() {
   );
 
   test(
-    'source changed before cleanup is preserved while portable commit is repairable',
+    'source changed before cleanup fails without publishing portable media',
     () async {
       final root = await Directory.systemTemp.createTemp(
         'avaca_library_source_changed_',
@@ -1046,7 +1046,7 @@ void main() {
 
         expect(
           result.items.single.state,
-          LibraryImportResultState.repairRequired,
+          LibraryImportResultState.failed,
         );
         expect(sourceFile.existsSync(), isTrue);
         expect(await sourceFile.readAsString(), 'source changed during import');
@@ -1054,13 +1054,13 @@ void main() {
           File(
             p.join(libraryRoot.path, 'Actress A', 'ABC-123', 'ABC-123.mp4'),
           ).existsSync(),
-          isTrue,
+          isFalse,
         );
         final database = await db.database;
-        expect(await database.query('media_files'), hasLength(1));
+        expect(await database.query('media_files'), isEmpty);
         expect(
           (await database.query('import_operations')).single['state'],
-          LibraryImportOperationState.repairRequired.value,
+          LibraryImportOperationState.failed.value,
         );
       } finally {
         await db?.close();
@@ -1070,7 +1070,7 @@ void main() {
   );
 
   test(
-    'linking failure occurs before source cleanup and is restart-safe',
+    'linking failure occurs after source cleanup and is restart-safe',
     () async {
       final root = await Directory.systemTemp.createTemp(
         'avaca_library_link_failure_',
@@ -1108,7 +1108,7 @@ void main() {
           result.items.single.state,
           LibraryImportResultState.repairRequired,
         );
-        expect(sourceFile.existsSync(), isTrue);
+        expect(sourceFile.existsSync(), isFalse);
         expect(await (await db.database).query('media_files'), hasLength(1));
       } finally {
         await db?.close();

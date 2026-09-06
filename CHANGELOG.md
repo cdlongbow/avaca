@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.10.2 - 2026-09-02
+
+### Library
+
+- Restored the physical-media-backed Library import journey from folder
+  selection through scan, selection, review, and commit.
+- Collection entries now represent imported, locatable physical media rather
+  than metadata-only Works.
+- Added portable media identity and media-location resolution for imported
+  Library items.
+- Improved Library import session handling, operation gating, and media
+  probing.
+
+### Review and performers
+
+- Added review and correction before import commit.
+- Added explicit primary-performer selection for imported works.
+- Updated Collection, detail, import, and Works presentation for the recovered
+  Library workflow.
+
+### Android
+
+- Added the Android storage/media access integration required by the recovered
+  Library import flow.
+- Updated Android entry-point behavior for the Library and player journey.
+
+### Validation
+
+- Added focused controller, Library, repository, resolver, operation-gate, and
+  view coverage for the recovered workflow.
+
 ## 0.10.1 - 2026-08-31
 
 - Re-centered the normal Collection on physically imported, locatable media;

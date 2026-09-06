@@ -14,9 +14,11 @@ import '../library/library_image_downloader.dart';
 import '../library/library_import_service.dart';
 import '../library/library_import_session.dart';
 import '../library/library_media_probe.dart';
+import '../library/library_models.dart';
 import '../library/library_operation_gate.dart';
 import '../library/library_repository.dart';
 import '../library/library_source_factory.dart';
+import '../library/library_source_access.dart';
 import '../models/scrape_source_id.dart';
 import '../services/scrape/scrape_source.dart';
 
@@ -43,7 +45,7 @@ class LibraryImportView extends StatefulWidget {
 class _LibraryImportViewState extends State<LibraryImportView> {
   final LibraryFilesystem _filesystem = LibraryFilesystem();
   final LibraryAndroidStorageAccess _androidStorageAccess =
-      const LibraryAndroidStorageAccess();
+      LibraryAndroidStorageAccess();
   final LibraryFilenameParser _parser = const LibraryFilenameParser();
   final LibraryImportSession _session = LibraryImportSession();
   final Map<String, TextEditingController> _manualCodeControllers = {};
@@ -95,6 +97,19 @@ class _LibraryImportViewState extends State<LibraryImportView> {
   }
 
   Future<void> _selectFolder({required bool libraryRoot}) async {
+    if (!libraryRoot && Platform.isAndroid && widget.directoryPicker == null) {
+      final selected = await _androidStorageAccess.pickFolder();
+      if (selected == null || !mounted) return;
+      _session.setSourceLocator(selected);
+      _disposeManualCodeControllers();
+      _clearReviewState();
+      setState(() {
+        _message = null;
+        _result = null;
+        _progress = null;
+      });
+      return;
+    }
     final selected =
         await (widget.directoryPicker?.call() ?? FilePicker.getDirectoryPath());
     if (selected == null || selected.trim().isEmpty || !mounted) return;
@@ -128,7 +143,10 @@ class _LibraryImportViewState extends State<LibraryImportView> {
       _clearReviewState();
     });
     try {
-      if (!await _androidStorageAccess.ensureMediaReadAccess()) {
+      final sourceLocator = _session.sourceLocator;
+      if (Platform.isAndroid &&
+          sourceLocator is! LibraryAndroidTreeSourceLocator &&
+          !await _ensureLegacyAndroidMediaAccess()) {
         if (mounted) {
           setState(
             () => _message = localizations.libraryImportMediaAccessRequired,
@@ -136,7 +154,9 @@ class _LibraryImportViewState extends State<LibraryImportView> {
         }
         return;
       }
-      final entries = await _scanner.scan(source);
+      final entries = sourceLocator is LibraryAndroidTreeSourceLocator
+          ? await _androidStorageAccess.scan(sourceLocator)
+          : await _scanner.scan(source);
       if (!mounted) return;
       _session.setEntries(entries);
       _replaceManualCodeControllers();
@@ -201,6 +221,7 @@ class _LibraryImportViewState extends State<LibraryImportView> {
         (service) => service.buildPlan(
           sourceFolder: source,
           libraryRoot: root,
+          sourceLocator: _session.sourceLocator,
           selectedEntries: _session.selectedEntries,
           revision: _session.revision,
           onProgress: _handleProgress,
@@ -265,6 +286,7 @@ class _LibraryImportViewState extends State<LibraryImportView> {
           final plan = await service.buildPlan(
             sourceFolder: source,
             libraryRoot: root,
+            sourceLocator: _session.sourceLocator,
             selectedEntries: _session.selectedEntries,
             revision: _session.revision,
             primaryActressSelector: (details) =>
@@ -359,6 +381,9 @@ class _LibraryImportViewState extends State<LibraryImportView> {
         resolver: LibraryExactWorkResolver(sources: sources),
         mediaProbe: probe,
         filesystem: _filesystem,
+        sourceAccess: Platform.isAndroid
+            ? _androidStorageAccess
+            : LibraryPathSourceAccess(filesystem: _filesystem),
         shortcutManager: Platform.isWindows
             ? const WindowsShortcutManager()
             : const NoopShortcutManager(),
@@ -372,6 +397,12 @@ class _LibraryImportViewState extends State<LibraryImportView> {
       imageDownloader.close();
       probe.close();
     }
+  }
+
+  Future<bool> _ensureLegacyAndroidMediaAccess() async {
+    // SAF-selected folders do not require broad media permissions. This
+    // compatibility path only serves injected/legacy raw-path pickers.
+    return _androidStorageAccess.ensureMediaReadAccess();
   }
 
   Map<String, String?> _initialPrimaryChoices(LibraryImportPlan plan) {

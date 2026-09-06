@@ -1,5 +1,173 @@
 import 'dart:math' as math;
 
+sealed class LibrarySourceLocator {
+  const LibrarySourceLocator();
+
+  String get kind;
+  String get displayName;
+  Map<String, Object?> toJson();
+
+  static LibrarySourceLocator fromJson(Map<String, Object?> json) {
+    final kind = json['kind']?.toString();
+    return switch (kind) {
+      'path' => LibraryPathSourceLocator(
+        json['path']?.toString() ??
+            (throw const FormatException('source path is missing')),
+      ),
+      'androidTree' => LibraryAndroidTreeSourceLocator(
+        treeUri:
+            json['treeUri']?.toString() ??
+            (throw const FormatException('source tree URI is missing')),
+        displayName: json['displayName']?.toString() ?? 'Android folder',
+      ),
+      _ => throw FormatException('unsupported source locator kind: $kind'),
+    };
+  }
+}
+
+final class LibraryPathSourceLocator extends LibrarySourceLocator {
+  const LibraryPathSourceLocator(this.absolutePath);
+
+  final String absolutePath;
+
+  @override
+  String get kind => 'path';
+
+  @override
+  String get displayName => absolutePath;
+
+  @override
+  Map<String, Object?> toJson() => {'kind': kind, 'path': absolutePath};
+
+  @override
+  bool operator ==(Object other) =>
+      other is LibraryPathSourceLocator && other.absolutePath == absolutePath;
+
+  @override
+  int get hashCode => Object.hash(kind, absolutePath);
+}
+
+final class LibraryAndroidTreeSourceLocator extends LibrarySourceLocator {
+  const LibraryAndroidTreeSourceLocator({
+    required this.treeUri,
+    required this.displayName,
+  });
+
+  final String treeUri;
+
+  @override
+  final String displayName;
+
+  @override
+  String get kind => 'androidTree';
+
+  @override
+  Map<String, Object?> toJson() => {
+    'kind': kind,
+    'treeUri': treeUri,
+    'displayName': displayName,
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is LibraryAndroidTreeSourceLocator && other.treeUri == treeUri;
+
+  @override
+  int get hashCode => Object.hash(kind, treeUri);
+}
+
+sealed class LibrarySourceEntryLocator {
+  const LibrarySourceEntryLocator();
+
+  String get kind;
+  String get displayName;
+  Map<String, Object?> toJson();
+
+  static LibrarySourceEntryLocator fromJson(Map<String, Object?> json) {
+    final kind = json['kind']?.toString();
+    return switch (kind) {
+      'path' => LibraryPathSourceEntryLocator(
+        json['path']?.toString() ??
+            (throw const FormatException('source entry path is missing')),
+      ),
+      'androidDocument' => LibraryAndroidDocumentSourceEntryLocator(
+        treeUri:
+            json['treeUri']?.toString() ??
+            (throw const FormatException('source tree URI is missing')),
+        documentUri:
+            json['documentUri']?.toString() ??
+            (throw const FormatException('source document URI is missing')),
+        relativePath: json['relativePath']?.toString() ?? '',
+        displayName: json['displayName']?.toString() ?? 'Android document',
+      ),
+      _ => throw FormatException(
+        'unsupported source entry locator kind: $kind',
+      ),
+    };
+  }
+}
+
+final class LibraryPathSourceEntryLocator extends LibrarySourceEntryLocator {
+  const LibraryPathSourceEntryLocator(this.absolutePath);
+
+  final String absolutePath;
+
+  @override
+  String get kind => 'path';
+
+  @override
+  String get displayName => absolutePath;
+
+  @override
+  Map<String, Object?> toJson() => {'kind': kind, 'path': absolutePath};
+
+  @override
+  bool operator ==(Object other) =>
+      other is LibraryPathSourceEntryLocator &&
+      other.absolutePath == absolutePath;
+
+  @override
+  int get hashCode => Object.hash(kind, absolutePath);
+}
+
+final class LibraryAndroidDocumentSourceEntryLocator
+    extends LibrarySourceEntryLocator {
+  const LibraryAndroidDocumentSourceEntryLocator({
+    required this.treeUri,
+    required this.documentUri,
+    required this.relativePath,
+    required this.displayName,
+  });
+
+  final String treeUri;
+  final String documentUri;
+  final String relativePath;
+
+  @override
+  final String displayName;
+
+  @override
+  String get kind => 'androidDocument';
+
+  @override
+  Map<String, Object?> toJson() => {
+    'kind': kind,
+    'treeUri': treeUri,
+    'documentUri': documentUri,
+    'relativePath': relativePath,
+    'displayName': displayName,
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is LibraryAndroidDocumentSourceEntryLocator &&
+      other.treeUri == treeUri &&
+      other.documentUri == documentUri;
+
+  @override
+  int get hashCode => Object.hash(kind, treeUri, documentUri);
+}
+
 enum LibraryParseStatus { recognized, ambiguous, unrecognized }
 
 enum LibraryVariant {
@@ -208,7 +376,7 @@ class LibraryFilenameParseResult {
 }
 
 class LibraryScanEntry {
-  const LibraryScanEntry({
+  LibraryScanEntry({
     required this.sourcePath,
     required this.originalFileName,
     required this.sizeBytes,
@@ -216,9 +384,16 @@ class LibraryScanEntry {
     required this.createdAt,
     required this.parseResult,
     this.selected = false,
-  });
+    LibrarySourceEntryLocator? sourceLocator,
+  }) : sourceLocator =
+           sourceLocator ?? LibraryPathSourceEntryLocator(sourcePath);
 
+  /// A diagnostic/display value retained for existing UI and journal rows.
+  ///
+  /// For Android SAF entries this is the opaque document URI, never a guessed
+  /// filesystem path.  Callers performing I/O must use [sourceLocator].
   final String sourcePath;
+  final LibrarySourceEntryLocator sourceLocator;
   final String originalFileName;
   final int sizeBytes;
   final DateTime? modifiedAt;
@@ -231,6 +406,7 @@ class LibraryScanEntry {
     bool? selected,
   }) => LibraryScanEntry(
     sourcePath: sourcePath,
+    sourceLocator: sourceLocator,
     originalFileName: originalFileName,
     sizeBytes: sizeBytes,
     modifiedAt: modifiedAt,
@@ -240,26 +416,45 @@ class LibraryScanEntry {
   );
 }
 
-class LibraryFileSnapshot {
-  const LibraryFileSnapshot({
-    required this.path,
+class LibrarySourceSnapshot {
+  const LibrarySourceSnapshot({
+    required this.locator,
     required this.sizeBytes,
     required this.modifiedAt,
     required this.createdAt,
     required this.changedAt,
   });
 
-  final String path;
+  final LibrarySourceEntryLocator locator;
   final int sizeBytes;
   final DateTime? modifiedAt;
   final DateTime? createdAt;
   final DateTime? changedAt;
 
-  bool matches(LibraryFileSnapshot other) {
-    return sizeBytes == other.sizeBytes &&
-        modifiedAt?.toUtc() == other.modifiedAt?.toUtc() &&
-        createdAt?.toUtc() == other.createdAt?.toUtc();
+  bool matches(LibrarySourceSnapshot other) {
+    return locator == other.locator &&
+        sizeBytes == other.sizeBytes &&
+        _matchesOptional(modifiedAt, other.modifiedAt) &&
+        _matchesOptional(createdAt, other.createdAt);
   }
+
+  bool _matchesOptional(DateTime? left, DateTime? right) =>
+      left == null || right == null || left.toUtc() == right.toUtc();
+}
+
+class LibraryFileSnapshot extends LibrarySourceSnapshot {
+  LibraryFileSnapshot({
+    required this.path,
+    required super.sizeBytes,
+    required super.modifiedAt,
+    required super.createdAt,
+    required super.changedAt,
+    LibrarySourceEntryLocator? locator,
+  }) : super(
+         locator: locator ?? LibraryPathSourceEntryLocator(path),
+       );
+
+  final String path;
 }
 
 class MediaProbeResult {

@@ -51,7 +51,11 @@ class LibraryCollectionService {
       ''',
       [actressId],
     );
+    final unresolved = await repository.unresolvedImportMediaPortableIds();
     for (final row in rows) {
+      if (unresolved.contains(row['media_portable_id']?.toString().trim())) {
+        continue;
+      }
       if (await _mediaExists(
         mediaPortableId: row['media_portable_id']?.toString(),
       )) {
@@ -105,11 +109,13 @@ class LibraryCollectionService {
 
     final healthyActresses = <Map<String, Object?>>[];
     final seen = <int>{};
+    final unresolved = await repository.unresolvedImportMediaPortableIds();
     for (final row in rows) {
       final actressId = (row['id'] as num?)?.toInt();
       if (actressId == null || seen.contains(actressId)) continue;
       final healthy = await _mediaExists(
         mediaPortableId: row['media_portable_id']?.toString(),
+        excludedPortableIds: unresolved,
       );
       if (!healthy) continue;
       seen.add(actressId);
@@ -139,6 +145,7 @@ class LibraryCollectionService {
       ''',
       [actressId],
     );
+    final unresolved = await repository.unresolvedImportMediaPortableIds();
     final result = <Map<String, Object?>>[];
     for (final row in rows) {
       final mediaRows = await database.query(
@@ -154,6 +161,7 @@ class LibraryCollectionService {
         if (await _mediaExists(
           mediaPortableId: media['portable_id']?.toString(),
           expectedWorkId: (row['id'] as num?)?.toInt(),
+          excludedPortableIds: unresolved,
         )) {
           healthy = true;
           break;
@@ -194,11 +202,13 @@ class LibraryCollectionService {
     final rawMedia = work['library_media'];
     if (rawMedia is! List || rawMedia.isEmpty) return null;
     final workPortableId = work['portable_id']?.toString();
+    final unresolved = await repository.unresolvedImportMediaPortableIds();
     final healthyMedia = <Map<String, Object?>>[];
     for (final value in rawMedia.whereType<Map>()) {
       final media = Map<String, Object?>.from(value);
       final portableId = media['portable_id']?.toString().trim() ?? '';
       if (portableId.isEmpty) continue;
+      if (unresolved.contains(portableId)) continue;
       try {
         await mediaResolver.resolveByPortableId(
           portableId,
@@ -223,9 +233,11 @@ class LibraryCollectionService {
   Future<bool> _mediaExists({
     required String? mediaPortableId,
     int? expectedWorkId,
+    Set<String> excludedPortableIds = const <String>{},
   }) async {
     final id = mediaPortableId?.trim();
     if (id == null || id.isEmpty) return false;
+    if (excludedPortableIds.contains(id)) return false;
     try {
       await mediaResolver.resolveByPortableId(
         id,

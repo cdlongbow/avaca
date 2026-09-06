@@ -14,6 +14,7 @@ import 'library_info_store.dart';
 import 'library_media_probe.dart';
 import 'library_models.dart';
 import 'library_repository.dart';
+import 'library_source_access.dart';
 
 class LibraryPlanIssue {
   const LibraryPlanIssue({
@@ -49,7 +50,7 @@ class LibraryImportPlanItem {
 
   final LibraryScanEntry entry;
   final ScrapeWorkDetails details;
-  final LibraryFileSnapshot sourceSnapshot;
+  final LibrarySourceSnapshot sourceSnapshot;
   final String sourceSha256;
   final MediaProbeResult mediaProbe;
   final String workPortableId;
@@ -64,6 +65,7 @@ class LibraryImportPlanItem {
   Map<String, Object?> toJournalJson() => {
     'code': details.code,
     'sourcePath': entry.sourcePath,
+    'source': entry.sourceLocator.toJson(),
     'originalFileName': entry.originalFileName,
     'workPortableId': workPortableId,
     'mediaPortableId': mediaPortableId,
@@ -82,6 +84,13 @@ class LibraryImportPlanItem {
   };
 }
 
+class _SourceMediaInspection {
+  const _SourceMediaInspection({required this.sha256, required this.probe});
+
+  final String sha256;
+  final MediaProbeResult probe;
+}
+
 class LibraryImportPlan {
   const LibraryImportPlan({
     required this.sourceFolder,
@@ -91,6 +100,7 @@ class LibraryImportPlan {
     required this.fingerprint,
     this.revision = 0,
     this.totalSelected = 0,
+    this.sourceLocator,
   });
 
   final String sourceFolder;
@@ -100,6 +110,7 @@ class LibraryImportPlan {
   final String fingerprint;
   final int revision;
   final int totalSelected;
+  final LibrarySourceLocator? sourceLocator;
 
   int get progressItemCount => totalSelected > 0 ? totalSelected : items.length;
 
@@ -239,6 +250,7 @@ class LibraryImportService {
     required this.mediaProbe,
     required this.filesystem,
     required this.shortcutManager,
+    this.sourceAccess,
     LibraryImageDownloader? imageDownloader,
     LibraryInfoStore? infoStore,
     PortableIdGenerator? idGenerator,
@@ -252,6 +264,7 @@ class LibraryImportService {
   final LibraryMediaProbe mediaProbe;
   final LibraryFilesystem filesystem;
   final LibraryShortcutManager shortcutManager;
+  final LibrarySourceAccess? sourceAccess;
   final LibraryImageDownloader imageDownloader;
   final LibraryInfoStore infoStore;
   final PortableIdGenerator idGenerator;
@@ -260,24 +273,38 @@ class LibraryImportService {
   Future<LibraryImportPlan> buildPlan({
     required String sourceFolder,
     required String libraryRoot,
+    LibrarySourceLocator? sourceLocator,
     required Iterable<LibraryScanEntry> selectedEntries,
     LibraryPrimaryActressSelector? primaryActressSelector,
     int revision = 0,
     bool allowImplicitPrimary = false,
     LibraryProgressCallback? onProgress,
   }) async {
-    final source = filesystem.absolutePath(sourceFolder);
-    final root = filesystem.absolutePath(libraryRoot);
-    filesystem.validateRoot(source);
-    filesystem.validateRoot(root);
-    await filesystem.validateNoSymbolicLinks(source, source);
-    await filesystem.validateNoSymbolicLinks(root, root);
-    if (filesystem.samePath(source, root) ||
-        filesystem.isWithin(source, root) ||
-        filesystem.isWithin(root, source)) {
-      throw const LibraryFilesystemException(
-        'source folder and library root must not overlap',
+    final effectiveSourceLocator =
+        sourceLocator ?? LibraryPathSourceLocator(sourceFolder);
+    final isExternalSource =
+        effectiveSourceLocator is LibraryAndroidTreeSourceLocator;
+    if (isExternalSource && sourceAccess == null) {
+      throw const LibrarySourceAccessException(
+        'Android source access is not configured',
       );
+    }
+    final source = isExternalSource
+        ? effectiveSourceLocator.displayName
+        : filesystem.absolutePath(sourceFolder);
+    final root = filesystem.absolutePath(libraryRoot);
+    filesystem.validateRoot(root);
+    await filesystem.validateNoSymbolicLinks(root, root);
+    if (!isExternalSource) {
+      filesystem.validateRoot(source);
+      await filesystem.validateNoSymbolicLinks(source, source);
+      if (filesystem.samePath(source, root) ||
+          filesystem.isWithin(source, root) ||
+          filesystem.isWithin(root, source)) {
+        throw const LibraryFilesystemException(
+          'source folder and library root must not overlap',
+        );
+      }
     }
     final issues = <LibraryPlanIssue>[];
     final items = <LibraryImportPlanItem>[];
@@ -381,8 +408,12 @@ class LibraryImportService {
           sourceFileName: entry.originalFileName,
           phase: LibraryImportProgressPhase.hashing,
         );
-        final sourceSnapshot = await filesystem.snapshot(entry.sourcePath);
-        final sourceHash = await filesystem.hashFile(entry.sourcePath);
+        final sourceSnapshot = await _snapshotSource(entry);
+        final inspection = await _inspectSource(
+          entry: entry,
+          expectedSnapshot: sourceSnapshot,
+        );
+        final sourceHash = inspection.sha256;
         _emitProgress(
           onProgress,
           itemIndex: selectedIndex + 1,
@@ -391,7 +422,7 @@ class LibraryImportService {
           sourceFileName: entry.originalFileName,
           phase: LibraryImportProgressPhase.probing,
         );
-        final probe = await mediaProbe.probe(entry.sourcePath);
+        final probe = inspection.probe;
         if (!probe.isUsable) {
           throw StateError(
             'media probe failed: ${probe.error ?? 'required stream metadata is missing'}',
@@ -468,6 +499,7 @@ class LibraryImportService {
     }
     final fingerprintInput = <String, Object?>{
       'sourceFolder': source,
+      'sourceLocator': effectiveSourceLocator.toJson(),
       'libraryRoot': root,
       'revision': revision,
       'items': items
@@ -485,6 +517,7 @@ class LibraryImportService {
       fingerprint: fingerprint,
       revision: revision,
       totalSelected: selected.length,
+      sourceLocator: effectiveSourceLocator,
     );
   }
 
@@ -509,7 +542,7 @@ class LibraryImportService {
       String? error;
       var duplicate = false;
       try {
-        final current = await filesystem.snapshot(item.entry.sourcePath);
+        final current = await _snapshotSource(item.entry);
         if (!current.matches(item.sourceSnapshot)) {
           error = 'source file changed after scan/plan';
         }
@@ -797,6 +830,8 @@ class LibraryImportService {
         ),
       );
       var portableCommitted = false;
+      var sourceCleanupResolved = false;
+      var succeeded = false;
       try {
         await repository.updateImportItem(
           itemId: journalId,
@@ -845,8 +880,8 @@ class LibraryImportService {
           sourceFileName: item.entry.originalFileName,
           phase: LibraryImportProgressPhase.copying,
         );
-        final copiedHash = await filesystem.copyAndHash(
-          item.entry.sourcePath,
+        final copiedHash = await _copySource(
+          item.entry,
           stagedMedia,
           expectedSnapshot: item.sourceSnapshot,
         );
@@ -904,6 +939,46 @@ class LibraryImportService {
           scrape: document.scrape,
           libraryRelativePath: item.destinationRelativePath,
         );
+        // The staged copy has already been verified.  Resolve source cleanup
+        // before publishing any final Library files or DB rows so a provider
+        // failure cannot expose a normal Collection item with the source
+        // still present.
+        await repository.updateImportItem(
+          itemId: journalId,
+          state: LibraryImportItemState.sourceCleanupPending,
+          step: 'source_cleanup_pending',
+        );
+        await repository.updateImportOperation(
+          operationId: operationId,
+          state: LibraryImportOperationState.sourceCleanupPending,
+        );
+        _emitProgress(
+          onProgress,
+          itemIndex: item.itemIndex,
+          itemCount: plan.progressItemCount,
+          code: item.details.code,
+          sourceFileName: item.entry.originalFileName,
+          phase: LibraryImportProgressPhase.sourceCleanup,
+        );
+        final currentSource = await _snapshotSource(item.entry);
+        if (!currentSource.matches(item.sourceSnapshot)) {
+          throw StateError(
+            'source changed before cleanup; source was preserved',
+          );
+        }
+        await _verifySourceHashBeforeCleanup(item);
+        final deleteResult = await _deleteSource(
+          item.entry,
+          expectedSnapshot: item.sourceSnapshot,
+        );
+        if (!deleteResult.isConfirmedDeleted) {
+          throw StateError(
+            'source cleanup ${deleteResult.outcome.name}: '
+            '${deleteResult.message ?? 'source was preserved'}',
+          );
+        }
+        sourceCleanupResolved = true;
+
         if (destinationState.exists) {
           // Recheck immediately before moving the media into an existing
           // Work.  A file that appeared after the first check must never be
@@ -920,12 +995,9 @@ class LibraryImportService {
           await File(
             stagedMedia,
           ).rename(path.join(destinationWork.path, item.normalizedFileName));
-          // Moving media into an existing portable Work is already a
-          // filesystem commit boundary.  Any later failure must be recoverable
-          // and must never be reported as a clean pre-commit failure.
-          portableCommitted = true;
           await _moveStagedImages(stagingWork, destinationWork);
           await infoStore.write(destinationWork, document);
+          portableCommitted = true;
         } else {
           await infoStore.write(stagingWork, document);
           await Directory(destinationWork.parent.path).create(recursive: true);
@@ -933,8 +1005,6 @@ class LibraryImportService {
             throw StateError('destination folder appeared during import');
           }
           await stagingWork.rename(destinationWork.path);
-          // The staged folder now owns the portable copy.  Keep the journal
-          // on the repair path if final verification or indexing fails.
           portableCommitted = true;
         }
         final finalMediaPath = path.join(
@@ -1011,32 +1081,6 @@ class LibraryImportService {
         );
         await repository.updateImportItem(
           itemId: journalId,
-          state: LibraryImportItemState.sourceCleanupPending,
-          step: 'source_cleanup_pending',
-        );
-        await repository.updateImportOperation(
-          operationId: operationId,
-          state: LibraryImportOperationState.sourceCleanupPending,
-        );
-        _emitProgress(
-          onProgress,
-          itemIndex: item.itemIndex,
-          itemCount: plan.progressItemCount,
-          code: item.details.code,
-          sourceFileName: item.entry.originalFileName,
-          phase: LibraryImportProgressPhase.sourceCleanup,
-        );
-        final currentSource = await filesystem.snapshot(item.entry.sourcePath);
-        if (!currentSource.matches(item.sourceSnapshot) ||
-            await filesystem.hashFile(item.entry.sourcePath) !=
-                item.sourceSha256) {
-          throw StateError(
-            'source changed before cleanup; source was preserved',
-          );
-        }
-        await filesystem.deleteFileIfExists(item.entry.sourcePath);
-        await repository.updateImportItem(
-          itemId: journalId,
           state: LibraryImportItemState.succeeded,
           step: 'succeeded',
         );
@@ -1053,6 +1097,7 @@ class LibraryImportService {
             message: 'imported',
           ),
         );
+        succeeded = true;
         _emitProgress(
           onProgress,
           itemIndex: item.itemIndex,
@@ -1063,7 +1108,7 @@ class LibraryImportService {
           resultState: LibraryImportResultState.succeeded,
         );
       } on Object catch (error) {
-        final committed = portableCommitted;
+        final committed = portableCommitted || sourceCleanupResolved;
         if (committed) needsRepair = true;
         await repository.updateImportItem(
           itemId: journalId,
@@ -1105,12 +1150,19 @@ class LibraryImportService {
               : LibraryImportResultState.failed,
         );
       } finally {
-        try {
-          await filesystem.deleteStagingTree(
-            stagingItem.path,
-            stagingRoot: path.join(plan.libraryRoot, '.__avaca_importing'),
-          );
-        } on Object {
+        if (succeeded || (!portableCommitted && !sourceCleanupResolved)) {
+          try {
+            await filesystem.deleteStagingTree(
+              stagingItem.path,
+              stagingRoot: path.join(plan.libraryRoot, '.__avaca_importing'),
+            );
+          } on Object {
+            needsRepair = true;
+          }
+        } else {
+          // A verified copy may be the only recoverable media after source
+          // cleanup or final publication crossed its boundary. Keep the
+          // staging journal for explicit recovery instead of deleting it.
           needsRepair = true;
         }
       }
@@ -1144,6 +1196,143 @@ class LibraryImportService {
       items: List.unmodifiable(results),
       planIssues: plan.issues,
     );
+  }
+
+  bool _isAndroidSourceEntry(LibraryScanEntry entry) =>
+      entry.sourceLocator is LibraryAndroidDocumentSourceEntryLocator;
+
+  Future<LibrarySourceSnapshot> _snapshotSource(LibraryScanEntry entry) {
+    if (_isAndroidSourceEntry(entry)) {
+      final access = sourceAccess;
+      if (access == null) {
+        throw const LibrarySourceAccessException(
+          'Android source access is not configured',
+        );
+      }
+      return access.snapshot(entry.sourceLocator);
+    }
+    return filesystem.snapshot(entry.sourcePath);
+  }
+
+  Future<_SourceMediaInspection> _inspectSource({
+    required LibraryScanEntry entry,
+    required LibrarySourceSnapshot expectedSnapshot,
+  }) async {
+    if (!_isAndroidSourceEntry(entry)) {
+      return _SourceMediaInspection(
+        sha256: await filesystem.hashFile(entry.sourcePath),
+        probe: await mediaProbe.probe(entry.sourcePath),
+      );
+    }
+    final access = sourceAccess;
+    if (access == null) {
+      throw const LibrarySourceAccessException(
+        'Android source access is not configured',
+      );
+    }
+    final temporaryDirectory = await Directory.systemTemp.createTemp(
+      'avaca_library_probe_',
+    );
+    try {
+      final localPath = path.join(temporaryDirectory.path, 'source.media');
+      await access.copyToFile(
+        entry.sourceLocator,
+        localPath,
+        expectedSnapshot: expectedSnapshot,
+      );
+      final hash = await filesystem.hashFile(localPath);
+      return _SourceMediaInspection(
+        sha256: hash,
+        probe: await mediaProbe.probe(localPath),
+      );
+    } finally {
+      if (await temporaryDirectory.exists()) {
+        await temporaryDirectory.delete(recursive: true);
+      }
+    }
+  }
+
+  Future<String> _copySource(
+    LibraryScanEntry entry,
+    String destinationPath, {
+    required LibrarySourceSnapshot expectedSnapshot,
+  }) {
+    if (_isAndroidSourceEntry(entry)) {
+      final access = sourceAccess;
+      if (access == null) {
+        throw const LibrarySourceAccessException(
+          'Android source access is not configured',
+        );
+      }
+      return access.copyToFile(
+        entry.sourceLocator,
+        destinationPath,
+        expectedSnapshot: expectedSnapshot,
+      );
+    }
+    return filesystem.copyAndHash(
+      entry.sourcePath,
+      destinationPath,
+      expectedSnapshot: expectedSnapshot,
+    );
+  }
+
+  Future<void> _verifySourceHashBeforeCleanup(
+    LibraryImportPlanItem item,
+  ) async {
+    if (!_isAndroidSourceEntry(item.entry)) {
+      if (await filesystem.hashFile(item.entry.sourcePath) !=
+          item.sourceSha256) {
+        throw StateError('source changed before cleanup; source was preserved');
+      }
+      return;
+    }
+    final access = sourceAccess;
+    if (access == null) {
+      throw const LibrarySourceAccessException(
+        'Android source access is not configured',
+      );
+    }
+    final temporaryDirectory = await Directory.systemTemp.createTemp(
+      'avaca_library_verify_',
+    );
+    try {
+      final localPath = path.join(temporaryDirectory.path, 'source.media');
+      final hash = await access.copyToFile(
+        item.entry.sourceLocator,
+        localPath,
+        expectedSnapshot: item.sourceSnapshot,
+      );
+      if (hash != item.sourceSha256 ||
+          await filesystem.hashFile(localPath) != item.sourceSha256) {
+        throw StateError('source changed before cleanup; source was preserved');
+      }
+    } finally {
+      if (await temporaryDirectory.exists()) {
+        await temporaryDirectory.delete(recursive: true);
+      }
+    }
+  }
+
+  Future<LibrarySourceDeleteResult> _deleteSource(
+    LibraryScanEntry entry, {
+    required LibrarySourceSnapshot expectedSnapshot,
+  }) {
+    if (_isAndroidSourceEntry(entry)) {
+      final access = sourceAccess;
+      if (access == null) {
+        throw const LibrarySourceAccessException(
+          'Android source access is not configured',
+        );
+      }
+      return access.delete(
+        entry.sourceLocator,
+        expectedSnapshot: expectedSnapshot,
+      );
+    }
+    return LibraryPathSourceAccess(
+      filesystem: filesystem,
+    ).delete(entry.sourceLocator, expectedSnapshot: expectedSnapshot);
   }
 
   void _emitProgress(

@@ -63,6 +63,33 @@ std::wstring ExecutableDirectory() {
   }
 }
 
+std::string Utf8Path(const std::wstring& path) {
+  if (path.empty()) return {};
+  const int length = WideCharToMultiByte(
+      CP_UTF8, 0, path.data(), static_cast<int>(path.size()), nullptr, 0,
+      nullptr, nullptr);
+  if (length <= 0) return {};
+  std::string result(static_cast<size_t>(length), '\0');
+  WideCharToMultiByte(CP_UTF8, 0, path.data(), static_cast<int>(path.size()),
+                      result.data(), length, nullptr, nullptr);
+  return result;
+}
+
+std::string ModulePath(HMODULE module) {
+  if (module == nullptr) return {};
+  std::vector<wchar_t> buffer(1024);
+  for (;;) {
+    const DWORD length = GetModuleFileNameW(
+        module, buffer.data(), static_cast<DWORD>(buffer.size()));
+    if (length == 0) return {};
+    if (length < buffer.size() - 1) {
+      return Utf8Path(std::wstring(buffer.data(), length));
+    }
+    buffer.resize(buffer.size() * 2);
+    if (buffer.size() > 32768) return {};
+  }
+}
+
 HMODULE LoadAdjacentLibrary(const wchar_t* name) {
   const std::wstring path = ExecutableDirectory() + L"\\" + name;
   return LoadLibraryExW(path.c_str(), nullptr,
@@ -140,6 +167,7 @@ std::string HResultString(HRESULT result) {
 
 struct MpvLibrary final {
   HMODULE module = nullptr;
+  std::string loaded_path;
   mpv_client_api_version_fn client_api_version = nullptr;
   mpv_create_fn create = nullptr;
   mpv_initialize_fn initialize = nullptr;
@@ -167,6 +195,7 @@ struct MpvLibrary final {
   bool Load() {
     module = LoadAdjacentLibrary(L"libmpv-2.dll");
     if (module == nullptr) return false;
+    loaded_path = ModulePath(module);
 
     const bool complete =
         LoadSymbol(module, "mpv_client_api_version", &client_api_version) &&
@@ -206,6 +235,7 @@ struct MpvLibrary final {
   void Unload() {
     if (module != nullptr) FreeLibrary(module);
     module = nullptr;
+    loaded_path.clear();
     client_api_version = nullptr;
     create = nullptr;
     initialize = nullptr;
@@ -234,6 +264,8 @@ struct MpvLibrary final {
 struct AngleLibrary final {
   HMODULE egl_module = nullptr;
   HMODULE gles_module = nullptr;
+  std::string egl_loaded_path;
+  std::string gles_loaded_path;
 
   eglGetProcAddress_fn egl_get_proc_address = nullptr;
   eglGetPlatformDisplayEXT_fn egl_get_platform_display = nullptr;
@@ -256,14 +288,19 @@ struct AngleLibrary final {
   EGLConfig config = nullptr;
   EGLContext context = EGL_NO_CONTEXT;
   EGLSurface surface = EGL_NO_SURFACE;
+  std::string load_error;
+  std::string surface_error;
 
   bool Load() {
     egl_module = LoadAdjacentLibrary(L"libEGL.dll");
     gles_module = LoadAdjacentLibrary(L"libGLESv2.dll");
     if (egl_module == nullptr || gles_module == nullptr) {
+      load_error = "angle_dll_load_" + std::to_string(GetLastError());
       Unload();
       return false;
     }
+    egl_loaded_path = ModulePath(egl_module);
+    gles_loaded_path = ModulePath(gles_module);
     const bool complete =
         LoadSymbol(egl_module, "eglGetProcAddress", &egl_get_proc_address) &&
         LoadSymbol(egl_module, "eglInitialize", &egl_initialize) &&
@@ -282,6 +319,7 @@ struct AngleLibrary final {
         LoadSymbol(gles_module, "glFinish", &gl_finish) &&
         LoadSymbol(gles_module, "glGetString", &gl_get_string);
     if (!complete) {
+      load_error = "angle_egl_symbol_missing";
       Unload();
       return false;
     }
@@ -292,10 +330,24 @@ struct AngleLibrary final {
                  &egl_get_platform_display);
     }
     if (egl_get_platform_display == nullptr) {
+      load_error = "angle_platform_display_symbol_missing";
       Unload();
       return false;
     }
     return true;
+  }
+
+  std::string LastFailure(const char* stage) const {
+    if (!load_error.empty()) return load_error;
+    if (!surface_error.empty()) return surface_error;
+    const auto error = egl_get_error == nullptr ? -1 : egl_get_error();
+    return std::string(stage) + "_egl_0x" +
+           [&error]() {
+             char value[16]{};
+             std::snprintf(value, sizeof(value), "%04X",
+                           static_cast<unsigned int>(error));
+             return std::string(value);
+           }();
   }
 
   void* GetProcAddress(const char* name) const {
@@ -322,6 +374,10 @@ struct AngleLibrary final {
     const EGLint display_attributes[] = {
         EGL_PLATFORM_ANGLE_TYPE_ANGLE,
         EGL_PLATFORM_ANGLE_TYPE_D3D11_ANGLE,
+        EGL_PLATFORM_ANGLE_ENABLE_AUTOMATIC_TRIM_ANGLE,
+        EGL_TRUE,
+        EGL_EXPERIMENTAL_PRESENT_PATH_ANGLE,
+        EGL_EXPERIMENTAL_PRESENT_PATH_FAST_ANGLE,
         EGL_NONE,
     };
     display = egl_get_platform_display(EGL_PLATFORM_ANGLE_ANGLE, nullptr,
@@ -333,10 +389,18 @@ struct AngleLibrary final {
     if (egl_bind_api(EGL_OPENGL_ES_API) != EGL_TRUE) return false;
 
     const EGLint config_attributes[] = {
-        EGL_SURFACE_TYPE,
-        EGL_PBUFFER_BIT,
-        EGL_RENDERABLE_TYPE,
-        EGL_OPENGL_ES2_BIT,
+        EGL_RED_SIZE,
+        8,
+        EGL_GREEN_SIZE,
+        8,
+        EGL_BLUE_SIZE,
+        8,
+        EGL_ALPHA_SIZE,
+        8,
+        EGL_DEPTH_SIZE,
+        8,
+        EGL_STENCIL_SIZE,
+        8,
         EGL_NONE,
     };
     EGLint count = 0;
@@ -356,8 +420,10 @@ struct AngleLibrary final {
   }
 
   bool CreateSurface(HANDLE shared_handle, int width, int height) {
+    surface_error.clear();
     if (display == EGL_NO_DISPLAY || context == EGL_NO_CONTEXT ||
         shared_handle == nullptr) {
+      surface_error = "angle_surface_precondition";
       return false;
     }
     const EGLint surface_attributes[] = {
@@ -373,14 +439,20 @@ struct AngleLibrary final {
     };
     surface = egl_create_pbuffer(
         display, EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE,
-        reinterpret_cast<EGLClientBuffer>(shared_handle), surface_attributes);
-    if (surface == EGL_NO_SURFACE ||
-        egl_make_current(display, surface, surface, context) != EGL_TRUE) {
-      if (surface != EGL_NO_SURFACE) egl_destroy_surface(display, surface);
+        reinterpret_cast<EGLClientBuffer>(shared_handle), config,
+        surface_attributes);
+    if (surface == EGL_NO_SURFACE) {
+      surface_error = LastFailure("angle_create_pbuffer");
+      return false;
+    }
+    if (egl_make_current(display, surface, surface, context) != EGL_TRUE) {
+      surface_error = LastFailure("angle_make_current");
+      egl_destroy_surface(display, surface);
       surface = EGL_NO_SURFACE;
       return false;
     }
     if (egl_bind_tex_image(display, surface, EGL_BACK_BUFFER) != EGL_TRUE) {
+      surface_error = LastFailure("angle_bind_tex_image");
       DestroySurface();
       return false;
     }
@@ -415,6 +487,8 @@ struct AngleLibrary final {
     if (egl_module != nullptr) FreeLibrary(egl_module);
     egl_module = nullptr;
     gles_module = nullptr;
+    egl_loaded_path.clear();
+    gles_loaded_path.clear();
     egl_get_proc_address = nullptr;
     egl_get_platform_display = nullptr;
     egl_initialize = nullptr;
@@ -619,11 +693,19 @@ struct AvacaWindowsPlayerSession::NativeState final {
       }
     }
 
-    if (!angle.Load() || !angle.InitializeDisplay()) {
-      last_error = "angle_d3d11_display";
+    if (!angle.Load()) {
+      last_error = angle.LastFailure("angle_load");
       return false;
     }
-    return RecreateSurfaceResources(kDefaultWidth, kDefaultHeight);
+    if (!angle.InitializeDisplay()) {
+      last_error = angle.LastFailure("angle_d3d11_display");
+      return false;
+    }
+    if (!RecreateSurfaceResources(kDefaultWidth, kDefaultHeight)) {
+      last_error = angle.LastFailure("angle_d3d11_shared_surface");
+      return false;
+    }
+    return true;
   }
 
   bool CreateSharedTexture(int width_value,
@@ -953,7 +1035,8 @@ AvacaWindowsPlayerSession::InitializeOnWorker() {
               false);
     return OperationResult::Failure(
         "PLAYER_BACKEND_INITIALIZATION",
-        "The Windows GPU player backend could not be initialized.");
+        "The Windows GPU player backend could not be initialized: " +
+            state.last_error);
   }
   if (!state.mpv.Load()) {
     state.last_error = "libmpv_library_or_symbol_missing";
@@ -1358,10 +1441,17 @@ AvacaWindowsPlayerSession::GetDiagnosticsOnWorker() {
     add_value("backend", "libmpv");
     add_value("surface", "dxgiSharedHandle");
     add_value("renderPath", "angle_d3d11_shared_handle");
+    add_value("renderer", "D3D11");
+    add_value("surfaceType", "windowsExternalTexture");
     add_value("dartFrameCopy", "none");
+    add_value("cpuReadback", "false");
+    add_value("softwareFallback", "false");
     add_value("gpuOnly", "true");
     add_value("adapter", state.adapter_name);
     add_value("featureLevel", FeatureLevelString(state.feature_level));
+    add_value("mpvLoadedPath", state.mpv.loaded_path);
+    add_value("eglLoadedPath", state.angle.egl_loaded_path);
+    add_value("glesLoadedPath", state.angle.gles_loaded_path);
     add_value("mpvApiVersion", std::to_string(state.mpv_api_version));
     add_value("hwdecCurrent",
               ReadString(state.mpv, state.mpv_handle, "hwdec-current")

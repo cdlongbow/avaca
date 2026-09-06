@@ -13,12 +13,13 @@ final class LibraryImportSession {
 
   final LibraryFilenameParser _parser;
   List<LibraryScanEntry> _entries = const <LibraryScanEntry>[];
-  String? _sourceFolder;
+  LibrarySourceLocator? _sourceLocator;
   String? _libraryRoot;
   int _revision = 0;
 
   List<LibraryScanEntry> get entries => List.unmodifiable(_entries);
-  String? get sourceFolder => _sourceFolder;
+  LibrarySourceLocator? get sourceLocator => _sourceLocator;
+  String? get sourceFolder => _sourceLocator?.displayName;
   String? get libraryRoot => _libraryRoot;
   int get revision => _revision;
 
@@ -29,13 +30,16 @@ final class LibraryImportSession {
 
   void setSourceFolder(String? value) {
     final normalized = value?.trim();
-    if (_sourceFolder ==
-        (normalized == null || normalized.isEmpty ? null : normalized)) {
-      return;
-    }
-    _sourceFolder = normalized == null || normalized.isEmpty
-        ? null
-        : normalized;
+    setSourceLocator(
+      normalized == null || normalized.isEmpty
+          ? null
+          : LibraryPathSourceLocator(normalized),
+    );
+  }
+
+  void setSourceLocator(LibrarySourceLocator? value) {
+    if (_sourceLocator == value) return;
+    _sourceLocator = value;
     _entries = const <LibraryScanEntry>[];
     _bump();
   }

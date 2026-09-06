@@ -75,6 +75,45 @@ endfunction()
 set(FLUTTER_MANAGED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/flutter")
 add_subdirectory(${FLUTTER_MANAGED_DIR})
 
+# Flutter 3.44.8's stock Windows engine uses ANGLE's HWND sequential swap
+# chain. On the supported Windows setup this path reports DXGI_STATUS_OCCLUDED
+# and leaves the Flutter surface white. AVACA ships a pinned engine built from
+# the matching Flutter 3.44.8 source with ANGLE DirectComposition requested and
+# verified at surface creation time. Keep the replacement in the build graph so
+# local and CI Release bundles cannot silently fall back to the stock engine.
+set(AVACA_PINNED_FLUTTER_ENGINE_DIR
+  "${CMAKE_CURRENT_SOURCE_DIR}/engine"
+  CACHE PATH "Directory containing AVACA's pinned Flutter Windows engine")
+set(AVACA_PINNED_FLUTTER_ENGINE_DLL
+  "${AVACA_PINNED_FLUTTER_ENGINE_DIR}/flutter_windows.dll")
+set(AVACA_PINNED_FLUTTER_ENGINE_IMPORT_LIB
+  "${AVACA_PINNED_FLUTTER_ENGINE_DIR}/flutter_windows.dll.lib")
+set(AVACA_WINDOWS_PLAYER_DEPS_ROOT
+  "${AVACA_PINNED_FLUTTER_ENGINE_DIR}"
+  CACHE PATH "Directory containing AVACA's pinned Windows player dependencies"
+  FORCE)
+if(EXISTS "${AVACA_PINNED_FLUTTER_ENGINE_DLL}" OR
+   EXISTS "${AVACA_PINNED_FLUTTER_ENGINE_IMPORT_LIB}")
+  if(NOT EXISTS "${AVACA_PINNED_FLUTTER_ENGINE_DLL}" OR
+     NOT EXISTS "${AVACA_PINNED_FLUTTER_ENGINE_IMPORT_LIB}")
+    message(FATAL_ERROR
+      "AVACA pinned Flutter engine requires both flutter_windows.dll and "
+      "flutter_windows.dll.lib")
+  endif()
+
+  add_custom_target(avaca_pinned_flutter_engine ALL
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      "${AVACA_PINNED_FLUTTER_ENGINE_DLL}" "${FLUTTER_LIBRARY}"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      "${AVACA_PINNED_FLUTTER_ENGINE_IMPORT_LIB}" "${FLUTTER_LIBRARY}.lib"
+    DEPENDS flutter_assemble
+            "${AVACA_PINNED_FLUTTER_ENGINE_DLL}"
+            "${AVACA_PINNED_FLUTTER_ENGINE_IMPORT_LIB}"
+    VERBATIM)
+  add_dependencies(flutter_wrapper_app avaca_pinned_flutter_engine)
+  add_dependencies(flutter_wrapper_plugin avaca_pinned_flutter_engine)
+endif()
+
 # Application build; see runner/CMakeLists.txt.
 add_subdirectory("runner")
 
@@ -96,6 +135,29 @@ endif()
 
 set(INSTALL_BUNDLE_DATA_DIR "${CMAKE_INSTALL_PREFIX}/data")
 set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}")
+
+# The native player plugin is linked into the runner, but its adjacent runtime
+# DLLs are not Flutter plugin-bundled libraries. Install the pinned closure at
+# the same bundle root as avaca.exe so a clean portable extraction can load the
+# player without relying on the build tree or PATH.
+set(AVACA_PLAYER_RUNTIME_FILES
+  libmpv-2.dll
+  libEGL.dll
+  libGLESv2.dll
+  d3dcompiler_47.dll
+  vk_swiftshader.dll
+  vulkan-1.dll
+)
+foreach(runtime_name IN LISTS AVACA_PLAYER_RUNTIME_FILES)
+  set(runtime_path "${AVACA_WINDOWS_PLAYER_DEPS_ROOT}/${runtime_name}")
+  if(NOT EXISTS "${runtime_path}")
+    message(FATAL_ERROR
+      "Missing pinned AVACA Windows player runtime file: ${runtime_path}")
+  endif()
+  install(FILES "${runtime_path}"
+    DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+    COMPONENT Runtime)
+endforeach()
 
 install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)

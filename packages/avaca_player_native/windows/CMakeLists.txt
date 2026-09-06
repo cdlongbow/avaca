@@ -38,17 +38,23 @@ target_link_libraries(${PLUGIN_NAME} PRIVATE
   user32.lib
 )
 
-# Runtime media/GPU libraries are optional at configure time so a normal
-# Flutter build can still verify the Dart/native contract.  If a dependency
-# root is supplied, its exact files are copied next to the executable.  The
-# runtime loader still requires all files and reports backendInitialization or
-# rendererFailure; there is no software/CPU pixel fallback.
-set(AVACA_PLAYER_NATIVE_DEPS_ROOT "" CACHE PATH
-    "Pinned AVACA Windows player dependency root")
+# The Windows player is a shipped product path, not a source-only contract.
+# The release workflow stages the pinned LGPL libmpv archive into this same
+# engine directory before configuring Flutter.  Keeping the default here
+# makes a local release build and CI use the identical adjacent-DLL closure.
+if(DEFINED AVACA_WINDOWS_PLAYER_DEPS_ROOT)
+  set(_avaca_default_player_deps_root "${AVACA_WINDOWS_PLAYER_DEPS_ROOT}")
+else()
+  set(_avaca_default_player_deps_root
+      "${CMAKE_CURRENT_SOURCE_DIR}/../../../windows/engine")
+endif()
+set(AVACA_PLAYER_NATIVE_DEPS_ROOT
+    "${_avaca_default_player_deps_root}" CACHE PATH
+    "Pinned AVACA Windows player dependency root" FORCE)
+set(AVACA_PLAYER_NATIVE_STRICT_DEPS ON CACHE BOOL
+    "Fail configuration when the pinned AVACA player runtime is absent" FORCE)
 set(AVACA_PLAYER_NATIVE_MPV_DEV_ROOT "" CACHE PATH
     "Optional local libmpv development root for diagnostics")
-set(AVACA_PLAYER_NATIVE_STRICT_DEPS OFF CACHE BOOL
-    "Fail configuration when the pinned AVACA player runtime is absent")
 
 if(AVACA_PLAYER_NATIVE_STRICT_DEPS AND
    NOT EXISTS "${AVACA_PLAYER_NATIVE_DEPS_ROOT}")
@@ -63,13 +69,12 @@ if(AVACA_PLAYER_NATIVE_DEPS_ROOT)
       libGLESv2.dll
       d3dcompiler_47.dll
       vk_swiftshader.dll
-      vulkan-1.dll
-      zlib.dll)
+      vulkan-1.dll)
     if(EXISTS "${AVACA_PLAYER_NATIVE_DEPS_ROOT}/${runtime_name}")
       add_custom_command(TARGET ${PLUGIN_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
           "${AVACA_PLAYER_NATIVE_DEPS_ROOT}/${runtime_name}"
-          "$<TARGET_FILE_DIR:${BINARY_NAME}>/${runtime_name}")
+          "$<TARGET_FILE_DIR:${PLUGIN_NAME}>/${runtime_name}")
     elseif(AVACA_PLAYER_NATIVE_STRICT_DEPS)
       message(FATAL_ERROR
         "Missing AVACA player runtime file: ${runtime_name}")
@@ -82,7 +87,7 @@ if(AVACA_PLAYER_NATIVE_MPV_DEV_ROOT)
     add_custom_command(TARGET ${PLUGIN_NAME} POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${AVACA_PLAYER_NATIVE_MPV_DEV_ROOT}/libmpv-2.dll"
-        "$<TARGET_FILE_DIR:${BINARY_NAME}>/libmpv-2.dll")
+        "$<TARGET_FILE_DIR:${PLUGIN_NAME}>/libmpv-2.dll")
   endif()
 endif()
 

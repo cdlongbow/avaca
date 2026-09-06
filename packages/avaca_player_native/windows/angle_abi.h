@@ -31,6 +31,12 @@ constexpr EGLint EGL_TEXTURE_2D = 0x305F;
 constexpr EGLint EGL_BACK_BUFFER = 0x3084;
 constexpr EGLint EGL_RENDERABLE_TYPE = 0x3040;
 constexpr EGLint EGL_SURFACE_TYPE = 0x3033;
+constexpr EGLint EGL_RED_SIZE = 0x3024;
+constexpr EGLint EGL_GREEN_SIZE = 0x3023;
+constexpr EGLint EGL_BLUE_SIZE = 0x3022;
+constexpr EGLint EGL_ALPHA_SIZE = 0x3021;
+constexpr EGLint EGL_DEPTH_SIZE = 0x3025;
+constexpr EGLint EGL_STENCIL_SIZE = 0x3026;
 constexpr EGLint EGL_PBUFFER_BIT = 0x0001;
 constexpr EGLint EGL_OPENGL_ES2_BIT = 0x0004;
 constexpr EGLint EGL_CONTEXT_CLIENT_VERSION = 0x3098;
@@ -39,6 +45,9 @@ constexpr EGLenum EGL_OPENGL_ES_API = 0x30A0;
 constexpr EGLenum EGL_PLATFORM_ANGLE_ANGLE = 0x3202;
 constexpr EGLint EGL_PLATFORM_ANGLE_TYPE_ANGLE = 0x3203;
 constexpr EGLint EGL_PLATFORM_ANGLE_TYPE_D3D11_ANGLE = 0x3208;
+constexpr EGLint EGL_PLATFORM_ANGLE_ENABLE_AUTOMATIC_TRIM_ANGLE = 0x320F;
+constexpr EGLint EGL_EXPERIMENTAL_PRESENT_PATH_ANGLE = 0x33A4;
+constexpr EGLint EGL_EXPERIMENTAL_PRESENT_PATH_FAST_ANGLE = 0x33A9;
 constexpr EGLenum EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE = 0x3200;
 
 constexpr unsigned int GL_VERSION = 0x1F02;
@@ -67,6 +76,7 @@ using eglCreatePbufferFromClientBuffer_fn = EGLSurface (*)(
     EGLDisplay display,
     EGLenum buftype,
     EGLClientBuffer buffer,
+    EGLConfig config,
     const EGLint* attrib_list);
 using eglDestroySurface_fn = EGLBoolean (*)(EGLDisplay display,
                                             EGLSurface surface);

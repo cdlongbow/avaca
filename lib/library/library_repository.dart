@@ -682,6 +682,39 @@ class LibraryRepository {
     );
   }
 
+  /// Returns portable media identities belonging to an import that has not
+  /// reached the terminal succeeded state. Normal Collection queries use this
+  /// guard so a partially published/repair-required import cannot appear as a
+  /// healthy item merely because its final media file exists.
+  Future<Set<String>> unresolvedImportMediaPortableIds() async {
+    final database = await db.database;
+    final rows = await database.query(
+      'import_operation_items',
+      columns: const ['media_portable_id'],
+      where:
+          'state != ? AND media_portable_id IS NOT NULL AND '
+          'TRIM(media_portable_id) <> ?',
+      whereArgs: [LibraryImportItemState.succeeded.value, ''],
+    );
+    return rows
+        .map((row) => row['media_portable_id']?.toString().trim() ?? '')
+        .where((value) => value.isNotEmpty)
+        .toSet();
+  }
+
+  /// Includes repair-required rows for an explicit maintenance/recovery pass.
+  /// The normal startup cleanup intentionally keeps those rows untouched until
+  /// a source locator and verified recovery action are available.
+  Future<List<Map<String, Object?>>> repairableImportOperations() async {
+    final database = await db.database;
+    return database.query(
+      'import_operations',
+      where: 'state = ?',
+      whereArgs: [LibraryImportOperationState.repairRequired.value],
+      orderBy: 'updated_at ASC',
+    );
+  }
+
   Future<int> _resolveOrCreateActress(
     DatabaseExecutor executor, {
     required String? portableId,
