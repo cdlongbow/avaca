@@ -142,7 +142,10 @@ final class LibraryPathSourceAccess implements LibrarySourceAccess {
     try {
       before = await snapshot(entry);
     } on Object catch (error) {
-      if (!File(entry.absolutePath).existsSync()) {
+      // Keep the failure path asynchronous as well; this method is called by
+      // the import workflow and must not perform a synchronous filesystem
+      // probe on Flutter's frame isolate.
+      if (!await File(entry.absolutePath).exists()) {
         return const LibrarySourceDeleteResult(
           outcome: LibrarySourceDeleteOutcome.alreadyMissing,
         );

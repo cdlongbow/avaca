@@ -215,7 +215,7 @@ class RemotePairingManager {
     try {
       return await crypto.deriveKey(
         secret: pairSecret,
-        info: 'AVACA-REMOTE/PAIR/V1/$purpose'.codeUnits,
+        info: '${RemoteLimits.pairingContextPrefix}$purpose'.codeUnits,
       );
     } finally {
       pairSecret.fillRange(0, pairSecret.length, 0);

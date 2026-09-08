@@ -34,9 +34,22 @@ target_link_libraries(${PLUGIN_NAME} PRIVATE
   flutter_wrapper_plugin
   d3d11.lib
   dxgi.lib
+  crypt32.lib
   ole32.lib
+  shell32.lib
   user32.lib
 )
+
+if(TARGET avaca_remote_core)
+  target_link_libraries(${PLUGIN_NAME} PRIVATE avaca_remote_core)
+  add_dependencies(${PLUGIN_NAME} avaca_remote_discovery)
+endif()
+
+if(AVACA_REMOTE_QUIC_ENABLED)
+  target_compile_definitions(${PLUGIN_NAME} PRIVATE AVACA_REMOTE_QUIC_ENABLED)
+  add_dependencies(${PLUGIN_NAME} avaca_remote_quic_core)
+  target_link_libraries(${PLUGIN_NAME} PRIVATE avaca_remote_quic_core)
+endif()
 
 # The Windows player is a shipped product path, not a source-only contract.
 # The release workflow stages the pinned LGPL libmpv archive into this same

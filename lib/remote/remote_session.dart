@@ -96,6 +96,7 @@ class RemoteAuthenticatedSession {
       command == RemoteCommand.clientHello ||
       command == RemoteCommand.serverHello ||
       command == RemoteCommand.authenticate ||
+      command == RemoteCommand.authenticatePlaybackGrant ||
       command == RemoteCommand.authenticated;
 }
 
@@ -438,7 +439,7 @@ class RemoteSessionAuthenticator {
 
   List<int> _preAuthContext(List<int> binding) {
     final writer = RemoteByteWriter()
-      ..writeBytes(utf8.encode('AVACA-REMOTE/PREAUTH/V1'))
+      ..writeBytes(utf8.encode(RemoteLimits.preAuthContext))
       ..writeUint8(RemoteLimits.protocolVersion)
       ..writeLengthPrefixedBytes(
         binding,

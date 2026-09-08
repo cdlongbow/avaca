@@ -3,6 +3,10 @@
 #include "angle_abi.h"
 #include "mpv_abi.h"
 
+#if defined(AVACA_REMOTE_QUIC_ENABLED)
+#include "avaca_remote_core/avaca_remote_core.h"
+#endif
+
 #include <flutter/texture_registrar.h>
 
 #include <d3d11.h>
@@ -128,6 +132,144 @@ const EncodableMap* MapMap(const EncodableMap& map, const char* key) {
   return std::get_if<EncodableMap>(value);
 }
 
+std::optional<std::vector<uint8_t>> MapBytes(const EncodableMap& map,
+                                             const char* key) {
+  const auto* value = MapValue(map, key);
+  if (value == nullptr || value->IsNull()) return std::nullopt;
+  const auto* bytes = std::get_if<std::vector<uint8_t>>(value);
+  return bytes == nullptr ? std::nullopt : std::optional(*bytes);
+}
+
+std::vector<uint8_t> BytesFromString(const std::string& value) {
+  std::vector<uint8_t> bytes;
+  bytes.reserve(value.size());
+  for (const char character : value) {
+    bytes.push_back(static_cast<uint8_t>(
+        static_cast<unsigned char>(character)));
+  }
+  return bytes;
+}
+
+#if defined(AVACA_REMOTE_QUIC_ENABLED)
+struct RemoteMpvStream final {
+  explicit RemoteMpvStream(std::atomic<uint64_t>* stream_reference,
+                           uint64_t native_stream,
+                           uint64_t content_length)
+      : stream_reference(stream_reference),
+        stream(native_stream),
+        length(content_length) {}
+
+  std::mutex mutex;
+  std::condition_variable condition;
+  std::atomic<uint64_t>* stream_reference = nullptr;
+  uint64_t stream = 0;
+  uint64_t length = 0;
+  uint64_t position = 0;
+  uint32_t active_calls = 0;
+  bool closing = false;
+};
+
+bool EnterRemoteMpvCall(RemoteMpvStream* remote, uint64_t* stream) {
+  if (remote == nullptr || stream == nullptr) return false;
+  std::lock_guard<std::mutex> lock(remote->mutex);
+  if (remote->closing || remote->stream == 0) return false;
+  ++remote->active_calls;
+  *stream = remote->stream;
+  return true;
+}
+
+void ExitRemoteMpvCall(RemoteMpvStream* remote) {
+  if (remote == nullptr) return;
+  std::lock_guard<std::mutex> lock(remote->mutex);
+  if (remote->active_calls > 0) --remote->active_calls;
+  remote->condition.notify_all();
+}
+
+int64_t RemoteMpvRead(void* cookie, char* buffer, uint64_t count) {
+  auto* remote = static_cast<RemoteMpvStream*>(cookie);
+  if (remote == nullptr || buffer == nullptr || count == 0 ||
+      count > 4u * 1024u * 1024u) {
+    return count == 0 ? 0 : -1;
+  }
+  uint64_t native_stream = 0;
+  uint64_t offset = 0;
+  if (!EnterRemoteMpvCall(remote, &native_stream)) return -1;
+  {
+    std::lock_guard<std::mutex> lock(remote->mutex);
+    offset = remote->position;
+  }
+  uint32_t bytes_read = 0;
+  const auto status = avaca_remote_playback_read_at(
+      native_stream, offset, reinterpret_cast<uint8_t*>(buffer),
+      static_cast<uint32_t>(count), &bytes_read);
+  if (status == 0) {
+    std::lock_guard<std::mutex> lock(remote->mutex);
+    remote->position += bytes_read;
+  }
+  ExitRemoteMpvCall(remote);
+  return status == 0 ? static_cast<int64_t>(bytes_read) : -1;
+}
+
+int64_t RemoteMpvSeek(void* cookie, int64_t offset) {
+  auto* remote = static_cast<RemoteMpvStream*>(cookie);
+  if (remote == nullptr || offset < 0) return -1;
+  std::lock_guard<std::mutex> lock(remote->mutex);
+  if (remote->closing || static_cast<uint64_t>(offset) > remote->length) {
+    return -1;
+  }
+  remote->position = static_cast<uint64_t>(offset);
+  return offset;
+}
+
+int64_t RemoteMpvSize(void* cookie) {
+  auto* remote = static_cast<RemoteMpvStream*>(cookie);
+  if (remote == nullptr || remote->length > INT64_MAX) return -1;
+  std::lock_guard<std::mutex> lock(remote->mutex);
+  return remote->closing ? -1 : static_cast<int64_t>(remote->length);
+}
+
+void RemoteMpvCancel(void* cookie) {
+  auto* remote = static_cast<RemoteMpvStream*>(cookie);
+  if (remote == nullptr) return;
+  uint64_t native_stream = 0;
+  {
+    std::lock_guard<std::mutex> lock(remote->mutex);
+    if (remote->closing || remote->stream == 0) return;
+    native_stream = remote->stream;
+  }
+  avaca_remote_playback_cancel(native_stream);
+}
+
+void RemoteMpvClose(void* cookie) {
+  auto* remote = static_cast<RemoteMpvStream*>(cookie);
+  if (remote == nullptr) return;
+  uint64_t native_stream = 0;
+  {
+    std::lock_guard<std::mutex> lock(remote->mutex);
+    if (remote->closing) return;
+    remote->closing = true;
+    native_stream = remote->stream;
+    if (remote->stream_reference != nullptr &&
+        remote->stream_reference->load() == 0) {
+      native_stream = 0;
+    }
+  }
+  if (native_stream != 0) avaca_remote_playback_cancel(native_stream);
+  {
+    std::unique_lock<std::mutex> lock(remote->mutex);
+    remote->condition.wait(lock, [&remote]() {
+      return remote->active_calls == 0;
+    });
+    remote->stream = 0;
+  }
+  if (native_stream != 0) avaca_remote_playback_close(native_stream);
+  if (remote->stream_reference != nullptr) {
+    remote->stream_reference->store(0);
+  }
+  delete remote;
+}
+#endif
+
 std::string DoubleString(double value) {
   std::ostringstream stream;
   stream.imbue(std::locale::classic());
@@ -191,6 +333,7 @@ struct MpvLibrary final {
   mpv_render_context_render_fn render_context_render = nullptr;
   mpv_render_context_report_swap_fn render_context_report_swap = nullptr;
   mpv_render_context_free_fn render_context_free = nullptr;
+  mpv_stream_cb_add_ro_fn stream_cb_add_ro = nullptr;
 
   bool Load() {
     module = LoadAdjacentLibrary(L"libmpv-2.dll");
@@ -224,7 +367,8 @@ struct MpvLibrary final {
                    &render_context_render) &&
         LoadSymbol(module, "mpv_render_context_report_swap",
                    &render_context_report_swap) &&
-        LoadSymbol(module, "mpv_render_context_free", &render_context_free);
+        LoadSymbol(module, "mpv_render_context_free", &render_context_free) &&
+        LoadSymbol(module, "mpv_stream_cb_add_ro", &stream_cb_add_ro);
     if (!complete) {
       Unload();
       return false;
@@ -258,6 +402,7 @@ struct MpvLibrary final {
     render_context_render = nullptr;
     render_context_report_swap = nullptr;
     render_context_free = nullptr;
+    stream_cb_add_ro = nullptr;
   }
 };
 
@@ -633,6 +778,17 @@ struct AvacaWindowsPlayerSession::NativeState final {
   bool completed = false;
   bool error = false;
   bool render_failed = false;
+  bool remote_stream_registered = false;
+#if defined(AVACA_REMOTE_QUIC_ENABLED)
+  std::string remote_server_id;
+  std::string remote_client_id;
+  std::string remote_host;
+  uint16_t remote_port = 0;
+  std::vector<uint8_t> remote_certificate_pin;
+  std::vector<uint8_t> remote_pairing_secret;
+  std::atomic<uint64_t> remote_stream{0};
+  uint64_t remote_resource_length = 0;
+#endif
   bool fullscreen = false;
   bool window_style_saved = false;
   LONG_PTR saved_style = 0;
@@ -811,6 +967,50 @@ struct AvacaWindowsPlayerSession::NativeState final {
   }
 };
 
+int AvacaWindowsPlayerSession::OnMpvRemoteOpen(
+    void* user_data,
+    char* uri,
+    mpv_stream_cb_info* info) {
+  if (info != nullptr) *info = {};
+  if (user_data == nullptr || uri == nullptr || info == nullptr) return -13;
+#if defined(AVACA_REMOTE_QUIC_ENABLED)
+  auto* session = static_cast<AvacaWindowsPlayerSession*>(user_data);
+  if (session->native_state_ == nullptr) return -13;
+  constexpr char kPrefix[] = "avaca-quic://";
+  const std::string value(uri);
+  if (value.size() <= sizeof(kPrefix) - 1 ||
+      value.compare(0, sizeof(kPrefix) - 1, kPrefix) != 0) {
+    return -13;
+  }
+  const std::string opaque = value.substr(sizeof(kPrefix) - 1);
+  if (opaque.empty() || opaque.find_first_of("/\\?#") != std::string::npos) {
+    return -13;
+  }
+  const auto native_stream = session->native_state_->remote_stream.load();
+  auto* remote = new (std::nothrow) RemoteMpvStream(
+      &session->native_state_->remote_stream,
+      native_stream,
+      session->native_state_->remote_resource_length);
+  if (remote == nullptr || native_stream == 0) {
+    delete remote;
+    return -13;
+  }
+  info->cookie = remote;
+  info->read_fn = &RemoteMpvRead;
+  info->seek_fn = &RemoteMpvSeek;
+  info->size_fn = &RemoteMpvSize;
+  info->close_fn = &RemoteMpvClose;
+  info->cancel_fn = &RemoteMpvCancel;
+  return 0;
+#else
+  // Keep the opaque protocol fail-closed in builds without the pinned MsQuic
+  // bridge.  It must never be reinterpreted as HTTP, SMB, or a local path.
+  (void)user_data;
+  (void)uri;
+  return -13;  // MPV_ERROR_LOADING_FAILED from the libmpv ABI.
+#endif
+}
+
 class AvacaWindowsPlayerSession::CommandQueue final {
  public:
   std::mutex mutex;
@@ -890,6 +1090,12 @@ AvacaWindowsPlayerSession::Initialize() {
 AvacaWindowsPlayerSession::OperationResult
 AvacaWindowsPlayerSession::Open(const EncodableMap& request) {
   return RunSync([this, request]() { return OpenOnWorker(request); });
+}
+
+AvacaWindowsPlayerSession::OperationResult
+AvacaWindowsPlayerSession::ConfigureRemote(const EncodableMap& profile) {
+  return RunSync(
+      [this, profile]() { return ConfigureRemoteOnWorker(profile); });
 }
 
 AvacaWindowsPlayerSession::OperationResult
@@ -1082,6 +1288,22 @@ AvacaWindowsPlayerSession::InitializeOnWorker() {
         "PLAYER_BACKEND_INITIALIZATION",
         "libmpv rejected the AVACA embedding options.");
   }
+  // Keep remote playback on the same native stream contract as local
+  // playback.  The callback is deliberately fail-closed until the QUIC
+  // session supplies an opaque resource binding; this prevents accidental
+  // HTTP/SMB/local-path fallback while retaining the exact mpv_stream_cb seam.
+  if (state.mpv.stream_cb_add_ro(state.mpv_handle, "avaca-quic", this,
+                                 &AvacaWindowsPlayerSession::OnMpvRemoteOpen) <
+      0) {
+    state.last_error = "mpv_stream_cb_add_ro";
+    EmitError("backendInitialization", "playerErrorBackendInitialization",
+              state.last_error.c_str(), false);
+    return OperationResult::Failure(
+        "PLAYER_BACKEND_INITIALIZATION",
+        "libmpv could not register the AVACA QUIC stream protocol.");
+  }
+  state.remote_stream_registered = true;
+
   if (state.mpv.initialize(state.mpv_handle) < 0) {
     state.last_error = "mpv_initialize";
     EmitError("backendInitialization", "playerErrorBackendInitialization",
@@ -1152,6 +1374,47 @@ AvacaWindowsPlayerSession::InitializeOnWorker() {
 }
 
 AvacaWindowsPlayerSession::OperationResult
+AvacaWindowsPlayerSession::ConfigureRemoteOnWorker(const EncodableMap& profile) {
+#if !defined(AVACA_REMOTE_QUIC_ENABLED)
+  (void)profile;
+  return OperationResult::Failure(
+      "REMOTE_NATIVE_UNAVAILABLE",
+      "The pinned AVACA QUIC native bridge is not available in this build.");
+#else
+  if (native_state_ == nullptr || !native_state_->initialized) {
+    return OperationResult::Failure(
+        "PLAYER_LIFECYCLE", "The Windows player backend is not initialized.");
+  }
+  NativeState& state = *native_state_;
+  if (state.remote_stream.load() != 0) {
+    return OperationResult::Failure(
+        "REMOTE_STREAM_ACTIVE",
+        "The remote profile cannot change while playback is active.");
+  }
+  const auto server_id = MapString(profile, "serverId");
+  const auto client_id = MapString(profile, "clientId");
+  const auto host = MapString(profile, "host");
+  const auto port = MapInt64(profile, "port");
+  const auto pin = MapBytes(profile, "certificateSha256Pin");
+  const auto secret = MapBytes(profile, "pairingSecret");
+  if (!server_id || !client_id || !host || !port || !pin || !secret ||
+      server_id->empty() || client_id->empty() || host->empty() ||
+      *port <= 0 || *port > 65535 || pin->size() != 32 ||
+      secret->size() != 32) {
+    return OperationResult::Failure(
+        "REMOTE_PROFILE_INVALID", "The remote client profile is invalid.");
+  }
+  state.remote_server_id = *server_id;
+  state.remote_client_id = *client_id;
+  state.remote_host = *host;
+  state.remote_port = static_cast<uint16_t>(*port);
+  state.remote_certificate_pin = *pin;
+  state.remote_pairing_secret = *secret;
+  return OperationResult::Success();
+#endif
+}
+
+AvacaWindowsPlayerSession::OperationResult
 AvacaWindowsPlayerSession::OpenOnWorker(const EncodableMap& request) {
   if (native_state_ == nullptr || !native_state_->initialized) {
     return OperationResult::Failure(
@@ -1166,54 +1429,127 @@ AvacaWindowsPlayerSession::OpenOnWorker(const EncodableMap& request) {
                                     "The player source is missing.");
   }
   const auto source_kind = MapString(*source, "kind");
-  std::string target;
+  // The separated AVACA client may only hand the native player an opaque
+  // resource URI.  Local paths, HTTP(S), SMB, and arbitrary URI schemes are
+  // legacy/root-target inputs and are rejected here so they cannot become a
+  // production fallback by accident.
+  constexpr char kRemotePrefix[] = "avaca-quic://";
+  const std::string target = MapString(*source, "uri").value_or("");
   const bool remote = source_kind && *source_kind == "remote";
-  if (source_kind && *source_kind == "local") {
-    target = MapString(*source, "path").value_or("");
-  } else if (remote) {
-    target = MapString(*source, "uri").value_or("");
-  }
-  if (target.empty() || (!source_kind) ||
-      (*source_kind != "local" && *source_kind != "remote")) {
+  const auto opaque_resource = target.size() > sizeof(kRemotePrefix) - 1
+                                  ? target.substr(sizeof(kRemotePrefix) - 1)
+                                  : std::string();
+  const bool opaque_quic_uri =
+      remote && target.size() > sizeof(kRemotePrefix) - 1 &&
+      target.compare(0, sizeof(kRemotePrefix) - 1, kRemotePrefix) == 0 &&
+      !opaque_resource.empty() &&
+      opaque_resource.find_first_of("/\\?#") == std::string::npos;
+  if (!opaque_quic_uri) {
     EmitError("invalidSource", "playerErrorInvalidSource", "source_invalid",
               false);
     return OperationResult::Failure("PLAYER_INVALID_SOURCE",
-                                    "The player source is invalid.");
+                                    "Only an opaque AVACA QUIC resource is supported.");
   }
 
-  std::string header_fields;
-  if (const auto* headers = MapMap(*source, "headers"); headers != nullptr) {
-    for (const auto& entry : *headers) {
-      const auto* key = std::get_if<std::string>(&entry.first);
-      const auto* value = std::get_if<std::string>(&entry.second);
-      if (key == nullptr || value == nullptr || key->empty() ||
-          key->find_first_of("\r\n") != std::string::npos ||
-          value->find_first_of("\r\n") != std::string::npos) {
-        EmitError("remoteRequestFailure", "playerErrorRemoteRequestFailure",
-                  "http_header_invalid", true);
-        return OperationResult::Failure(
-            "PLAYER_REMOTE_REQUEST_FAILURE", "The HTTP headers are invalid.");
-      }
-      if (!header_fields.empty()) header_fields.push_back(',');
-      header_fields += *key;
-      header_fields += ": ";
-      header_fields += *value;
-    }
-  }
-  if (state.mpv.set_property_string(state.mpv_handle, "http-header-fields",
-                                    header_fields.c_str()) < 0) {
-    state.last_error = "http_header_fields";
-    EmitError("remoteRequestFailure", "playerErrorRemoteRequestFailure",
-              state.last_error.c_str(), true);
+  if (MapMap(*source, "headers") != nullptr) {
+    EmitError("invalidSource", "playerErrorInvalidSource",
+              "http_headers_not_allowed", false);
     return OperationResult::Failure(
-        "PLAYER_REMOTE_REQUEST_FAILURE",
-        "libmpv could not apply the HTTP request headers.");
+        "PLAYER_INVALID_SOURCE",
+        "AVACA QUIC resources do not accept HTTP request headers.");
   }
+
+#if defined(AVACA_REMOTE_QUIC_ENABLED)
+  const auto* profile = MapMap(*source, "profile");
+  if (profile != nullptr) {
+    const auto configured = ConfigureRemoteOnWorker(*profile);
+    if (!configured.ok) return configured;
+  }
+  if (state.remote_server_id.empty() || state.remote_client_id.empty() ||
+      state.remote_host.empty() || state.remote_port == 0 ||
+      state.remote_certificate_pin.size() != 32 ||
+      state.remote_pairing_secret.size() != 32) {
+    return OperationResult::Failure(
+        "REMOTE_PROFILE_MISSING",
+        "An authenticated AVACA remote client profile is required.");
+  }
+  if (state.remote_stream.load() != 0) {
+    const auto old_stream = state.remote_stream.exchange(0);
+    avaca_remote_playback_close(old_stream);
+  }
+  const auto resource_id =
+      MapString(*source, "resourceId").value_or(opaque_resource);
+  const auto playback_session_id = MapString(*source, "playbackSessionId");
+  const auto playback_grant = MapBytes(*source, "playbackGrant");
+  const auto content_length = MapInt64(*source, "contentLength").has_value()
+                                  ? MapInt64(*source, "contentLength")
+                                  : MapInt64(*source, "length");
+  if (resource_id.empty() || !playback_session_id || !playback_grant ||
+      playback_session_id->empty() || playback_grant->size() != 32 ||
+      !content_length || *content_length < 0) {
+    return OperationResult::Failure(
+        "REMOTE_DESCRIPTOR_INVALID",
+        "The native AVACA playback descriptor is incomplete.");
+  }
+  AvacaRemoteClientProfile remote_profile{};
+  remote_profile.server_id = state.remote_server_id.c_str();
+  remote_profile.server_id_length =
+      static_cast<uint32_t>(state.remote_server_id.size());
+  remote_profile.client_id = state.remote_client_id.c_str();
+  remote_profile.client_id_length =
+      static_cast<uint32_t>(state.remote_client_id.size());
+  remote_profile.host = state.remote_host.c_str();
+  remote_profile.host_length = static_cast<uint32_t>(state.remote_host.size());
+  remote_profile.port = state.remote_port;
+  remote_profile.certificate_sha256_pin = state.remote_certificate_pin.data();
+  remote_profile.certificate_sha256_pin_length =
+      static_cast<uint32_t>(state.remote_certificate_pin.size());
+  remote_profile.pairing_secret = state.remote_pairing_secret.data();
+  remote_profile.pairing_secret_length =
+      static_cast<uint32_t>(state.remote_pairing_secret.size());
+
+  const auto resource_id_bytes = BytesFromString(resource_id);
+  AvacaRemotePlaybackDescriptor remote_descriptor{};
+  remote_descriptor.resource_id = resource_id_bytes.data();
+  remote_descriptor.resource_id_length =
+      static_cast<uint32_t>(resource_id_bytes.size());
+  remote_descriptor.resource_length = static_cast<uint64_t>(*content_length);
+  remote_descriptor.playback_session_id = playback_session_id->c_str();
+  remote_descriptor.playback_session_id_length =
+      static_cast<uint32_t>(playback_session_id->size());
+  remote_descriptor.playback_grant = playback_grant->data();
+  remote_descriptor.playback_grant_length =
+      static_cast<uint32_t>(playback_grant->size());
+
+  uint64_t opened_stream = 0;
+  const auto native_status = avaca_remote_playback_open_native(
+      &remote_profile, &remote_descriptor, &opened_stream);
+  if (native_status != 0 || opened_stream == 0) {
+    state.remote_stream.store(0);
+    EmitError("mediaOpenFailed", "playerErrorMediaOpenFailed",
+              "remote_native_open", true);
+    return OperationResult::Failure(
+        "PLAYER_REMOTE_OPEN_FAILED",
+        "The AVACA native playback connection could not be opened.");
+  }
+  state.remote_stream.store(opened_stream);
+  state.remote_resource_length = remote_descriptor.resource_length;
+#else
+  return OperationResult::Failure(
+      "REMOTE_NATIVE_UNAVAILABLE",
+      "The pinned AVACA QUIC native bridge is not available in this build.");
+#endif
 
   const char* command[] = {"loadfile", target.c_str(), "replace", nullptr};
   const int command_result = state.mpv.command(state.mpv_handle, command);
   if (command_result < 0) {
-    state.last_error = remote ? "mpv_loadfile_remote" : "mpv_loadfile_local";
+    state.last_error = "mpv_loadfile_avaca_quic";
+#if defined(AVACA_REMOTE_QUIC_ENABLED)
+    if (state.remote_stream.load() != 0) {
+      const auto old_stream = state.remote_stream.exchange(0);
+      avaca_remote_playback_close(old_stream);
+    }
+#endif
     EmitError("mediaOpenFailed", "playerErrorMediaOpenFailed",
               state.last_error.c_str(), true);
     return OperationResult::Failure("PLAYER_MEDIA_OPEN_FAILED",
@@ -1447,6 +1783,8 @@ AvacaWindowsPlayerSession::GetDiagnosticsOnWorker() {
     add_value("cpuReadback", "false");
     add_value("softwareFallback", "false");
     add_value("gpuOnly", "true");
+    add_value("remoteStreamProtocol",
+              state.remote_stream_registered ? "avaca-quic" : "none");
     add_value("adapter", state.adapter_name);
     add_value("featureLevel", FeatureLevelString(state.feature_level));
     add_value("mpvLoadedPath", state.mpv.loaded_path);
@@ -1505,6 +1843,18 @@ AvacaWindowsPlayerSession::CloseOnWorker() {
   }
   texture_variant_.reset();
   state.Destroy();
+#if defined(AVACA_REMOTE_QUIC_ENABLED)
+  const auto remote_stream = state.remote_stream.exchange(0);
+  if (remote_stream != 0) {
+    avaca_remote_playback_close(remote_stream);
+  }
+    std::fill(state.remote_pairing_secret.begin(),
+              state.remote_pairing_secret.end(), static_cast<uint8_t>(0));
+  state.remote_pairing_secret.clear();
+    std::fill(state.remote_certificate_pin.begin(),
+              state.remote_certificate_pin.end(), static_cast<uint8_t>(0));
+  state.remote_certificate_pin.clear();
+#endif
   return OperationResult::Success();
 }
 

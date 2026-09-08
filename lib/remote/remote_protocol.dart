@@ -8,19 +8,44 @@ import 'remote_media.dart';
 enum RemoteFramePhase { preAuth, auth, application }
 
 enum RemoteCommand {
-  clientHello,
-  serverHello,
-  authenticate,
-  authenticated,
-  openResource,
-  resourceOpened,
-  readResource,
-  resourceChunk,
-  cancelRead,
-  closeResource,
-  ping,
-  pong,
-  error,
+  clientHello(0x01),
+  serverHello(0x02),
+  authenticate(0x03),
+  authenticatePlaybackGrant(0x04),
+  authenticated(0x05),
+  getCapabilities(0x10),
+  capabilities(0x11),
+  listCollection(0x20),
+  collectionPage(0x21),
+  getWorkDetail(0x22),
+  workDetail(0x23),
+  openAsset(0x24),
+  assetOpened(0x25),
+  createPlaybackSession(0x30),
+  playbackSessionCreated(0x31),
+  closePlaybackSession(0x32),
+  playbackSessionClosed(0x33),
+  openResource(0x40),
+  resourceOpened(0x41),
+  readResource(0x42),
+  resourceChunk(0x43),
+  cancelRead(0x44),
+  closeResource(0x45),
+  resourceClosed(0x46),
+  ping(0x70),
+  pong(0x71),
+  error(0x7f);
+
+  const RemoteCommand(this.opcode);
+
+  final int opcode;
+
+  static RemoteCommand? fromOpcode(int opcode) {
+    for (final command in values) {
+      if (command.opcode == opcode) return command;
+    }
+    return null;
+  }
 }
 
 class RemoteFrame {
@@ -52,7 +77,7 @@ class RemoteFrameCodec {
     _checkPayloadLength(frame.payload.length, phase);
     final writer = RemoteByteWriter()
       ..writeUint8(frame.version)
-      ..writeUint8(frame.command.index)
+      ..writeUint8(frame.command.opcode)
       ..writeUint16(frame.flags)
       ..writeUint32(frame.payload.length)
       ..writeUint64(frame.requestId);
@@ -83,7 +108,8 @@ class RemoteFrameCodec {
     final payloadLength = reader.readUint32();
     final requestId = reader.readUint64();
     _checkPayloadLength(payloadLength, phase);
-    if (commandValue >= RemoteCommand.values.length) {
+    final command = RemoteCommand.fromOpcode(commandValue);
+    if (command == null) {
       throw const RemoteException(
         RemoteFailureCode.malformedFrame,
         'remote command is unknown',
@@ -103,7 +129,9 @@ class RemoteFrameCodec {
     }
     return RemoteFrame(
       version: version,
-      command: RemoteCommand.values[commandValue],
+      // Command values are sparse by design; decode through the explicit
+      // opcode table above rather than relying on enum declaration order.
+      command: command,
       flags: flags,
       requestId: requestId,
       payload: reader.readBytes(payloadLength, maxBytes: _maxPayload(phase)),
@@ -291,10 +319,22 @@ class RemoteProtocolSession {
         _require(command, RemoteCommand.clientHello);
         state = RemoteProtocolState.awaitingClientAuthentication;
       case RemoteProtocolState.awaitingClientAuthentication:
-        _require(command, RemoteCommand.authenticate);
+        if (command != RemoteCommand.authenticate &&
+            command != RemoteCommand.authenticatePlaybackGrant) {
+          throw const RemoteException(
+            RemoteFailureCode.invalidState,
+            'expected an authentication command in the current protocol state',
+          );
+        }
         state = RemoteProtocolState.authenticated;
       case RemoteProtocolState.authenticated:
         _requireApplicationCommand(command, const <RemoteCommand>{
+          RemoteCommand.getCapabilities,
+          RemoteCommand.listCollection,
+          RemoteCommand.getWorkDetail,
+          RemoteCommand.openAsset,
+          RemoteCommand.createPlaybackSession,
+          RemoteCommand.closePlaybackSession,
           RemoteCommand.openResource,
           RemoteCommand.readResource,
           RemoteCommand.cancelRead,
@@ -322,8 +362,15 @@ class RemoteProtocolSession {
         state = RemoteProtocolState.authenticated;
       case RemoteProtocolState.authenticated:
         _requireApplicationCommand(command, const <RemoteCommand>{
+          RemoteCommand.capabilities,
+          RemoteCommand.collectionPage,
+          RemoteCommand.workDetail,
+          RemoteCommand.assetOpened,
+          RemoteCommand.playbackSessionCreated,
+          RemoteCommand.playbackSessionClosed,
           RemoteCommand.resourceOpened,
           RemoteCommand.resourceChunk,
+          RemoteCommand.resourceClosed,
           RemoteCommand.ping,
           RemoteCommand.pong,
           RemoteCommand.error,
@@ -361,7 +408,13 @@ class RemoteProtocolSession {
 
   bool _isApplicationRequest(RemoteCommand command) =>
       state == RemoteProtocolState.authenticated &&
-      (command == RemoteCommand.openResource ||
+      (command == RemoteCommand.getCapabilities ||
+          command == RemoteCommand.listCollection ||
+          command == RemoteCommand.getWorkDetail ||
+          command == RemoteCommand.openAsset ||
+          command == RemoteCommand.createPlaybackSession ||
+          command == RemoteCommand.closePlaybackSession ||
+          command == RemoteCommand.openResource ||
           command == RemoteCommand.readResource ||
           command == RemoteCommand.cancelRead ||
           command == RemoteCommand.closeResource ||

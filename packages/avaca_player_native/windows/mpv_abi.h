@@ -124,6 +124,32 @@ typedef struct mpv_opengl_fbo {
 
 typedef void (*mpv_render_update_fn)(void* cb_ctx);
 
+// Custom read-only stream ABI used by the AVACA remote playback bridge.  The
+// callbacks are invoked by libmpv's demuxer thread; they must never touch
+// Flutter/Dart state or block the raster thread.
+typedef int64_t (*mpv_stream_cb_read_fn)(void* cookie, char* buf, uint64_t nbytes);
+typedef int64_t (*mpv_stream_cb_seek_fn)(void* cookie, int64_t offset);
+typedef int64_t (*mpv_stream_cb_size_fn)(void* cookie);
+typedef void (*mpv_stream_cb_close_fn)(void* cookie);
+typedef void (*mpv_stream_cb_cancel_fn)(void* cookie);
+typedef struct mpv_stream_cb_info {
+  void* cookie;
+  mpv_stream_cb_read_fn read_fn;
+  mpv_stream_cb_seek_fn seek_fn;
+  mpv_stream_cb_size_fn size_fn;
+  mpv_stream_cb_close_fn close_fn;
+  mpv_stream_cb_cancel_fn cancel_fn;
+} mpv_stream_cb_info;
+typedef int (*mpv_stream_cb_open_ro_fn)(
+    void* user_data,
+    char* uri,
+    mpv_stream_cb_info* info);
+typedef int (*mpv_stream_cb_add_ro_fn)(
+    mpv_handle* ctx,
+    const char* protocol,
+    void* user_data,
+    mpv_stream_cb_open_ro_fn open_fn);
+
 typedef mpv_handle*(__cdecl* mpv_create_fn)();
 typedef int(__cdecl* mpv_initialize_fn)(mpv_handle* ctx);
 typedef void(__cdecl* mpv_terminate_destroy_fn)(mpv_handle* ctx);

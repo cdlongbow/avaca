@@ -3,7 +3,15 @@
 /// These limits are deliberately conservative. They are protocol limits, not
 /// UI limits, and every decoder must enforce them before allocating memory.
 abstract final class RemoteLimits {
-  static const protocolVersion = 1;
+  /// Wire version is deliberately bumped for the separated Server/AVACA
+  /// contract.  There is no downgrade path to the pre-separation protocol.
+  static const protocolVersion = 2;
+  static const alpn = 'avaca-remote/2';
+  static const exporterLabel = 'EXPORTER-AVACA-REMOTE-V2';
+  static const preAuthContext = 'AVACA-REMOTE/PREAUTH/V2';
+  static const discoveryContext = 'AVACA-REMOTE/DISCOVERY/V2';
+  static const namespaceContext = 'AVACA-REMOTE/NAMESPACE/V2';
+  static const pairingContextPrefix = 'AVACA-REMOTE/PAIR/V2/';
   static const channelBindingBytes = 32;
   static const preAuthFrameBytes = 1024;
   static const authFrameBytes = 16 * 1024;

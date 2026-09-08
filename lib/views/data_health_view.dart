@@ -28,7 +28,14 @@ class _DataHealthViewState extends State<DataHealthView> {
     _future = _service.load();
   }
 
-  void _refresh() => setState(() => _future = _service.load());
+  void _refresh() {
+    // Keep the Future creation inside a synchronous setState block.  Returning
+    // the Future from an arrow callback makes Flutter reject the refresh
+    // gesture with "setState callback returned a Future".
+    setState(() {
+      _future = _service.load();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

@@ -179,7 +179,7 @@ class RemoteDiscoveryCodec {
     }
     final key = await crypto.deriveKey(
       secret: pairSecret,
-      info: 'AVACA-REMOTE/DISCOVERY/V1'.codeUnits,
+      info: RemoteLimits.discoveryContext.codeUnits,
     );
     try {
       final namespace = await _namespaceFor(key);
@@ -205,7 +205,7 @@ class RemoteDiscoveryCodec {
   }) async {
     final key = await crypto.deriveKey(
       secret: pairSecret,
-      info: 'AVACA-REMOTE/DISCOVERY/V1'.codeUnits,
+      info: RemoteLimits.discoveryContext.codeUnits,
     );
     try {
       final expectedNamespace = await _namespaceFor(key);
@@ -327,7 +327,7 @@ class RemoteDiscoveryCodec {
   Future<String> _namespaceFor(List<int> key) async {
     final digest = crypto_hash.sha256.convert(<int>[
       ...key,
-      ...'AVACA-REMOTE/NAMESPACE/V1'.codeUnits,
+      ...RemoteLimits.namespaceContext.codeUnits,
     ]).bytes;
     return base64Url.encode(digest.sublist(0, 20)).replaceAll('=', '');
   }

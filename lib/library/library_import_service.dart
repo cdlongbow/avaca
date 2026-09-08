@@ -62,6 +62,30 @@ class LibraryImportPlanItem {
   final String normalizedFileName;
   final int itemIndex;
 
+  LibraryImportPlanItem copyWith({
+    String? primaryActressName,
+    String? primaryActressId,
+    List<Map<String, Object?>>? performers,
+    String? destinationRelativePath,
+  }) {
+    return LibraryImportPlanItem(
+      entry: entry,
+      details: details,
+      sourceSnapshot: sourceSnapshot,
+      sourceSha256: sourceSha256,
+      mediaProbe: mediaProbe,
+      workPortableId: workPortableId,
+      mediaPortableId: mediaPortableId,
+      primaryActressName: primaryActressName ?? this.primaryActressName,
+      primaryActressId: primaryActressId ?? this.primaryActressId,
+      performers: performers ?? this.performers,
+      destinationRelativePath:
+          destinationRelativePath ?? this.destinationRelativePath,
+      normalizedFileName: normalizedFileName,
+      itemIndex: itemIndex,
+    );
+  }
+
   Map<String, Object?> toJournalJson() => {
     'code': details.code,
     'sourcePath': entry.sourcePath,
@@ -518,6 +542,78 @@ class LibraryImportService {
       revision: revision,
       totalSelected: selected.length,
       sourceLocator: effectiveSourceLocator,
+    );
+  }
+
+  /// Applies the review screen's primary-performer choices to the immutable
+  /// plan that was already scanned, resolved, hashed, and probed.
+  ///
+  /// Commit must not call [buildPlan] again: doing so repeated network
+  /// scraping, ffprobe, and whole-file hashing after the user pressed the
+  /// button and was the source of the Windows freeze.  The source snapshots
+  /// remain exactly those reviewed; only the destination metadata that the
+  /// user deliberately changed is rewritten.
+  LibraryImportPlan applyPrimaryChoices(
+    LibraryImportPlan plan,
+    Map<String, String?> choices,
+  ) {
+    final items = <LibraryImportPlanItem>[];
+    for (final item in plan.items) {
+      final code = item.details.code.trim().toUpperCase();
+      final requested = choices[code]?.trim();
+      if (requested == null || requested.isEmpty) {
+        items.add(item);
+        continue;
+      }
+      final performer = item.performers.cast<Map<String, Object?>>().firstWhere(
+        (record) =>
+            record['name']?.toString().trim().toLowerCase() ==
+            requested.toLowerCase(),
+        orElse: () => <String, Object?>{},
+      );
+      if (performer.isEmpty) {
+        throw StateError(
+          'selected primary actress is not a resolved performer for $code',
+        );
+      }
+      final selectedId = performer['actressId']?.toString().trim();
+      final reordered = <Map<String, Object?>>[
+        performer,
+        ...item.performers.where((record) => !identical(record, performer)),
+      ];
+      items.add(
+        item.copyWith(
+          primaryActressName: requested,
+          primaryActressId: selectedId == null || selectedId.isEmpty
+              ? item.primaryActressId
+              : selectedId,
+          performers: List.unmodifiable(reordered),
+          destinationRelativePath:
+              '${filesystem.safeSegment(requested)}/${filesystem.safeSegment(code)}',
+        ),
+      );
+    }
+    final fingerprintInput = <String, Object?>{
+      'sourceFolder': plan.sourceFolder,
+      'sourceLocator': plan.sourceLocator?.toJson(),
+      'libraryRoot': plan.libraryRoot,
+      'revision': plan.revision,
+      'items': items
+          .map((item) => item.toJournalJson())
+          .toList(growable: false),
+    };
+    final fingerprint = sha256
+        .convert(utf8.encode(jsonEncode(fingerprintInput)))
+        .toString();
+    return LibraryImportPlan(
+      sourceFolder: plan.sourceFolder,
+      libraryRoot: plan.libraryRoot,
+      items: List.unmodifiable(items),
+      issues: plan.issues,
+      fingerprint: fingerprint,
+      revision: plan.revision,
+      totalSelected: plan.totalSelected,
+      sourceLocator: plan.sourceLocator,
     );
   }
 

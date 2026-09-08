@@ -48,4 +48,49 @@ void main() {
       if (root.existsSync()) await root.delete(recursive: true);
     }
   });
+
+  test('returns a recoverable busy code when the queue wait times out', () async {
+    final root = await Directory.systemTemp.createTemp('avaca_operation_gate_');
+    final lockPath = '${root.path}${Platform.pathSeparator}library.lock';
+    final release = Completer<void>();
+    final gate = LibraryOperationGate(lockPath: lockPath);
+    var thirdStarted = false;
+    try {
+      final first = gate.run(() async {
+        await release.future;
+        return 1;
+      });
+      await expectLater(
+        gate.run(
+          () async => 2,
+          timeout: const Duration(milliseconds: 20),
+        ),
+        throwsA(
+          isA<LibraryOperationBusyException>().having(
+            (error) => error.toString(),
+            'code',
+            contains(LibraryOperationBusyException.code),
+          ),
+        ),
+      );
+      // A timed-out waiter must not release its queue marker early and allow
+      // a later operation to overtake the still-running first operation.
+      await expectLater(
+        gate.run(
+          () async {
+            thirdStarted = true;
+            return 3;
+          },
+          timeout: const Duration(milliseconds: 20),
+        ),
+        throwsA(isA<LibraryOperationBusyException>()),
+      );
+      expect(thirdStarted, isFalse);
+      release.complete();
+      expect(await first, 1);
+      expect(await gate.run(() async => 4), 4);
+    } finally {
+      if (root.existsSync()) await root.delete(recursive: true);
+    }
+  });
 }

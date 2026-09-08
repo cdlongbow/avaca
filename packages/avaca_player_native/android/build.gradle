@@ -24,9 +24,22 @@ allprojects {
 apply plugin: 'com.android.library'
 apply plugin: 'kotlin-android'
 
+def avacaMsquicRoot = project.findProperty('avaca.msquic.root')?.toString()
+if (avacaMsquicRoot == null || avacaMsquicRoot.trim().isEmpty()) {
+    avacaMsquicRoot = System.getenv('AVACA_MSQUIC_ROOT') ?: ''
+}
+
 android {
     namespace 'com.avaca.player.avaca'
     compileSdk 36
+    ndkVersion '28.2.13676358'
+
+    externalNativeBuild {
+        cmake {
+            path file('src/main/cpp/CMakeLists.txt')
+            version '3.22.1'
+        }
+    }
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
@@ -39,12 +52,19 @@ android {
 
     defaultConfig {
         minSdk 23
+        ndk {
+            abiFilters 'arm64-v8a', 'x86_64'
+        }
+        externalNativeBuild {
+            cmake {
+                arguments "-DAVACA_MSQUIC_ROOT=${avacaMsquicRoot}"
+            }
+        }
     }
 }
 
 dependencies {
+    implementation 'androidx.media3:media3-datasource:1.10.1'
     implementation 'androidx.media3:media3-exoplayer:1.10.1'
     implementation 'androidx.media3:media3-ui:1.10.1'
-    implementation 'androidx.media3:media3-datasource:1.10.1'
-    implementation 'androidx.media3:media3-extractor:1.10.1'
 }

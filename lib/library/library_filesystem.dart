@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
+import 'dart:isolate';
 import 'package:crypto/crypto.dart';
 import 'package:ffi/ffi.dart';
 import 'package:path/path.dart' as path;
@@ -210,16 +211,12 @@ class LibraryFilesystem {
   }
 
   Future<String> hashFile(String filePath) async {
-    final digestSink = _DigestSink();
-    final digestInput = sha256.startChunkedConversion(digestSink);
-    try {
-      await for (final chunk in File(absolutePath(filePath)).openRead()) {
-        digestInput.add(chunk);
-      }
-    } finally {
-      digestInput.close();
-    }
-    return digestSink.value.toString();
+    // SHA-256 over a large media file is CPU-heavy even though openRead is
+    // asynchronous.  Run the digest in a worker isolate so the Windows
+    // Flutter raster/UI isolate remains responsive during Review and
+    // preflight.  The path is the only message crossing the isolate boundary.
+    final normalized = absolutePath(filePath);
+    return Isolate.run(() => _hashFileInIsolate(normalized));
   }
 
   Future<String> copyAndHash(
@@ -235,19 +232,15 @@ class LibraryFilesystem {
       throw const LibraryFilesystemException('source changed before copying');
     }
     await Directory(path.dirname(destination)).create(recursive: true);
-    final digestSink = _DigestSink();
-    final digestInput = sha256.startChunkedConversion(digestSink);
     final output = File(destination).openWrite();
     var bytesWritten = 0;
     try {
       await for (final chunk in File(source).openRead()) {
         bytesWritten += chunk.length;
-        digestInput.add(chunk);
         output.add(chunk);
         onBytes?.call(bytesWritten);
       }
     } finally {
-      digestInput.close();
       await output.flush();
       await output.close();
     }
@@ -261,7 +254,11 @@ class LibraryFilesystem {
         'destination size verification failed',
       );
     }
-    return digestSink.value.toString();
+    // Keep the CPU-heavy digest off the Flutter UI isolate.  The copy itself
+    // remains streamed and asynchronous; hashing the verified destination is
+    // an additional sequential read, but prevents a large media file from
+    // monopolizing the frame isolate during Commit.
+    return hashFile(destination);
   }
 
   Future<void> writeJsonAtomically(
@@ -382,6 +379,19 @@ class LibraryFilesystem {
     'LPT8',
     'LPT9',
   };
+}
+
+Future<String> _hashFileInIsolate(String filePath) async {
+  final digestSink = _DigestSink();
+  final digestInput = sha256.startChunkedConversion(digestSink);
+  try {
+    await for (final chunk in File(filePath).openRead()) {
+      digestInput.add(chunk);
+    }
+  } finally {
+    digestInput.close();
+  }
+  return digestSink.value.toString();
 }
 
 abstract interface class LibraryShortcutManager {

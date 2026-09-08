@@ -4,12 +4,16 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.net.Uri
+import android.net.nsd.NsdManager
+import android.net.nsd.NsdServiceInfo
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.View
 import android.view.Window
 import android.widget.FrameLayout
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
 import androidx.media3.common.C
 import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
@@ -18,8 +22,6 @@ import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
-import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.ui.AspectRatioFrameLayout
@@ -32,13 +34,24 @@ import io.flutter.plugin.common.StandardMessageCodec
 import io.flutter.plugin.platform.PlatformView
 import io.flutter.plugin.platform.PlatformViewFactory
 import io.flutter.embedding.engine.plugins.FlutterPlugin
-import java.io.File
+import java.security.KeyStore
+import java.security.SecureRandom
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
+import java.util.Base64
 import java.util.Locale
 
 private const val VIEW_TYPE = "avaca_player_native/video"
 private const val CONTROL_CHANNEL = "avaca/player/control"
 private const val EVENTS_CHANNEL = "avaca/player/events"
+private const val DISCOVERY_CHANNEL = "avaca/remote/discovery"
+private const val DISCOVERY_EVENTS_CHANNEL = "avaca/remote/discovery_events"
+private const val DISCOVERY_SERVICE_TYPE = "_avaca-remote._udp"
 private const val LOG_TAG = "AvacaPlayerNative"
+private const val PROFILE_KEY_ALIAS = "avaca_remote_profile_v2"
+private const val PROFILE_PREFS = "avaca_remote_profiles_v2"
 
 /** Private Android Media3 bridge. All callbacks and player work stay on the main thread. */
 class AvacaPlayerNativePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
@@ -47,13 +60,27 @@ class AvacaPlayerNativePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     private var eventSink: EventChannel.EventSink? = null
     private lateinit var appContext: Context
     private lateinit var controlChannel: MethodChannel
+    private lateinit var profileChannel: MethodChannel
     private lateinit var eventsChannel: EventChannel
+    private lateinit var discoveryChannel: MethodChannel
+    private lateinit var discoveryEventsChannel: EventChannel
+    private var discoveryEventSink: EventChannel.EventSink? = null
+    private var discoveryManager: NsdManager? = null
+    private var discoveryListener: NsdManager.DiscoveryListener? = null
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         appContext = binding.applicationContext
         controlChannel = MethodChannel(binding.binaryMessenger, CONTROL_CHANNEL)
+        profileChannel = MethodChannel(binding.binaryMessenger, "avaca/remote/profile_store")
         eventsChannel = EventChannel(binding.binaryMessenger, EVENTS_CHANNEL)
+        discoveryChannel = MethodChannel(binding.binaryMessenger, DISCOVERY_CHANNEL)
+        discoveryEventsChannel = EventChannel(
+            binding.binaryMessenger,
+            DISCOVERY_EVENTS_CHANNEL,
+        )
         controlChannel.setMethodCallHandler(this)
+        profileChannel.setMethodCallHandler(this)
+        discoveryChannel.setMethodCallHandler(this)
         eventsChannel.setStreamHandler(object : EventChannel.StreamHandler {
             override fun onListen(arguments: Any?, sink: EventChannel.EventSink) {
                 eventSink = sink
@@ -63,6 +90,15 @@ class AvacaPlayerNativePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                 eventSink = null
             }
         })
+        discoveryEventsChannel.setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(arguments: Any?, sink: EventChannel.EventSink) {
+                discoveryEventSink = sink
+            }
+
+            override fun onCancel(arguments: Any?) {
+                discoveryEventSink = null
+            }
+        })
         binding.platformViewRegistry.registerViewFactory(
             VIEW_TYPE,
             NativePlayerViewFactory(this),
@@ -70,14 +106,32 @@ class AvacaPlayerNativePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        stopDiscoveryInternal()
         sessions.values.toList().forEach { it.close() }
         sessions.clear()
         eventSink = null
+        discoveryEventSink = null
         controlChannel.setMethodCallHandler(null)
+        profileChannel.setMethodCallHandler(null)
+        discoveryChannel.setMethodCallHandler(null)
         eventsChannel.setStreamHandler(null)
+        discoveryEventsChannel.setStreamHandler(null)
     }
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
+        if (call.method == "start") {
+            startDiscovery(result)
+            return
+        }
+        if (call.method == "stop") {
+            stopDiscoveryInternal()
+            result.success(null)
+            return
+        }
+        if (call.method == "write" || call.method == "read" || call.method == "delete") {
+            handleRemoteProfileStore(call, result)
+            return
+        }
         val sessionId = call.argument<String>("sessionId")
         if (call.method == "createSession") {
             if (sessionId.isNullOrBlank()) {
@@ -103,6 +157,11 @@ class AvacaPlayerNativePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
             when (call.method) {
                 "open" -> {
                     playerSession.open(call.argument<Map<*, *>>("request"))
+                    result.success(null)
+                }
+
+                "configureRemote" -> {
+                    playerSession.configureRemote(call.argument<Map<*, *>>("profile"))
                     result.success(null)
                 }
 
@@ -163,6 +222,182 @@ class AvacaPlayerNativePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
 
     internal fun emit(event: Map<String, Any?>) {
         eventSink?.success(event)
+    }
+
+    private fun startDiscovery(result: MethodChannel.Result) {
+        if (discoveryListener != null) {
+            result.success(null)
+            return
+        }
+        val manager = appContext.getSystemService(Context.NSD_SERVICE) as? NsdManager
+        if (manager == null) {
+            result.error("DISCOVERY_UNAVAILABLE", "Android NSD is unavailable.", null)
+            return
+        }
+        val listener = object : NsdManager.DiscoveryListener {
+            override fun onDiscoveryStarted(serviceType: String) = Unit
+
+            override fun onServiceFound(serviceInfo: NsdServiceInfo) {
+                if (serviceInfo.serviceType.trimEnd('.') != DISCOVERY_SERVICE_TYPE) return
+                try {
+                    manager.resolveService(serviceInfo, object : NsdManager.ResolveListener {
+                        override fun onResolveFailed(info: NsdServiceInfo, errorCode: Int) {
+                            Log.w(LOG_TAG, "NSD resolve failed code=$errorCode")
+                        }
+
+                        override fun onServiceResolved(info: NsdServiceInfo) {
+                            val host = info.host?.hostAddress ?: info.host?.hostName
+                            if (host.isNullOrBlank() || info.port !in 1..65535) return
+                            val txt = linkedMapOf<String, String>()
+                            for ((key, value) in info.attributes) {
+                                val text = value.toString(Charsets.UTF_8)
+                                if (key.isNotBlank() && text.isNotBlank()) {
+                                    txt[key] = text
+                                }
+                            }
+                            val event = mapOf<String, Any?>(
+                                "host" to host,
+                                "port" to info.port,
+                                "txt" to txt,
+                            )
+                            mainHandler.post { discoveryEventSink?.success(event) }
+                        }
+                    })
+                } catch (error: Throwable) {
+                    Log.w(LOG_TAG, "NSD resolve request failed", error)
+                }
+            }
+
+            override fun onServiceLost(serviceInfo: NsdServiceInfo) = Unit
+
+            override fun onDiscoveryStopped(serviceType: String) = Unit
+
+            override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
+                Log.w(LOG_TAG, "NSD discovery start failed code=$errorCode")
+                try {
+                    manager.stopServiceDiscovery(this)
+                } catch (_: Throwable) {
+                    // The listener is already terminal.
+                }
+                if (discoveryListener === this) discoveryListener = null
+            }
+
+            override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {
+                Log.w(LOG_TAG, "NSD discovery stop failed code=$errorCode")
+                if (discoveryListener === this) discoveryListener = null
+            }
+        }
+        try {
+            discoveryManager = manager
+            discoveryListener = listener
+            manager.discoverServices(
+                DISCOVERY_SERVICE_TYPE,
+                NsdManager.PROTOCOL_DNS_SD,
+                listener,
+            )
+            result.success(null)
+        } catch (error: Throwable) {
+            discoveryListener = null
+            discoveryManager = null
+            result.error("DISCOVERY_START_FAILED", "Android NSD discovery failed.", null)
+        }
+    }
+
+    private fun stopDiscoveryInternal() {
+        val manager = discoveryManager
+        val listener = discoveryListener
+        discoveryListener = null
+        discoveryManager = null
+        if (manager != null && listener != null) {
+            try {
+                manager.stopServiceDiscovery(listener)
+            } catch (_: Throwable) {
+                // A listener that already failed is terminal.
+            }
+        }
+    }
+
+    private fun handleRemoteProfileStore(call: MethodCall, result: MethodChannel.Result) {
+        // This method is intentionally hosted by the already bundled native
+        // plugin so AVACA does not need a plaintext SharedPreferences fallback.
+        // The preference value below is always IV || AES-GCM ciphertext.
+        val key = call.argument<String>("key")
+        if (key.isNullOrBlank() ||
+            key.length > 320 ||
+            !key.matches(Regex("^[A-Za-z0-9._~-]+$"))) {
+            result.error("INVALID_PROFILE_KEY", "The remote profile key is invalid.", null)
+            return
+        }
+        try {
+            val preferences = appContext.getSharedPreferences(PROFILE_PREFS, Context.MODE_PRIVATE)
+            when (call.method) {
+                "write" -> {
+                    val cleartext = call.argument<ByteArray>("value")
+                    if (cleartext == null || cleartext.isEmpty() || cleartext.size > 64 * 1024) {
+                        result.error("INVALID_PROFILE", "The remote profile payload is invalid.", null)
+                        return
+                    }
+                    val iv = ByteArray(12)
+                    SecureRandom().nextBytes(iv)
+                    val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+                    cipher.init(Cipher.ENCRYPT_MODE, profileKey(), GCMParameterSpec(128, iv))
+                    val ciphertext = cipher.doFinal(cleartext)
+                    val envelope = ByteArray(iv.size + ciphertext.size)
+                    iv.copyInto(envelope, 0)
+                    ciphertext.copyInto(envelope, iv.size)
+                    preferences.edit()
+                        .putString(key, Base64.getEncoder().withoutPadding().encodeToString(envelope))
+                        .apply()
+                    cleartext.fill(0)
+                    result.success(null)
+                }
+                "read" -> {
+                    val encoded = preferences.getString(key, null)
+                    if (encoded == null) {
+                        result.success(null)
+                        return
+                    }
+                    val envelope = Base64.getDecoder().decode(encoded)
+                    if (envelope.size < 12 + 16) {
+                        result.error("PROFILE_CORRUPT", "The protected remote profile is invalid.", null)
+                        return
+                    }
+                    val iv = envelope.copyOfRange(0, 12)
+                    val ciphertext = envelope.copyOfRange(12, envelope.size)
+                    val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+                    cipher.init(Cipher.DECRYPT_MODE, profileKey(), GCMParameterSpec(128, iv))
+                    result.success(cipher.doFinal(ciphertext))
+                }
+                "delete" -> {
+                    preferences.edit().remove(key).apply()
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        } catch (_: Throwable) {
+            result.error("PROFILE_STORAGE", "Secure remote profile storage failed.", null)
+        }
+    }
+
+    private fun profileKey(): SecretKey {
+        val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        val existing = keyStore.getKey(PROFILE_KEY_ALIAS, null)
+        if (existing is SecretKey) return existing
+        val generator = KeyGenerator.getInstance(
+            KeyProperties.KEY_ALGORITHM_AES,
+            "AndroidKeyStore",
+        )
+        generator.init(
+            KeyGenParameterSpec.Builder(
+                PROFILE_KEY_ALIAS,
+                KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
+            )
+                .setKeySize(256)
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .build(),
+        )
+        return generator.generateKey()
     }
 }
 
@@ -227,6 +462,7 @@ internal class NativePlayerSession(
     private var fullscreen = false
     private var playbackError = false
     private var closed = false
+    private var remoteProfile: AndroidRemoteProfile? = null
 
     init {
         handler.post(updateRunnable)
@@ -257,50 +493,85 @@ internal class NativePlayerSession(
         }
     }
 
+    fun configureRemote(profile: Map<*, *>?) {
+        if (profile == null) throw IllegalArgumentException("Remote profile is missing.")
+        val serverId = profile["serverId"]?.toString()?.trim().orEmpty()
+        val clientId = profile["clientId"]?.toString()?.trim().orEmpty()
+        val host = profile["host"]?.toString()?.trim().orEmpty()
+        val port = (profile["port"] as? Number)?.toInt() ?: 0
+        val pin = mapBytes(profile, "certificateSha256Pin")
+        val secret = mapBytes(profile, "pairingSecret")
+        if (serverId.isBlank() || clientId.isBlank() || host.isBlank() ||
+            port !in 1..65535 || pin?.size != 32 || secret?.size != 32) {
+            throw IllegalArgumentException("Remote client profile is invalid.")
+        }
+        remoteProfile?.wipe()
+        remoteProfile = AndroidRemoteProfile(
+            serverId,
+            clientId,
+            host,
+            port,
+            pin.copyOf(),
+            secret.copyOf(),
+        )
+    }
+
     fun open(request: Map<*, *>?) {
         if (request == null) throw IllegalArgumentException("Player request is missing.")
-        pendingRequest = request
-        val currentPlayer = player ?: return
         val source = request["source"] as? Map<*, *>
             ?: throw IllegalArgumentException("Player source is missing.")
         val sourceKind = source["kind"]?.toString()
-        val mediaUri = when (sourceKind) {
-            "local" -> Uri.fromFile(File(source["path"]?.toString() ?: ""))
-            "remote" -> Uri.parse(source["uri"]?.toString() ?: "")
-            else -> throw IllegalArgumentException("Unsupported player source.")
+        val uri = source["uri"]?.toString()?.trim().orEmpty()
+        val prefix = "avaca-quic://"
+        val opaqueResource = uri.removePrefix(prefix)
+        if (sourceKind != "remote" ||
+            !uri.startsWith(prefix) ||
+            opaqueResource.isBlank() ||
+            opaqueResource.any { it == '/' || it == '\\' || it == '?' || it == '#' } ||
+            source.containsKey("headers")) {
+            throw IllegalArgumentException(
+                "Only an opaque AVACA QUIC resource is supported.",
+            )
         }
-        if (mediaUri.toString().isBlank()) {
-            throw IllegalArgumentException("Player source URI is empty.")
+        val sessionId = source["playbackSessionId"]?.toString()?.trim().orEmpty()
+        val resourceId = source["resourceId"]?.toString()?.trim()
+            ?.takeUnless { it.isEmpty() } ?: opaqueResource
+        val grant = mapBytes(source, "playbackGrant")
+        val contentLength = ((source["contentLength"] as? Number)
+            ?: (source["length"] as? Number))?.toLong()
+        if (sessionId.isBlank() || resourceId.isBlank() || grant?.size != 32 ||
+            contentLength == null || contentLength < 0L) {
+            throw IllegalArgumentException("AVACA remote playback descriptor is incomplete.")
         }
-
-        val headers = mutableMapOf<String, String>()
-        val rawHeaders = source["headers"] as? Map<*, *>
-        rawHeaders?.forEach { (key, value) ->
-            if (key != null && value != null) headers[key.toString()] = value.toString()
+        val profileMap = source["profile"] as? Map<*, *>
+        if (profileMap != null) configureRemote(profileMap)
+        val currentPlayer = player ?: run {
+            pendingRequest = request
+            return
         }
-        val httpFactory = DefaultHttpDataSource.Factory()
-            .setAllowCrossProtocolRedirects(true)
-            .setDefaultRequestProperties(headers)
-        val dataSourceFactory = DefaultDataSource.Factory(applicationContext, httpFactory)
-        val mediaItemBuilder = MediaItem.Builder()
-            .setUri(mediaUri)
-            .setMediaId(request["workCode"]?.toString() ?: sessionId)
-        val mimeType = source["mimeType"]?.toString()
-        if (!mimeType.isNullOrBlank()) mediaItemBuilder.setMimeType(mimeType)
-
-        val mediaSource = ProgressiveMediaSource.Factory(dataSourceFactory)
-            .createMediaSource(mediaItemBuilder.build())
-        selectedSubtitleTrackId = null
-        subtitleTracks = emptyList()
-        subtitleSelections = emptyMap()
-        playbackError = false
-        currentPlayer.setMediaSource(mediaSource)
-        currentPlayer.setPlaybackSpeed(speed)
-        currentPlayer.prepare()
-        val initialPosition = (request["initialPositionMs"] as? Number)?.toLong() ?: 0L
-        currentPlayer.seekTo(initialPosition.coerceAtLeast(0L))
-        currentPlayer.playWhenReady = false
-        emitState(phase = "loading")
+        val configuredProfile = remoteProfile
+            ?: throw IllegalStateException("An authenticated AVACA remote profile is required.")
+        val descriptor = AndroidRemoteDescriptor(
+            sessionId,
+            resourceId,
+            grant.copyOf(),
+            contentLength,
+        )
+        try {
+            val factory = AvacaRemoteDataSourceFactory(
+                configuredProfile.copyForDataSource(),
+                descriptor,
+            )
+            val mediaSource = ProgressiveMediaSource.Factory(factory)
+                .createMediaSource(MediaItem.fromUri(Uri.parse(uri)))
+            currentPlayer.stop()
+            currentPlayer.setMediaSource(mediaSource)
+            currentPlayer.prepare()
+            playbackError = false
+        } catch (error: Throwable) {
+            descriptor.wipe()
+            throw error
+        }
     }
 
     fun play() {
@@ -403,6 +674,9 @@ internal class NativePlayerSession(
         player?.removeListener(listener)
         player?.release()
         player = null
+        pendingRequest = null
+        remoteProfile?.wipe()
+        remoteProfile = null
         Log.i(LOG_TAG, "release_complete session=$sessionId")
     }
 
@@ -547,5 +821,16 @@ private fun Window.setFullscreenFlags(enabled: Boolean) {
             View.SYSTEM_UI_FLAG_LAYOUT_STABLE
     } else {
         View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+    }
+}
+
+private fun mapBytes(map: Map<*, *>, key: String): ByteArray? {
+    return when (val value = map[key]) {
+        is ByteArray -> value
+        is List<*> -> {
+            if (value.any { it !is Number }) null
+            else value.map { (it as Number).toInt().toByte() }.toByteArray()
+        }
+        else -> null
     }
 }

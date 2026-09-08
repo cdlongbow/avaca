@@ -474,7 +474,11 @@ class _WorkDetailViewState extends State<WorkDetailView> {
   }
 
   Widget _detailImage(String path) {
-    if (path.isNotEmpty && File(path).existsSync()) {
+    // Image.file performs its own asynchronous open and routes missing or
+    // inaccessible files through errorBuilder.  Avoid existsSync here: this
+    // widget can rebuild while navigating through a large Collection, and a
+    // synchronous probe would block the Flutter frame isolate.
+    if (path.isNotEmpty) {
       return Image.file(
         File(path),
         fit: BoxFit.cover,

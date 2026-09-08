@@ -753,7 +753,10 @@ class _LocalWorkImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (path.isNotEmpty && File(path).existsSync()) {
+    // Let the image provider perform the filesystem open asynchronously; a
+    // synchronous existsSync per card made Collection rebuilds contend with
+    // navigation frames on Windows.
+    if (path.isNotEmpty) {
       return Image.file(
         File(path),
         fit: BoxFit.cover,

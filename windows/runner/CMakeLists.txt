@@ -51,39 +51,12 @@ target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")
 add_dependencies(${BINARY_NAME} flutter_assemble)
 
 if(AVACA_REMOTE_QUIC_ENABLED)
-  if(NOT MSVC)
-    message(FATAL_ERROR "The AVACA MsQuic bridge currently requires MSVC")
-  endif()
-
-  add_library(avaca_remote_quic SHARED
-    "remote_quic_bridge.cpp"
-  )
-  target_compile_features(avaca_remote_quic PRIVATE cxx_std_17)
-  target_compile_definitions(avaca_remote_quic PRIVATE
-    "NOMINMAX"
-    "QUIC_API_ENABLE_PREVIEW_FEATURES"
-    "_HAS_EXCEPTIONS=0"
-  )
-  target_compile_options(avaca_remote_quic PRIVATE
-    /W4 /WX /EHsc /wd4100 /wd4201 /wd4214
-  )
-  target_include_directories(avaca_remote_quic PRIVATE
-    "${AVACA_MSQUIC_ROOT}/src/inc"
-  )
-  # The bridge resolves MsQuicOpenVersion/MsQuicClose from the exact adjacent
-  # runtime DLL at execution time; it intentionally does not link an import
-  # library or search PATH for an arbitrary MsQuic installation.
-  target_link_libraries(avaca_remote_quic PRIVATE
-    "bcrypt.lib"
-    "crypt32.lib"
-    "ncrypt.lib"
-    "ole32.lib"
-    "ws2_32.lib"
-  )
-  add_dependencies(${BINARY_NAME} avaca_remote_quic)
+  # The native bridge is owned by avaca_remote_core.  The runner only copies
+  # the role-neutral target into the bundle and never compiles a second copy.
+  add_dependencies(${BINARY_NAME} avaca_remote_quic_core)
   add_custom_command(TARGET ${BINARY_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-      "$<TARGET_FILE:avaca_remote_quic>"
+      "$<TARGET_FILE:avaca_remote_quic_core>"
       "$<TARGET_FILE_DIR:${BINARY_NAME}>/avaca_remote_quic.dll"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
       "${AVACA_MSQUIC_DLL}"

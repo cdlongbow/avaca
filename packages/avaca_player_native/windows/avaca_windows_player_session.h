@@ -15,6 +15,7 @@
 #include <thread>
 
 struct mpv_event;
+struct mpv_stream_cb_info;
 
 class AvacaWindowsPlayerSession final
     : public std::enable_shared_from_this<AvacaWindowsPlayerSession> {
@@ -44,6 +45,7 @@ class AvacaWindowsPlayerSession final
       delete;
 
   OperationResult Initialize();
+  OperationResult ConfigureRemote(const flutter::EncodableMap& profile);
   OperationResult Open(const flutter::EncodableMap& request);
   OperationResult Play();
   OperationResult Pause();
@@ -64,6 +66,7 @@ class AvacaWindowsPlayerSession final
   void WorkerLoop();
   void WakeWorker();
   OperationResult InitializeOnWorker();
+  OperationResult ConfigureRemoteOnWorker(const flutter::EncodableMap& profile);
   OperationResult OpenOnWorker(const flutter::EncodableMap& request);
   OperationResult PlayOnWorker();
   OperationResult PauseOnWorker();
@@ -90,6 +93,9 @@ class AvacaWindowsPlayerSession final
       size_t height);
   static void ReleaseDescriptor(void* release_context);
   static void OnMpvRenderUpdate(void* callback_context);
+  static int OnMpvRemoteOpen(void* user_data,
+                             char* uri,
+                             mpv_stream_cb_info* info);
 
   const std::string session_id_;
   flutter::TextureRegistrar* const texture_registrar_;

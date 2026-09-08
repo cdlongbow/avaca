@@ -57,10 +57,20 @@ class _LibraryImportViewState extends State<LibraryImportView> {
   final Map<String, String?> _primaryByWorkCode = {};
   bool _reviewing = false;
   bool _busy = false;
+  bool _cancelRequested = false;
   String? _message;
   LibraryImportBatchResult? _result;
   LibraryImportProgress? _progress;
   LibraryOperationGate? _operationGate;
+  LibraryImportService? _activeImportService;
+  Map<ScrapeSourceId, ScrapeSource>? _activeSources;
+  LibraryMediaProbe? _activeMediaProbe;
+  LibraryImageDownloader? _activeImageDownloader;
+  LibraryImportProgress? _pendingProgress;
+  bool _progressFlushScheduled = false;
+  int _progressGeneration = 0;
+  int _activeImportUses = 0;
+  bool _disposeImportServiceWhenIdle = false;
 
   LibraryOperationGate get _gate => _operationGate ??=
       widget.operationGate ?? LibraryOperationGate.forDatabase(widget.db);
@@ -77,6 +87,7 @@ class _LibraryImportViewState extends State<LibraryImportView> {
 
   @override
   void dispose() {
+    _disposeImportService();
     for (final controller in _manualCodeControllers.values) {
       controller.dispose();
     }
@@ -137,6 +148,7 @@ class _LibraryImportViewState extends State<LibraryImportView> {
     }
     setState(() {
       _busy = true;
+      _cancelRequested = false;
       _message = null;
       _result = null;
       _progress = null;
@@ -265,7 +277,25 @@ class _LibraryImportViewState extends State<LibraryImportView> {
       await _reviewSelected();
       return;
     }
+    // Text fields are committed to the session lazily on focus changes.  Flush
+    // them before comparing the plan revision so a correction made while the
+    // Review screen is open is treated as stale, never silently imported with
+    // the old parsed code.
     _flushManualCodes();
+    // The reviewed source snapshot is the commit contract.  If the user
+    // changed the scan selection, corrected a filename, or changed either
+    // root while Review was open, fail closed and ask for a fresh Review
+    // instead of silently rebuilding the expensive plan on the UI action.
+    if (reviewPlan.revision != _session.revision ||
+        path.normalize(reviewPlan.libraryRoot) != path.normalize(root)) {
+      setState(() {
+        _message = 'PLAN_STALE: import review is stale; please review again';
+        _reviewPlan = null;
+        _preflight = null;
+        _reviewing = false;
+      });
+      return;
+    }
     final missingPrimary = _missingPrimaryCodes(reviewPlan);
     if (missingPrimary.isNotEmpty) {
       setState(
@@ -276,6 +306,7 @@ class _LibraryImportViewState extends State<LibraryImportView> {
     }
     setState(() {
       _busy = true;
+      _cancelRequested = false;
       _message = null;
       _preflight = null;
       _progress = null;
@@ -283,15 +314,11 @@ class _LibraryImportViewState extends State<LibraryImportView> {
     try {
       final result = await _gate.run(
         () => _withImportService((service) async {
-          final plan = await service.buildPlan(
-            sourceFolder: source,
-            libraryRoot: root,
-            sourceLocator: _session.sourceLocator,
-            selectedEntries: _session.selectedEntries,
-            revision: _session.revision,
-            primaryActressSelector: (details) =>
-                _primaryByWorkCode[details.code.trim().toUpperCase()],
-            onProgress: _handleProgress,
+          // Reuse the immutable reviewed plan.  This avoids a second scrape,
+          // ffprobe process, and whole-file hash pass when Commit is pressed.
+          final plan = service.applyPrimaryChoices(
+            reviewPlan,
+            _primaryByWorkCode,
           );
           if (plan.issues.isNotEmpty) {
             if (mounted) {
@@ -322,10 +349,16 @@ class _LibraryImportViewState extends State<LibraryImportView> {
             });
             return null;
           }
-          return service.execute(plan, preflight, onProgress: _handleProgress);
+          return service.execute(
+            plan,
+            preflight,
+            isCancelled: () => _cancelRequested,
+            onProgress: _handleProgress,
+          );
         }),
       );
       if (!mounted || result == null) return;
+      _disposeImportService();
       _session.reconcileAfterImport(
         result.items
             .where((item) => item.state == LibraryImportResultState.succeeded)
@@ -356,10 +389,25 @@ class _LibraryImportViewState extends State<LibraryImportView> {
 
   void _handleProgress(LibraryImportProgress progress) {
     if (!mounted) return;
-    setState(() => _progress = progress);
+    // A large scan can emit hundreds of phase updates in a short burst. Keep
+    // the work asynchronous but publish at most one progress update per
+    // rendered frame so ListView/layout work cannot starve pointer and route
+    // transition frames.
+    _pendingProgress = progress;
+    if (_progressFlushScheduled) return;
+    _progressFlushScheduled = true;
+    final generation = _progressGeneration;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _progressFlushScheduled = false;
+      if (!mounted || generation != _progressGeneration) return;
+      final pending = _pendingProgress;
+      _pendingProgress = null;
+      if (pending != null) setState(() => _progress = pending);
+    });
   }
 
   void _backToScan() {
+    _clearReviewState();
     setState(() {
       _reviewing = false;
       _preflight = null;
@@ -367,35 +415,29 @@ class _LibraryImportViewState extends State<LibraryImportView> {
     });
   }
 
+  void _cancelImport() {
+    if (!_busy) return;
+    _cancelRequested = true;
+    setState(() {
+      _message =
+          '${AppLocalizations.of(context).cancel}: '
+          '${AppLocalizations.of(context).libraryImportProgressPhase('cancelled')}';
+    });
+  }
+
   Future<T> _withImportService<T>(
     Future<T> Function(LibraryImportService service) action,
   ) async {
-    final factory = LibrarySourceFactory(db: widget.db);
-    Map<ScrapeSourceId, ScrapeSource>? sources;
-    final probe = FfmpegKitMediaProbe();
-    final imageDownloader = WorkImageLibraryDownloader();
+    _activeImportUses++;
     try {
-      sources = await factory.createSources();
-      final service = LibraryImportService(
-        repository: _repository,
-        resolver: LibraryExactWorkResolver(sources: sources),
-        mediaProbe: probe,
-        filesystem: _filesystem,
-        sourceAccess: Platform.isAndroid
-            ? _androidStorageAccess
-            : LibraryPathSourceAccess(filesystem: _filesystem),
-        shortcutManager: Platform.isWindows
-            ? const WindowsShortcutManager()
-            : const NoopShortcutManager(),
-        imageDownloader: imageDownloader,
-      );
+      final service = await _ensureImportService();
       return await action(service);
     } finally {
-      for (final sourceAdapter in sources?.values ?? const <ScrapeSource>[]) {
-        sourceAdapter.close();
+      _activeImportUses--;
+      if (_activeImportUses == 0 && _disposeImportServiceWhenIdle) {
+        _disposeImportServiceWhenIdle = false;
+        _closeImportServiceNow();
       }
-      imageDownloader.close();
-      probe.close();
     }
   }
 
@@ -469,10 +511,82 @@ class _LibraryImportViewState extends State<LibraryImportView> {
   }
 
   void _clearReviewState() {
+    _disposeImportService();
+    _invalidateProgress();
     _reviewing = false;
     _reviewPlan = null;
     _preflight = null;
     _primaryByWorkCode.clear();
+  }
+
+  /// Builds the expensive scraper/probe graph once for the Review -> Commit
+  /// lifetime.  Commit therefore reuses the reviewed plan and an already
+  /// initialized service instead of reopening every source when the user
+  /// confirms the import.
+  Future<LibraryImportService> _ensureImportService() async {
+    final cached = _activeImportService;
+    if (cached != null) return cached;
+
+    final factory = LibrarySourceFactory(db: widget.db);
+    Map<ScrapeSourceId, ScrapeSource>? sources;
+    LibraryMediaProbe? probe;
+    LibraryImageDownloader? imageDownloader;
+    try {
+      sources = await factory.createSources();
+      probe = FfmpegKitMediaProbe();
+      imageDownloader = WorkImageLibraryDownloader();
+      final service = LibraryImportService(
+        repository: _repository,
+        resolver: LibraryExactWorkResolver(sources: sources),
+        mediaProbe: probe,
+        filesystem: _filesystem,
+        sourceAccess: Platform.isAndroid
+            ? _androidStorageAccess
+            : LibraryPathSourceAccess(filesystem: _filesystem),
+        shortcutManager: Platform.isWindows
+            ? const WindowsShortcutManager()
+            : const NoopShortcutManager(),
+        imageDownloader: imageDownloader,
+      );
+      _activeImportService = service;
+      _activeSources = sources;
+      _activeMediaProbe = probe;
+      _activeImageDownloader = imageDownloader;
+      return service;
+    } on Object {
+      for (final source in sources?.values ?? const <ScrapeSource>[]) {
+        source.close();
+      }
+      imageDownloader?.close();
+      probe?.close();
+      rethrow;
+    }
+  }
+
+  void _disposeImportService() {
+    if (_activeImportUses > 0) {
+      _disposeImportServiceWhenIdle = true;
+      return;
+    }
+    _closeImportServiceNow();
+  }
+
+  void _closeImportServiceNow() {
+    _activeImportService = null;
+    final sources = _activeSources;
+    _activeSources = null;
+    for (final source in sources?.values ?? const <ScrapeSource>[]) {
+      source.close();
+    }
+    _activeImageDownloader?.close();
+    _activeImageDownloader = null;
+    _activeMediaProbe?.close();
+    _activeMediaProbe = null;
+  }
+
+  void _invalidateProgress() {
+    _progressGeneration++;
+    _pendingProgress = null;
   }
 
   @override
@@ -747,8 +861,12 @@ class _LibraryImportViewState extends State<LibraryImportView> {
       child: Row(
         children: [
           OutlinedButton(
-            onPressed: _busy ? null : _backToScan,
-            child: Text(localizations.libraryImportBackToScan),
+            onPressed: _busy ? _cancelImport : _backToScan,
+            child: Text(
+              _busy
+                  ? localizations.cancel
+                  : localizations.libraryImportBackToScan,
+            ),
           ),
           const Spacer(),
           FilledButton.icon(

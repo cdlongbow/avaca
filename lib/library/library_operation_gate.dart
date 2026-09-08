@@ -30,8 +30,15 @@ final class LibraryOperationGate {
   final String lockPath;
   final _LibraryOperationQueue _queue;
 
-  Future<T> run<T>(Future<T> Function() action) =>
-      _queue.run(lockPath: lockPath, action: action);
+  /// Runs one Library mutation while bounding both the in-process queue wait
+  /// and the cross-process file-lock wait.  A second import must never leave
+  /// the Flutter UI waiting forever behind a crashed or abandoned process.
+  Future<T> run<T>(
+    Future<T> Function() action, {
+    Duration timeout = defaultTimeout,
+  }) => _queue.run(lockPath: lockPath, action: action, timeout: timeout);
+
+  static const defaultTimeout = Duration(seconds: 10);
 }
 
 final class _LibraryOperationQueue {
@@ -40,26 +47,65 @@ final class _LibraryOperationQueue {
   Future<T> run<T>({
     required String lockPath,
     required Future<T> Function() action,
+    required Duration timeout,
   }) {
     final previous = _tail;
     final released = Completer<void>();
     _tail = released.future;
-    return previous.then((_) async {
+    return (() async {
+      var releaseImmediately = true;
       try {
-        return await _withFileLock(lockPath, action);
+        try {
+          await previous.timeout(timeout);
+        } on TimeoutException {
+          // Do not let a later operation overtake the operation we timed out
+          // behind.  The timed-out entry is removed from execution, but its
+          // queue marker is released only after the predecessor completes.
+          // Otherwise a third import could enter while the first still owns
+          // the cross-process lock.
+          releaseImmediately = false;
+          previous.then<void>(
+            (_) {
+              if (!released.isCompleted) released.complete();
+            },
+            onError: (_, _) {
+              if (!released.isCompleted) released.complete();
+            },
+          );
+          throw const LibraryOperationBusyException();
+        }
+        return await _withFileLock(lockPath, action, timeout: timeout);
+      } on TimeoutException {
+        throw const LibraryOperationBusyException();
       } finally {
-        if (!released.isCompleted) released.complete();
+        if (releaseImmediately && !released.isCompleted) {
+          released.complete();
+        }
       }
-    });
+    })();
   }
 }
 
-Future<T> _withFileLock<T>(String lockPath, Future<T> Function() action) async {
+/// Stable error code used by UI and automation to offer retry/recovery.
+final class LibraryOperationBusyException implements Exception {
+  const LibraryOperationBusyException();
+
+  static const code = 'LIBRARY_OPERATION_BUSY';
+
+  @override
+  String toString() => '$code: another Library operation is still running';
+}
+
+Future<T> _withFileLock<T>(
+  String lockPath,
+  Future<T> Function() action, {
+  required Duration timeout,
+}) async {
   await Directory(path.dirname(lockPath)).create(recursive: true);
   final handle = await File(lockPath).open(mode: FileMode.append);
   var locked = false;
   try {
-    await handle.lock(FileLock.exclusive);
+    await handle.lock(FileLock.exclusive).timeout(timeout);
     locked = true;
     return await action();
   } finally {

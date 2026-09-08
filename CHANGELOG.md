@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.10.3 - 2026-09-09
+
+### Server and Player remote connection
+
+- Added the separated Windows-only AVACA Server and Windows/Android AVACA
+  client entry points for the authenticated remote connection flow.
+- Added protocol v2 HMAC and TLS-exporter channel binding, opaque resource
+  descriptors, playback grants, client ownership checks, expiry, revoke, and
+  cancellation semantics for range RPCs.
+- Added the dual Dart-control/native-playback session model with native lease
+  retention across temporary control-session disconnects.
+- Added Windows libmpv and Android Media3 native range adapters over the shared
+  MsQuic remote core without HTTP, SMB, local-path, or full-file fallbacks.
+
+### Pairing and discovery
+
+- Added per-client invitation/profile handling, QR and paste import flows,
+  certificate pin display, secure profile storage boundaries, revoke/re-pair,
+  and `_avaca-remote._udp` DNS-SD discovery on Windows and Android.
+- Added server-side pairing and playback-session ownership boundaries so
+  secrets remain outside logs, catalog data, and diagnostics.
+
+### Validation
+
+- Added protocol, remote-core, client, library, scraper, server, and AVACA
+  application coverage plus Windows and Android native build wiring.
+- This branch is a 0.10.3 implementation candidate. Physical Windows/Android
+  end-to-end playback, action-level UI evidence, and Windows certificate-store
+  / Android-device validation remain environment-blocked and must be closed
+  before a formal public release.
+
 ## 0.10.2 - 2026-09-02
 
 ### Library

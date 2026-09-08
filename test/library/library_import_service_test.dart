@@ -372,6 +372,14 @@ void main() {
       expect(row['portable_id'], isNull);
       expect(sourceFile.existsSync(), isTrue);
 
+      final reviewedChoice = service.applyPrimaryChoices(plan, const {
+        'ABC-123': 'Actress B',
+      });
+      expect(reviewedChoice.items.single.primaryActressName, 'Actress B');
+      expect(reviewedChoice.items.single.performers.first['name'], 'Actress B');
+      expect(reviewedChoice.fingerprint, isNot(plan.fingerprint));
+      expect(sourceFile.existsSync(), isTrue);
+
       final preflight = await service.preflight(plan);
       final cancelled = await service.execute(
         plan,
@@ -1044,10 +1052,7 @@ void main() {
         final preflight = await service.preflight(plan);
         final result = await service.execute(plan, preflight);
 
-        expect(
-          result.items.single.state,
-          LibraryImportResultState.failed,
-        );
+        expect(result.items.single.state, LibraryImportResultState.failed);
         expect(sourceFile.existsSync(), isTrue);
         expect(await sourceFile.readAsString(), 'source changed during import');
         expect(

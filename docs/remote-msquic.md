@@ -1,9 +1,10 @@
-# AVACA Remote Connectivity Core：Windows MsQuic spike
+# AVACA Remote Connectivity Core：Windows MsQuic
 
-這一階段只提供可選的 Windows QUIC transport 邊界，供後續 service/auth
-orchestration 接線使用。`RemoteServiceCoordinator.forApp()` 仍維持
-`UnavailableRemoteTransport`，因此預設 build 不會載入 native bridge，也不會
-啟用遠端播放器、媒體路徑、DHT、STUN/NAT 或 relay。
+這裡提供 Server 與 AVACA Windows composition 共用的可選 QUIC transport
+邊界。預設 build 不會猜測憑證或載入任意 DLL；只有明確提供 MsQuic source／
+runtime DLL 並在程序環境設定 authenticated pairing 值時，兩個 app 才會在
+首幀後建立 listener／client transport。未設定或啟動失敗時保留可操作的
+管理／瀏覽殼，不會替換成 plaintext、HTTP、SMB 或整檔下載。
 
 ## Native dependency
 
@@ -15,12 +16,12 @@ DLL 或網路位置載入依賴。
 先建立官方 MsQuic shared DLL，再以 AVACA 的 Windows CMake option opt in：
 
 ```powershell
-cmake -S windows -B build/windows/remote_quic_cmake `
+cmake -S apps/server/windows -B apps/server/build/windows/x64 `
   -G Ninja -DCMAKE_BUILD_TYPE=Release `
   -DAVACA_MSQUIC_ROOT=D:/path/to/msquic `
   -DAVACA_MSQUIC_DLL=D:/path/to/msquic/build/windows/bin/Release/msquic.dll `
   -DAVACA_REMOTE_QUIC_ENABLED=ON
-cmake --build build/windows/remote_quic_cmake --target avaca_remote_quic
+cmake --build apps/server/build/windows/x64 --config Release --target avaca_remote_quic_core
 ```
 
 `AVACA_REMOTE_QUIC_ENABLED` 預設為 `OFF`。啟用時，CMake 會要求
@@ -34,17 +35,61 @@ build 仍需照專案既有的 Flutter/FFmpegKit prerequisites 執行。
   SHA-1 thumbprint；沒有 server thumbprint 就不能開 listener。
 - client 不使用 `NO_CERTIFICATE_VALIDATION`。它要求 Schannel portable
   certificate callback，對 server leaf DER 計算 SHA-256 並比對 pinned hash。
-- QUIC TLS exporter `EXPORTER-AVACA-REMOTE-V1` 產生 32-byte channel binding。
+- QUIC TLS exporter `EXPORTER-AVACA-REMOTE-V2` 產生 32-byte channel binding。
   Pairing/auth transcript 同時包含 `RemoteLimits.protocolVersion` 與完整
-  channel binding，換 socket、換 TLS session 或換 binding 都必須重新驗證。
-- ALPN 固定為 `avaca-remote/1`；native send/receive、Dart connection 與
-  auth frame 都有既定上限。
+  channel binding，換 socket、換 TLS session 或換 binding 都必須重新驗證；
+  protocol v1 不會被接受或自動降級。
+- ALPN 固定為 `avaca-remote/2`；native send/receive、Dart connection 與
+  auth frame 都有既定上限。Frame opcode 使用 `avaca_protocol` 的顯式稀疏
+  值，不依賴 enum declaration order。
 
-這個 spike 沒有提供 plaintext TCP、accept-all TLS、arbitrary certificate
-fallback 或自動憑證 provisioning。`RemoteServiceCoordinator.forApp()` 仍是
-安全的 unavailable composition；要啟用 production path，呼叫端必須使用
-`forConfiguredApp()` 或 `forWindowsMsQuic()` 明確提供 endpoint/discovery
-providers、certificate pin、server thumbprint、固定 listen port，以及
-authenticated session handler。每次新連線會先以 QUIC channel binding 完成
-pair-scoped pre-auth 與 mutual auth，才交給 handler；缺少任一設定時不會
-替換成 plaintext 或 accept-all fallback。
+沒有提供 plaintext TCP、accept-all TLS、arbitrary certificate fallback 或
+自動憑證 provisioning。`apps/server` 的 `AvacaServerEnvironmentConfig` 與
+`apps/avaca` 的 `AvacaClientEnvironmentConnection` 會嚴格檢查 ID、port、
+thumbprint 與 secret 長度，然後把組態交給 `AvacaMsQuicTransportFactory`。
+每次新連線會先以 QUIC channel binding 完成 pair-scoped pre-auth 與 mutual
+auth，才交給 v2 application handler；缺少任一設定時不會降級。
+
+目前 Windows native bridge 已把同一份 authenticated playback descriptor 接到
+libmpv `mpv_stream_cb_*`；`openResource` 取得的 opaque handle、absolute
+`readAt`、seek、cancel 與 close 都留在 native data-plane。Android 使用同一份
+frame/HMAC/exporter core，透過 JNI 接到 Media3 `DataSource`，只允許
+`arm64-v8a`／`x86_64` 的官方 MsQuic build。
+
+Android 在 Windows host 上需要 Git-for-Windows Perl；應用程式 CMake 會在
+build tree overlay 修正 upstream quictls 的 POSIX environment command，並只
+提供 build-time localization shim，不修改 pinned MsQuic checkout。NDK r28c
+目前最高可用 native API level 為 35，因此 compileSdk 36 的完整 Gradle／實機
+驗收仍須以相容的 Android toolchain 完成，不能把 syntax-only 或 CMake
+configure 當成手機播放通過。
+
+配對資料由 `AVACA-PAIR-V2.` canonical base64url invitation 匯入；Windows
+certificate store UI 只回傳 subject、SHA-1 thumbprint 與 leaf SHA-256 pin，
+private key 不會離開 store。Player profile 由 Windows DPAPI 或 Android
+Keystore/AES-GCM 保存。Windows DNS-SD 與 Android `NsdManager` 已接到原生
+discovery channel；TXT 仍只提供 candidate，不攜帶 secret，也不會自動建立信任。
+Android camera QR／貼上 invitation、Server→Player→native 實機端到端播放與
+Windows／Android action-level UI 證據仍是獨立的驗收閘門，未完成前不得標記
+`PASS_UI`。
+
+## Windows native range E2E runner
+
+`tooling/remote_server_player_e2e.dart` 是可重跑的 Windows runtime runner：它
+啟動 `AvacaServerApplicationHost`，用真實 MsQuic DLL 建立 Dart control session，
+再用同一 `clientId` 呼叫 native `avaca_remote_playback_open_native` 建立第二條
+data-plane session，驗證 browse／detail、range／absolute seek、control disconnect
+後的 native lease，以及 client reconnect。它只驗證 opaque range bytes，不會啟動
+libmpv 視窗，因此不能取代實機播放與 UI gate。
+
+```powershell
+dart compile exe tooling/remote_server_player_e2e.dart `
+  -o .codex-tmp/avaca_remote_server_player_e2e.exe
+Copy-Item apps/server/build/windows/x64/runner/Debug/avaca_remote_quic*.dll `
+  .codex-tmp/
+Copy-Item apps/server/build/windows/x64/runner/Debug/msquic.dll .codex-tmp/
+& .codex-tmp/avaca_remote_server_player_e2e.exe <sha1-40-hex> <leaf-sha256-64-hex> 45887
+```
+
+`<sha1-40-hex>` 必須是 Windows `CurrentUser\My` 中含 private key 的 Server
+certificate thumbprint；`<leaf-sha256-64-hex>` 必須由同一張 leaf DER 計算。測試
+結束後應刪除暫存 fixture 與測試憑證。

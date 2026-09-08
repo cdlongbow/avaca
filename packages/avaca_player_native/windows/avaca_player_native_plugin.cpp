@@ -1,6 +1,7 @@
 #include "include/avaca_player_native/avaca_player_native_plugin.h"
 
 #include "avaca_windows_player_session.h"
+#include "avaca_remote_core/avaca_windows_discovery.h"
 
 #include <flutter/event_channel.h>
 #include <flutter/method_channel.h>
@@ -8,18 +9,26 @@
 #include <flutter/standard_method_codec.h>
 
 #include <windows.h>
+#include <shlobj.h>
+#include <wincrypt.h>
 
+#include <filesystem>
+#include <fstream>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace {
 
 constexpr char kControlChannel[] = "avaca/player/control";
 constexpr char kEventsChannel[] = "avaca/player/events";
+constexpr char kProfileStoreChannel[] = "avaca/remote/profile_store";
+constexpr char kDiscoveryChannel[] = "avaca/remote/discovery";
+constexpr char kDiscoveryEventsChannel[] = "avaca/remote/discovery_events";
 constexpr char kViewType[] = "avaca_player_native/video";
 
 using EncodableValue = flutter::EncodableValue;
@@ -66,6 +75,111 @@ const EncodableMap* MapMap(const EncodableMap& map, const char* key) {
   return std::get_if<EncodableMap>(value);
 }
 
+bool SafeProfileKey(const std::string& key) {
+  if (key.empty() || key.size() > 320) return false;
+  for (const auto character : key) {
+    if (!((character >= 'A' && character <= 'Z') ||
+          (character >= 'a' && character <= 'z') ||
+          (character >= '0' && character <= '9') || character == '.' ||
+          character == '_' || character == '-' || character == '~')) {
+      return false;
+    }
+  }
+  return true;
+}
+
+std::optional<std::wstring> ProfilePath(const std::string& key,
+                                        bool create_directory) {
+  if (!SafeProfileKey(key)) return std::nullopt;
+  PWSTR local_app_data = nullptr;
+  if (FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData, KF_FLAG_DEFAULT,
+                                  nullptr, &local_app_data)) ||
+      local_app_data == nullptr) {
+    return std::nullopt;
+  }
+  const std::filesystem::path directory =
+      std::filesystem::path(local_app_data) / L"AVACA" / L"remote-profiles";
+  CoTaskMemFree(local_app_data);
+  std::error_code error;
+  if (create_directory) std::filesystem::create_directories(directory, error);
+  if (error) return std::nullopt;
+  return (directory / (std::wstring(key.begin(), key.end()) + L".bin"))
+      .wstring();
+}
+
+bool ProtectProfile(const std::vector<uint8_t>& cleartext,
+                    std::vector<uint8_t>* protected_blob) {
+  if (protected_blob == nullptr || cleartext.empty() ||
+      cleartext.size() > MAXDWORD) {
+    return false;
+  }
+  DATA_BLOB input = {static_cast<DWORD>(cleartext.size()),
+                     const_cast<BYTE*>(cleartext.data())};
+  DATA_BLOB output = {};
+  if (!CryptProtectData(&input, L"AVACA remote profile", nullptr, nullptr,
+                        nullptr, CRYPTPROTECT_UI_FORBIDDEN, &output)) {
+    return false;
+  }
+  protected_blob->assign(output.pbData, output.pbData + output.cbData);
+  LocalFree(output.pbData);
+  return true;
+}
+
+bool UnprotectProfile(const std::vector<uint8_t>& protected_blob,
+                      std::vector<uint8_t>* cleartext) {
+  if (cleartext == nullptr || protected_blob.empty() ||
+      protected_blob.size() > MAXDWORD) {
+    return false;
+  }
+  DATA_BLOB input = {static_cast<DWORD>(protected_blob.size()),
+                     const_cast<BYTE*>(protected_blob.data())};
+  DATA_BLOB output = {};
+  if (!CryptUnprotectData(&input, nullptr, nullptr, nullptr, nullptr,
+                          CRYPTPROTECT_UI_FORBIDDEN, &output)) {
+    return false;
+  }
+  cleartext->assign(output.pbData, output.pbData + output.cbData);
+  SecureZeroMemory(output.pbData, output.cbData);
+  LocalFree(output.pbData);
+  return true;
+}
+
+bool WriteProtectedProfile(const std::string& key,
+                           const std::vector<uint8_t>& cleartext) {
+  const auto path = ProfilePath(key, true);
+  if (!path) return false;
+  std::vector<uint8_t> protected_blob;
+  if (!ProtectProfile(cleartext, &protected_blob)) return false;
+  const auto temporary = *path + L".tmp";
+  {
+    std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
+    if (!output) return false;
+    output.write(reinterpret_cast<const char*>(protected_blob.data()),
+                 static_cast<std::streamsize>(protected_blob.size()));
+    output.flush();
+    if (!output) return false;
+  }
+  return MoveFileExW(temporary.c_str(), path->c_str(),
+                     MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
+}
+
+std::optional<std::vector<uint8_t>> ReadProtectedProfile(
+    const std::string& key) {
+  const auto path = ProfilePath(key, false);
+  if (!path) return std::nullopt;
+  std::ifstream input(*path, std::ios::binary);
+  if (!input) return std::nullopt;
+  const auto size = std::filesystem::file_size(*path);
+  if (size == 0 || size > 1024 * 1024) return std::nullopt;
+  std::vector<uint8_t> protected_blob(static_cast<size_t>(size));
+  input.read(reinterpret_cast<char*>(protected_blob.data()),
+             static_cast<std::streamsize>(protected_blob.size()));
+  if (!input) return std::nullopt;
+  std::vector<uint8_t> cleartext;
+  if (!UnprotectProfile(protected_blob, &cleartext)) return std::nullopt;
+  return cleartext;
+}
+
 EncodableValue SurfaceResult(int64_t texture_id) {
   EncodableMap value;
   value.emplace(EncodableValue("surfaceType"),
@@ -75,6 +189,25 @@ EncodableValue SurfaceResult(int64_t texture_id) {
 }
 
 class AvacaPlayerNativePlugin;
+
+class DiscoveryEventStreamHandler final
+    : public flutter::StreamHandler<EncodableValue> {
+ public:
+  explicit DiscoveryEventStreamHandler(AvacaPlayerNativePlugin* plugin)
+      : plugin_(plugin) {}
+
+ protected:
+  std::unique_ptr<flutter::StreamHandlerError<EncodableValue>>
+  OnListenInternal(const EncodableValue* arguments,
+                   std::unique_ptr<flutter::EventSink<EncodableValue>>&&
+                       events) override;
+
+  std::unique_ptr<flutter::StreamHandlerError<EncodableValue>>
+  OnCancelInternal(const EncodableValue* arguments) override;
+
+ private:
+  AvacaPlayerNativePlugin* const plugin_;
+};
 
 class PlayerEventStreamHandler final
     : public flutter::StreamHandler<EncodableValue> {
@@ -102,26 +235,51 @@ class AvacaPlayerNativePlugin final : public flutter::Plugin {
         control_channel_(std::make_unique<flutter::MethodChannel<EncodableValue>>(
             registrar_->messenger(), kControlChannel,
             &flutter::StandardMethodCodec::GetInstance())),
+        profile_channel_(std::make_unique<flutter::MethodChannel<EncodableValue>>(
+            registrar_->messenger(), kProfileStoreChannel,
+            &flutter::StandardMethodCodec::GetInstance())),
+        discovery_channel_(std::make_unique<flutter::MethodChannel<EncodableValue>>(
+            registrar_->messenger(), kDiscoveryChannel,
+            &flutter::StandardMethodCodec::GetInstance())),
         events_channel_(std::make_unique<flutter::EventChannel<EncodableValue>>(
             registrar_->messenger(), kEventsChannel,
-            &flutter::StandardMethodCodec::GetInstance())) {
+            &flutter::StandardMethodCodec::GetInstance())),
+        discovery_events_channel_(
+            std::make_unique<flutter::EventChannel<EncodableValue>>(
+                registrar_->messenger(), kDiscoveryEventsChannel,
+                &flutter::StandardMethodCodec::GetInstance())) {
     control_channel_->SetMethodCallHandler(
         [this](const auto& call, auto result) {
           HandleMethodCall(call, std::move(result));
         });
+    profile_channel_->SetMethodCallHandler(
+        [this](const auto& call, auto result) {
+          HandleProfileStoreCall(call, std::move(result));
+        });
+    discovery_channel_->SetMethodCallHandler(
+        [this](const auto& call, auto result) {
+          HandleDiscoveryCall(call, std::move(result));
+        });
     events_channel_->SetStreamHandler(
         std::make_unique<PlayerEventStreamHandler>(this));
+    discovery_events_channel_->SetStreamHandler(
+        std::make_unique<DiscoveryEventStreamHandler>(this));
   }
 
   ~AvacaPlayerNativePlugin() override {
+    StopDiscovery();
+    discovery_events_channel_->SetStreamHandler(nullptr);
+    discovery_channel_->SetMethodCallHandler(nullptr);
     events_channel_->SetStreamHandler(nullptr);
     control_channel_->SetMethodCallHandler(nullptr);
+    profile_channel_->SetMethodCallHandler(nullptr);
 
     std::map<std::string, std::shared_ptr<AvacaWindowsPlayerSession>> sessions;
     {
       std::lock_guard<std::mutex> lock(mutex_);
       sessions.swap(sessions_);
       event_sink_.reset();
+      discovery_event_sink_.reset();
     }
     for (auto& entry : sessions) {
       entry.second->Close();
@@ -148,7 +306,116 @@ class AvacaPlayerNativePlugin final : public flutter::Plugin {
     if (sink != nullptr) sink->Success(event);
   }
 
+  void SetDiscoveryEventSink(
+      std::shared_ptr<flutter::EventSink<EncodableValue>> event_sink) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    discovery_event_sink_ = std::move(event_sink);
+  }
+
+  void ClearDiscoveryEventSink() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    discovery_event_sink_.reset();
+  }
+
  private:
+  void EmitDiscovery(
+      avaca_remote_core::AvacaWindowsDiscoveryCandidate candidate) {
+    EncodableMap txt;
+    for (const auto& entry : candidate.txt) {
+      txt.emplace(EncodableValue(entry.first), EncodableValue(entry.second));
+    }
+    EncodableMap event;
+    event.emplace(EncodableValue("host"), EncodableValue(candidate.host));
+    event.emplace(EncodableValue("port"),
+                  EncodableValue(static_cast<int64_t>(candidate.port)));
+    event.emplace(EncodableValue("txt"), EncodableValue(std::move(txt)));
+
+    std::shared_ptr<flutter::EventSink<EncodableValue>> sink;
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      sink = discovery_event_sink_;
+    }
+    if (sink != nullptr) sink->Success(EncodableValue(std::move(event)));
+  }
+
+  void HandleDiscoveryCall(
+      const flutter::MethodCall<EncodableValue>& call,
+      std::unique_ptr<flutter::MethodResult<EncodableValue>> result) {
+    if (call.method_name() == "start") {
+      if (!discovery_) {
+        discovery_ = std::make_unique<avaca_remote_core::AvacaWindowsDnsSd>();
+      }
+      const bool started = discovery_->StartBrowsing(
+          "_avaca-remote._udp",
+          [this](avaca_remote_core::AvacaWindowsDiscoveryCandidate candidate) {
+            EmitDiscovery(std::move(candidate));
+          });
+      if (!started) {
+        result->Error("DISCOVERY_START_FAILED",
+                      "Windows DNS-SD discovery could not start.");
+      } else {
+        result->Success();
+      }
+      return;
+    }
+    if (call.method_name() == "stop") {
+      StopDiscovery();
+      result->Success();
+      return;
+    }
+    result->NotImplemented();
+  }
+
+  void StopDiscovery() {
+    if (discovery_) discovery_->StopBrowsing();
+  }
+
+  void HandleProfileStoreCall(
+      const flutter::MethodCall<EncodableValue>& call,
+      std::unique_ptr<flutter::MethodResult<EncodableValue>> result) {
+    const auto* arguments = call.arguments();
+    const auto* map = arguments == nullptr ? nullptr
+                                           : std::get_if<EncodableMap>(arguments);
+    const auto key = map == nullptr ? std::optional<std::string>()
+                                    : MapString(*map, "key");
+    if (!key || !SafeProfileKey(*key)) {
+      result->Error("INVALID_PROFILE_KEY", "The remote profile key is invalid.");
+      return;
+    }
+    if (call.method_name() == "write") {
+      const auto* value = map == nullptr ? nullptr : MapValue(*map, "value");
+      const auto* bytes = value == nullptr
+                              ? nullptr
+                              : std::get_if<std::vector<uint8_t>>(value);
+      if (bytes == nullptr || bytes->empty() || bytes->size() > 64 * 1024 ||
+          !WriteProtectedProfile(*key, *bytes)) {
+        result->Error("PROFILE_STORAGE", "Secure remote profile write failed.");
+        return;
+      }
+      result->Success();
+      return;
+    }
+    if (call.method_name() == "read") {
+      const auto value = ReadProtectedProfile(*key);
+      if (!value) {
+        result->Success();
+      } else {
+        result->Success(EncodableValue(*value));
+      }
+      return;
+    }
+    if (call.method_name() == "delete") {
+      const auto path = ProfilePath(*key, false);
+      if (path && !DeleteFileW(path->c_str()) && GetLastError() != ERROR_FILE_NOT_FOUND) {
+        result->Error("PROFILE_STORAGE", "Secure remote profile delete failed.");
+        return;
+      }
+      result->Success();
+      return;
+    }
+    result->NotImplemented();
+  }
+
   void HandleMethodCall(
       const flutter::MethodCall<EncodableValue>& call,
       std::unique_ptr<flutter::MethodResult<EncodableValue>> result) {
@@ -185,7 +452,13 @@ class AvacaPlayerNativePlugin final : public flutter::Plugin {
 
     AvacaWindowsPlayerSession::OperationResult operation;
     const auto method = call.method_name();
-    if (method == "open") {
+    if (method == "configureRemote") {
+      const auto* profile = MapMap(*argument_map, "profile");
+      operation = profile == nullptr
+                      ? AvacaWindowsPlayerSession::OperationResult::Failure(
+                            "INVALID_PROFILE", "The remote profile is missing.")
+                      : session->ConfigureRemote(*profile);
+    } else if (method == "open") {
       const auto* request = MapMap(*argument_map, "request");
       operation = request == nullptr
                       ? AvacaWindowsPlayerSession::OperationResult::Failure(
@@ -299,11 +572,17 @@ class AvacaPlayerNativePlugin final : public flutter::Plugin {
 
   flutter::PluginRegistrarWindows* const registrar_;
   std::unique_ptr<flutter::MethodChannel<EncodableValue>> control_channel_;
+  std::unique_ptr<flutter::MethodChannel<EncodableValue>> profile_channel_;
+  std::unique_ptr<flutter::MethodChannel<EncodableValue>> discovery_channel_;
   std::unique_ptr<flutter::EventChannel<EncodableValue>> events_channel_;
+  std::unique_ptr<flutter::EventChannel<EncodableValue>>
+      discovery_events_channel_;
 
   std::mutex mutex_;
   std::map<std::string, std::shared_ptr<AvacaWindowsPlayerSession>> sessions_;
   std::shared_ptr<flutter::EventSink<EncodableValue>> event_sink_;
+  std::shared_ptr<flutter::EventSink<EncodableValue>> discovery_event_sink_;
+  std::unique_ptr<avaca_remote_core::AvacaWindowsDnsSd> discovery_;
 
   friend class PlayerEventStreamHandler;
 };
@@ -320,6 +599,22 @@ PlayerEventStreamHandler::OnListenInternal(
 std::unique_ptr<flutter::StreamHandlerError<EncodableValue>>
 PlayerEventStreamHandler::OnCancelInternal(const EncodableValue* arguments) {
   plugin_->ClearEventSink();
+  return nullptr;
+}
+
+std::unique_ptr<flutter::StreamHandlerError<EncodableValue>>
+DiscoveryEventStreamHandler::OnListenInternal(
+    const EncodableValue* arguments,
+    std::unique_ptr<flutter::EventSink<EncodableValue>>&& events) {
+  plugin_->SetDiscoveryEventSink(
+      std::shared_ptr<flutter::EventSink<EncodableValue>>(events.release()));
+  return nullptr;
+}
+
+std::unique_ptr<flutter::StreamHandlerError<EncodableValue>>
+DiscoveryEventStreamHandler::OnCancelInternal(
+    const EncodableValue* arguments) {
+  plugin_->ClearDiscoveryEventSink();
   return nullptr;
 }
 

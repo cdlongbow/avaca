@@ -8,13 +8,8 @@ import 'core/config.dart';
 import 'core/database.dart';
 import 'core/keyboard_dismiss_navigator_observer.dart';
 import 'controllers/software_update_controller.dart';
-import 'library/library_filesystem.dart';
-import 'library/library_maintenance_service.dart';
-import 'library/library_operation_gate.dart';
-import 'library/library_repository.dart';
 import 'remote/remote_coordinator.dart';
 import 'services/update_cache_service.dart';
-import 'services/update_startup_marker.dart';
 import 'views/data_health_view.dart';
 import 'views/detail_view.dart';
 import 'views/home_view.dart';
@@ -24,39 +19,38 @@ import 'views/works_view.dart';
 import 'views/library_import_view.dart';
 import 'library/library_collection_service.dart';
 
-Future<void> main() async {
+/// The root target is retained as a migration fixture only.
+///
+/// Production composition lives in `apps/server` and `apps/avaca`. Keeping
+/// this entrypoint lightweight is intentional: launching the repository root
+/// must not open the legacy database, start remote services, or initialize the
+/// old player/library monolith before the first frame.
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  runApp(const _LegacyTargetNotice());
+}
 
-  final db = AppDatabase();
-  await db.init();
-  final libraryOperationGate = LibraryOperationGate.forDatabase(db);
-  try {
-    await libraryOperationGate.run(
-      () => LibraryImportRecoveryService(
-        repository: LibraryRepository(db: db),
-        filesystem: LibraryFilesystem(),
-      ).recover(),
+class _LegacyTargetNotice extends StatelessWidget {
+  const _LegacyTargetNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'AVACA',
+      home: Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Text(
+              '此根目錄 target 僅供 migration fixture。\n'
+              '請執行 apps/server（Windows Server）或 apps/avaca（AVACA 用戶端）。',
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      ),
     );
-  } on Object catch (error) {
-    // Recovery is fail-closed for Library mutations, but a recoverable
-    // database must still be able to open so Data Health can explain the
-    // repair state to the user.
-    debugPrint('Library import recovery failed: ${error.runtimeType}');
   }
-  await markWindowsStartupSuccess();
-
-  final remoteServiceCoordinator = RemoteServiceCoordinator.forApp(
-    baseDir: db.baseDir,
-  );
-  final collectionService = LibraryCollectionService(db: db);
-  runApp(
-    AvacaApp(
-      db: db,
-      collectionService: collectionService,
-      enableAutomaticUpdateCheck: true,
-      remoteServiceCoordinator: remoteServiceCoordinator,
-    ),
-  );
 }
 
 class AvacaApp extends StatefulWidget {

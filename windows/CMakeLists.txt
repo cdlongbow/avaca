@@ -1,10 +1,31 @@
 # Project-level configuration.
 cmake_minimum_required(VERSION 3.14)
+
+# The installed Visual Studio FileTracker cannot create its .tlog files in
+# this workspace.  Disable optional dependency tracking before the project is
+# created so CMake applies the MSBuild global to every generated target.
+set(CMAKE_VS_GLOBALS "TrackFileAccess=false")
+
+if(POLICY CMP0091)
+  cmake_policy(SET CMP0091 NEW)
+endif()
 project(avaca LANGUAGES CXX)
+
+# Keep the debug CRT consistent with Flutter's `_DEBUG` runner definitions.
+if(MSVC)
+  set(CMAKE_MSVC_RUNTIME_LIBRARY
+    "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+endif()
 
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
 set(BINARY_NAME "avaca")
+set(AVACA_BUILD_ROLE "avaca" CACHE STRING
+  "Application composition to bundle: avaca or server")
+set_property(CACHE AVACA_BUILD_ROLE PROPERTY STRINGS avaca server)
+if(NOT AVACA_BUILD_ROLE STREQUAL "avaca" AND NOT AVACA_BUILD_ROLE STREQUAL "server")
+  message(FATAL_ERROR "AVACA_BUILD_ROLE must be avaca or server")
+endif()
 
 # The QUIC bridge is deliberately opt-in. A normal Flutter build must remain
 # independent of the external MsQuic source tree and runtime DLL. When the
@@ -65,6 +86,10 @@ add_definitions(-DUNICODE -D_UNICODE)
 # of modifying this function.
 function(APPLY_STANDARD_SETTINGS TARGET)
   target_compile_features(${TARGET} PUBLIC cxx_std_17)
+  if(MSVC)
+    set_property(TARGET ${TARGET} PROPERTY MSVC_RUNTIME_LIBRARY
+      "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+  endif()
   target_compile_options(${TARGET} PRIVATE /W4 /WX /wd"4100")
   target_compile_options(${TARGET} PRIVATE /EHsc)
   target_compile_definitions(${TARGET} PRIVATE "_HAS_EXCEPTIONS=0")
@@ -115,6 +140,8 @@ if(EXISTS "${AVACA_PINNED_FLUTTER_ENGINE_DLL}" OR
 endif()
 
 # Application build; see runner/CMakeLists.txt.
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../packages/avaca_remote_core/windows"
+  "avaca_remote_core_build")
 add_subdirectory("runner")
 
 # Generated plugin build rules, which manage building the plugins and adding
@@ -140,24 +167,26 @@ set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}")
 # DLLs are not Flutter plugin-bundled libraries. Install the pinned closure at
 # the same bundle root as avaca.exe so a clean portable extraction can load the
 # player without relying on the build tree or PATH.
-set(AVACA_PLAYER_RUNTIME_FILES
-  libmpv-2.dll
-  libEGL.dll
-  libGLESv2.dll
-  d3dcompiler_47.dll
-  vk_swiftshader.dll
-  vulkan-1.dll
-)
-foreach(runtime_name IN LISTS AVACA_PLAYER_RUNTIME_FILES)
-  set(runtime_path "${AVACA_WINDOWS_PLAYER_DEPS_ROOT}/${runtime_name}")
-  if(NOT EXISTS "${runtime_path}")
-    message(FATAL_ERROR
-      "Missing pinned AVACA Windows player runtime file: ${runtime_path}")
-  endif()
-  install(FILES "${runtime_path}"
-    DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
-    COMPONENT Runtime)
-endforeach()
+if(AVACA_BUILD_ROLE STREQUAL "avaca")
+  set(AVACA_PLAYER_RUNTIME_FILES
+    libmpv-2.dll
+    libEGL.dll
+    libGLESv2.dll
+    d3dcompiler_47.dll
+    vk_swiftshader.dll
+    vulkan-1.dll
+  )
+  foreach(runtime_name IN LISTS AVACA_PLAYER_RUNTIME_FILES)
+    set(runtime_path "${AVACA_WINDOWS_PLAYER_DEPS_ROOT}/${runtime_name}")
+    if(NOT EXISTS "${runtime_path}")
+      message(FATAL_ERROR
+        "Missing pinned AVACA Windows player runtime file: ${runtime_path}")
+    endif()
+    install(FILES "${runtime_path}"
+      DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+      COMPONENT Runtime)
+  endforeach()
+endif()
 
 install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)
@@ -168,7 +197,7 @@ install(TARGETS avaca_update
 )
 
 if(AVACA_REMOTE_QUIC_ENABLED)
-  install(TARGETS avaca_remote_quic
+  install(TARGETS avaca_remote_quic_core
     RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
     COMPONENT Runtime
   )

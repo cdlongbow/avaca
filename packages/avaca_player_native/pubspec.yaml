@@ -9,6 +9,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  avaca_remote_core:
+    path: ../avaca_remote_core
 
 dev_dependencies:
   flutter_test:
