@@ -11,12 +11,13 @@
 - 只發布正式版，不使用 draft 或 prerelease 資產。
 - Android 的 `versionName` 使用 `X.Y.Z`。
 - `v0.8.0` 的歷史 APK 使用 `versionCode=30`；`v0.8.1` 使用
-  `versionCode=2026`；`v0.8.2` 使用 `versionCode=2027`。從 `v0.8.1`
-  開始，workflow 以 GitHub Release workflow run #6 對應 2026，之後每個
-  正式 Release run 遞增 1（公式為
-  `GITHUB_RUN_NUMBER + 2020`）。Android 不接受較小或重複的 `versionCode`
-  作為更新。
-- 同一個 Tag 重新執行 workflow 會保留同一個 `github.run_number`，只能更新同一個 GitHub Release；要發布新版本，必須使用新的 `vX.Y.Z` Tag。
+  `versionCode=2026`；`v0.8.2` 使用 `versionCode=2027`。`v0.8.1` 之後，
+  每個正式版本的 workflow 都使用 `pubspec.yaml` 的完整
+  `X.Y.Z+versionCode` build metadata，並驗證 `versionCode` 至少為 30。
+  Android 不接受較小或重複的 `versionCode` 作為更新。
+- 同一個 Tag 重新執行 workflow 會保留相同的 `versionCode`，只能更新同一個
+  GitHub Release；要發布新版本，必須使用新的 `vX.Y.Z` Tag 並先提高
+  `pubspec.yaml` 的 build metadata。
 
 ## GitHub Release 資產檔名
 
@@ -64,7 +65,7 @@ portable bundle。資料庫與圖片位於 `%LOCALAPPDATA%\AVACA`，不在替換
 ## 發布方式
 
 1. 更新 `pubspec.yaml` 的 `X.Y.Z`。
-2. 確認 Android 正式發布的 `versionCode` 會遞增。
+2. 確認 `pubspec.yaml` 的 Android `versionCode` 會遞增。
 3. 建立並推送對應的 `vX.Y.Z` Tag。
 4. 由 `release.yml` 建立資產、checksum 並發布 GitHub Release。
 5. 發布前的 workflow 檢查必須通過；不要手動改名或補上不符合規則的資產。

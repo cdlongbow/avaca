@@ -88,44 +88,6 @@ set(_avaca_msquic_source "${AVACA_MSQUIC_ROOT}")
     file(WRITE
       "${_avaca_msquic_overlay}/submodules/quictls/Configurations/15-android.conf"
       "${_avaca_android_config}")
-    file(READ
-      "${_avaca_msquic_overlay}/src/platform/selfsign_openssl.c"
-      _avaca_selfsign_openssl)
-    string(REPLACE
-      [=[#include "platform_internal.h"]=]
-      [=[#include "platform_internal.h"
-
-#if defined(__ANDROID__) && __ANDROID_API__ < 28
-static int
-avaca_android_glob(
-    const char* Pattern,
-    int Flags,
-    int (*ErrorFunction)(const char*, int),
-    glob_t* Result
-    )
-{
-    (void)Pattern;
-    (void)Flags;
-    (void)ErrorFunction;
-    (void)Result;
-    return GLOB_NOMATCH;
-}
-
-static void
-avaca_android_globfree(
-    glob_t* Result
-    )
-{
-    (void)Result;
-}
-
-#define glob avaca_android_glob
-#define globfree avaca_android_globfree
-#endif]=]
-      _avaca_selfsign_openssl "${_avaca_selfsign_openssl}")
-    file(WRITE
-      "${_avaca_msquic_overlay}/src/platform/selfsign_openssl.c"
-      "${_avaca_selfsign_openssl}")
     set(_avaca_quictls_perl_dir
       "${_avaca_msquic_overlay}/submodules/quictls/util/perl")
     string(SUBSTRING "${_avaca_quictls_perl_dir}" 0 1
@@ -163,6 +125,14 @@ avaca_android_globfree(
   set(_avaca_msquic_source "${_avaca_msquic_overlay}")
 endif()
 add_subdirectory("${_avaca_msquic_source}" "${CMAKE_BINARY_DIR}/msquic")
+
+# Android API levels below 28 expose glob_t but not glob/globfree in Bionic.
+# MsQuic's self-signing helper calls those APIs unconditionally, so inject a
+# fail-closed compatibility shim into the platform target on every host OS.
+if(ANDROID)
+  target_compile_options(msquic_platform PRIVATE
+    "-include${CMAKE_CURRENT_LIST_DIR}/android_glob_compat.h")
+endif()
 
 add_library(avaca_remote_android SHARED avaca_android_remote_quic.cpp)
 target_compile_features(avaca_remote_android PRIVATE cxx_std_17)
