@@ -11,6 +11,8 @@ import 'package:avaca_library/avaca_library.dart';
 import 'package:avaca_remote_core/avaca_remote_core.dart';
 import 'package:avaca_scraper/avaca_scraper.dart';
 
+import 'pairing_host_selector.dart';
+
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   assertProtocolV2();
@@ -96,6 +98,7 @@ class _ServerHomeState extends State<_ServerHome> {
   late final MethodChannel _certificateStoreChannel;
   late final MethodChannel _discoveryChannel;
   List<_ServerCertificate> _certificates = const <_ServerCertificate>[];
+  List<String> _pairingHosts = const <String>[];
   _ServerCertificate? _selectedCertificate;
   bool _certificatesLoading = false;
   String? _invitationCode;
@@ -107,7 +110,7 @@ class _ServerHomeState extends State<_ServerHome> {
     super.initState();
     _folderController = TextEditingController();
     _clientIdController = TextEditingController(text: 'avaca-client');
-    _hostController = TextEditingController(text: '127.0.0.1');
+    _hostController = TextEditingController();
     _certificateStoreChannel = const MethodChannel(
       'avaca/server/certificate_store',
     );
@@ -115,6 +118,7 @@ class _ServerHomeState extends State<_ServerHome> {
     if (Platform.isWindows) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         unawaited(_loadCertificates());
+        unawaited(_loadPairingHosts());
       });
     }
     final injected = widget.runtime;
@@ -129,6 +133,26 @@ class _ServerHomeState extends State<_ServerHome> {
     if (databasePath != null && databasePath.isNotEmpty) {
       _openFuture = _openDatabase(databasePath);
     }
+  }
+
+  Future<void> _loadPairingHosts() async {
+    List<String> hosts;
+    try {
+      hosts = await AvacaPairingHostSelector.selectAll();
+    } on Object {
+      // The user can still provide an explicit host when interface discovery
+      // is unavailable or denied by the platform.
+      hosts = const <String>[];
+    }
+    if (!mounted) return;
+    // Never overwrite a value that the user entered while discovery was
+    // running.  There is intentionally no loopback fallback here.
+    setState(() {
+      _pairingHosts = hosts;
+      if (_hostController.text.trim().isEmpty && hosts.isNotEmpty) {
+        _hostController.text = hosts.first;
+      }
+    });
   }
 
   Future<AvacaServerRuntime?> _openDatabase(String databasePath) async {
@@ -556,6 +580,30 @@ class _ServerHomeState extends State<_ServerHome> {
             ),
           ),
           const SizedBox(height: 8),
+          if (_pairingHosts.isNotEmpty) ...[
+            DropdownButtonFormField<String>(
+              initialValue: _pairingHosts.contains(_hostController.text.trim())
+                  ? _hostController.text.trim()
+                  : null,
+              decoration: const InputDecoration(
+                labelText: '可用區網 IPv4（可選）',
+                border: OutlineInputBorder(),
+              ),
+              items: _pairingHosts
+                  .map(
+                    (host) => DropdownMenuItem<String>(
+                      value: host,
+                      child: Text(host),
+                    ),
+                  )
+                  .toList(growable: false),
+              onChanged: (host) {
+                if (host == null) return;
+                setState(() => _hostController.text = host);
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
           TextField(
             controller: _hostController,
             decoration: const InputDecoration(
@@ -563,6 +611,8 @@ class _ServerHomeState extends State<_ServerHome> {
               border: OutlineInputBorder(),
             ),
           ),
+          const SizedBox(height: 4),
+          const Text('會優先填入可用的區網 IPv4。若沒有可用介面，請手動輸入手機可連線的位址；不會自動改回 127.0.0.1。'),
           const SizedBox(height: 8),
           FilledButton.icon(
             onPressed: _listenerReady ? _createPairingInvitation : null,

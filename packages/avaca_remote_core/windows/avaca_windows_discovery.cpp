@@ -65,7 +65,8 @@ std::wstring LocalDnsHostName() {
 }
 
 bool IsPendingStatus(DWORD status) {
-  return status == ERROR_SUCCESS || status == ERROR_IO_PENDING;
+  return status == ERROR_SUCCESS || status == ERROR_IO_PENDING ||
+         status == DNS_REQUEST_PENDING;
 }
 
 }  // namespace
@@ -260,9 +261,14 @@ bool AvacaWindowsDnsSd::StartBrowsing(const std::string& service_type,
     std::lock_guard<std::mutex> lock(impl_->mutex);
     if (impl_->deferred_cleanup) return false;
   }
-  const auto query = ToWide(service_type.empty() ? kDefaultServiceType
-                                                  : service_type);
+  const auto requested_service =
+      service_type.empty() ? kDefaultServiceType : service_type;
+  auto query = ToWide(requested_service);
   if (query.empty() || !callback) return false;
+  if (query.size() < 6 ||
+      query.compare(query.size() - 6, 6, L".local") != 0) {
+    query += L".local";
+  }
   {
     std::lock_guard<std::mutex> lock(impl_->mutex);
     impl_->callback = std::move(callback);
@@ -324,10 +330,11 @@ bool AvacaWindowsDnsSd::RegisterService(
     const std::map<std::string, std::string>& txt) {
   UnregisterService();
   if (instance_name.empty() || port == 0 || txt.empty()) return false;
-  const auto service_name = ToWide(kDefaultServiceType);
+  const auto service_type = ToWide(kDefaultServiceType);
   const auto instance = ToWide(instance_name);
   const auto host = LocalDnsHostName();
-  if (service_name.empty() || instance.empty() || host.empty()) return false;
+  if (service_type.empty() || instance.empty() || host.empty()) return false;
+  const auto service_name = instance + L"." + service_type + L".local";
 
   std::vector<std::wstring> keys;
   std::vector<std::wstring> values;

@@ -2,7 +2,13 @@
 cmake_minimum_required(VERSION 3.14)
 # The installed Visual Studio FileTracker cannot create its .tlog files in
 # this workspace. Apply the MSBuild workaround before project generation.
-set(CMAKE_VS_GLOBALS "TrackFileAccess=false")
+set(CMAKE_VS_GLOBALS "TrackFileAccess=false" CACHE STRING
+  "Disable MSBuild FileTracker for restricted workspaces" FORCE)
+# CMake performs the first MSVC probe in an isolated try_compile project.
+# Propagate the VS global so that FileTracker is disabled there as well as on
+# the real targets.  Do not force compiler detection: doing so removes CMake's
+# MSVC feature table and breaks target_compile_features later in configure.
+list(APPEND CMAKE_TRY_COMPILE_PLATFORM_VARIABLES CMAKE_VS_GLOBALS)
 
 if(POLICY CMP0091)
   cmake_policy(SET CMP0091 NEW)
@@ -26,13 +32,38 @@ set(AVACA_MSQUIC_ROOT "" CACHE PATH
   "Validated MsQuic source root containing src/inc/msquic.h")
 set(AVACA_MSQUIC_DLL "" CACHE FILEPATH
   "Validated MsQuic runtime DLL built from AVACA_MSQUIC_ROOT")
+set(AVACA_MSQUIC_PROVENANCE "" CACHE FILEPATH
+  "MsQuic provenance manifest for the bundled runtime DLL")
+set(AVACA_REQUIRE_REMOTE_QUIC OFF CACHE BOOL
+  "Fail unless the production QUIC dependency closure is configured")
+if(NOT AVACA_MSQUIC_ROOT AND DEFINED ENV{AVACA_MSQUIC_ROOT})
+  set(AVACA_MSQUIC_ROOT "$ENV{AVACA_MSQUIC_ROOT}" CACHE PATH
+    "Validated MsQuic source root containing src/inc/msquic.h" FORCE)
+endif()
+if(NOT AVACA_MSQUIC_DLL AND DEFINED ENV{AVACA_MSQUIC_DLL})
+  set(AVACA_MSQUIC_DLL "$ENV{AVACA_MSQUIC_DLL}" CACHE FILEPATH
+    "Validated MsQuic runtime DLL built from AVACA_MSQUIC_ROOT" FORCE)
+endif()
+if(NOT AVACA_MSQUIC_PROVENANCE AND DEFINED ENV{AVACA_MSQUIC_PROVENANCE})
+  set(AVACA_MSQUIC_PROVENANCE "$ENV{AVACA_MSQUIC_PROVENANCE}" CACHE FILEPATH
+    "MsQuic provenance manifest for the bundled runtime DLL" FORCE)
+endif()
+if(DEFINED ENV{AVACA_REQUIRE_REMOTE_QUIC} AND
+   "$ENV{AVACA_REQUIRE_REMOTE_QUIC}" STREQUAL "ON")
+  set(AVACA_REQUIRE_REMOTE_QUIC ON CACHE BOOL
+    "Fail unless the production QUIC dependency closure is configured" FORCE)
+endif()
 set(AVACA_REMOTE_QUIC_ENABLED OFF)
-if(AVACA_MSQUIC_ROOT OR AVACA_MSQUIC_DLL)
-  if(NOT AVACA_MSQUIC_ROOT OR NOT AVACA_MSQUIC_DLL)
-    message(FATAL_ERROR "AVACA QUIC requires both AVACA_MSQUIC_ROOT and AVACA_MSQUIC_DLL")
+if(AVACA_REQUIRE_REMOTE_QUIC OR AVACA_MSQUIC_ROOT OR AVACA_MSQUIC_DLL OR
+   AVACA_MSQUIC_PROVENANCE)
+  if(NOT AVACA_MSQUIC_ROOT OR NOT AVACA_MSQUIC_DLL OR
+     NOT AVACA_MSQUIC_PROVENANCE)
+    message(FATAL_ERROR
+      "AVACA QUIC requires MsQuic root, DLL, and provenance manifest")
   endif()
   if(NOT EXISTS "${AVACA_MSQUIC_ROOT}/src/inc/msquic.h" OR
-     NOT EXISTS "${AVACA_MSQUIC_DLL}")
+     NOT EXISTS "${AVACA_MSQUIC_DLL}" OR
+     NOT EXISTS "${AVACA_MSQUIC_PROVENANCE}")
     message(FATAL_ERROR "AVACA QUIC dependency closure is incomplete")
   endif()
   set(AVACA_REMOTE_QUIC_ENABLED ON)
@@ -172,6 +203,9 @@ if(AVACA_REMOTE_QUIC_ENABLED)
     RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}" COMPONENT Runtime)
   install(FILES "${AVACA_MSQUIC_DLL}"
     DESTINATION "${CMAKE_INSTALL_PREFIX}" COMPONENT Runtime)
+  install(FILES "${AVACA_MSQUIC_PROVENANCE}"
+    DESTINATION "${CMAKE_INSTALL_PREFIX}"
+    RENAME avaca-msquic-provenance.json COMPONENT Runtime)
 endif()
 
 install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"

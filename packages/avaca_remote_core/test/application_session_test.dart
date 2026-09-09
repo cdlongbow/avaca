@@ -80,6 +80,33 @@ void main() {
     expect(pair.server.isOpen, isFalse);
   });
 
+  test('server can explicitly allow the native playback auth domain', () async {
+    final pair = _MemoryConnectionPair();
+    final secret = Uint8List.fromList(List<int>.filled(32, 0x5a));
+    final serverFuture = AvacaApplicationSession.authenticateServer(
+      pair.server,
+      serverId: 'server-playback',
+      pairingSecret: secret,
+      acceptedAuthDomains: const <String>[
+        AvacaHandshakeCodec.controlDomain,
+        AvacaHandshakeCodec.playbackDomain,
+      ],
+    );
+    final clientFuture = AvacaApplicationSession.authenticateClient(
+      pair.client,
+      clientId: 'client-playback',
+      expectedServerId: 'server-playback',
+      pairingSecret: secret,
+      authDomain: AvacaHandshakeCodec.playbackDomain,
+    );
+    final server = await serverFuture;
+    final client = await clientFuture;
+    expect(server.authDomain, AvacaHandshakeCodec.playbackDomain);
+    expect(client.authDomain, AvacaHandshakeCodec.playbackDomain);
+    await client.close();
+    await server.close();
+  });
+
   test('a timed-out request does not poison the following response', () async {
     final pair = _MemoryConnectionPair();
     final secret = Uint8List.fromList(List<int>.filled(32, 9));

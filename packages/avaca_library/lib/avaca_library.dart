@@ -871,6 +871,14 @@ final class AvacaServerApplicationHost {
         pairingSecret: _pairingSecret,
         pairingSecretResolver: pairingSecretResolver,
         expectedClientId: expectedClientId,
+        // The same authenticated QUIC listener serves the control catalog and
+        // the native playback data plane.  Both domains still require the
+        // invitation-derived pairing secret; the selected domain is bound to
+        // the handshake transcript and retained on the session.
+        acceptedAuthDomains: const <String>[
+          AvacaHandshakeCodec.controlDomain,
+          AvacaHandshakeCodec.playbackDomain,
+        ],
       );
       await onClientAuthenticated?.call(session.peerId);
       _sessions.add(session);

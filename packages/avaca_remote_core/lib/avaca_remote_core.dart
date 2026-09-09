@@ -5,6 +5,7 @@ import 'package:avaca_protocol/avaca_protocol.dart';
 export 'src/application_session.dart';
 export 'src/client_profile.dart';
 export 'src/discovery.dart';
+export 'src/pairing_endpoint_resolver.dart';
 export 'src/native_quic_transport.dart';
 export 'src/profile_store_stub.dart'
     if (dart.library.ui) 'src/profile_store.dart';

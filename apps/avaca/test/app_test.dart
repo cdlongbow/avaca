@@ -110,7 +110,9 @@ void main() {
 
     expect(find.text('Server ID：ui-server'), findsOneWidget);
     expect(find.text('端點：server.local:4545'), findsOneWidget);
+    expect(find.text('端點來源：直接 invitation'), findsOneWidget);
     expect(find.textContaining('leaf SHA-256：ABAB'), findsOneWidget);
+    expect(find.textContaining('CDCD'), findsNothing);
     expect(find.text('確認並保存配對'), findsOneWidget);
   });
 

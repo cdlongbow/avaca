@@ -25,6 +25,11 @@ if(AVACA_REMOTE_QUIC_ENABLED)
   add_library(avaca_remote_quic_core SHARED
     "remote_quic_bridge.cpp"
   )
+  # The Dart FFI loader and both portable Windows bundles use this stable
+  # runtime filename.  Keep the CMake target name descriptive while making
+  # the emitted DLL name part of the package contract.
+  set_target_properties(avaca_remote_quic_core PROPERTIES
+    OUTPUT_NAME avaca_remote_quic)
   target_compile_features(avaca_remote_quic_core PRIVATE cxx_std_17)
   target_compile_definitions(avaca_remote_quic_core PRIVATE
     NOMINMAX QUIC_API_ENABLE_PREVIEW_FEATURES _HAS_EXCEPTIONS=0)

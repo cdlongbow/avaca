@@ -44,9 +44,6 @@ if(AVACA_REMOTE_QUIC_ENABLED)
   add_dependencies(${BINARY_NAME} avaca_remote_quic_core)
   add_custom_command(TARGET ${BINARY_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-      "$<TARGET_FILE:avaca_remote_quic_core>"
-      "$<TARGET_FILE_DIR:${BINARY_NAME}>/avaca_remote_quic.dll"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
       "${AVACA_MSQUIC_DLL}"
       "$<TARGET_FILE_DIR:${BINARY_NAME}>/msquic.dll")
 endif()

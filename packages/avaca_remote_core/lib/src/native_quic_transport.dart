@@ -583,7 +583,10 @@ final class _AvacaQuicConnection implements AvacaRemoteConnection {
     _incoming = StreamController<Uint8List>(
       sync: false,
       onListen: _drainIncoming,
-      onResume: _drainIncoming,
+      onResume: () {
+        _incomingPaused = false;
+        _drainIncoming();
+      },
       onPause: () => _incomingPaused = true,
       onCancel: _clearIncoming,
     );

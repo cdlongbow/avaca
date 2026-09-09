@@ -779,9 +779,7 @@ void AVACA_REMOTE_QUIC_CALL NativePlaybackEventCallback(
       } else {
         stream->channel_binding.assign(data, data + length);
       }
-    }
-    if (!SendNativeClientHello(stream)) {
-      FailNativePlayback(stream, QUIC_STATUS_ABORTED);
+      stream->condition.notify_all();
     }
   } else if (event == AVACA_REMOTE_QUIC_EVENT_DATA) {
     ProcessNativeBytes(stream, data, length);
@@ -1947,13 +1945,34 @@ avaca_remote_playback_open_native(
   int32_t failure = QUIC_STATUS_SUCCESS;
   {
     std::unique_lock<std::mutex> lock(stream->mutex);
-    const bool ready = stream->condition.wait_for(
+    const bool connected = stream->condition.wait_for(
+        lock, std::chrono::seconds(15), [&stream]() {
+          return stream->connected ||
+                 stream->failure_status != QUIC_STATUS_SUCCESS ||
+                 stream->closing;
+        });
+    if (!connected || !stream->connected) {
+      failure = stream->failure_status == QUIC_STATUS_SUCCESS
+                    ? QUIC_STATUS_ABORTED
+                    : stream->failure_status;
+    }
+  }
+  // The CONNECTED event is delivered from MsQuic's callback stack.  The first
+  // application write is intentionally issued after the callback returns so
+  // native playback cannot re-enter StreamSend from the connection callback.
+  if (failure == QUIC_STATUS_SUCCESS && !SendNativeClientHello(stream)) {
+    FailNativePlayback(stream, QUIC_STATUS_ABORTED);
+    failure = QUIC_STATUS_ABORTED;
+  }
+  if (failure == QUIC_STATUS_SUCCESS) {
+    std::unique_lock<std::mutex> lock(stream->mutex);
+    const bool authenticated = stream->condition.wait_for(
         lock, std::chrono::seconds(15), [&stream]() {
           return stream->authenticated ||
                  stream->failure_status != QUIC_STATUS_SUCCESS ||
                  stream->closing;
         });
-    if (!ready || !stream->authenticated) {
+    if (!authenticated || !stream->authenticated) {
       failure = stream->failure_status == QUIC_STATUS_SUCCESS
                     ? QUIC_STATUS_ABORTED
                     : stream->failure_status;

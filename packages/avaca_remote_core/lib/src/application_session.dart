@@ -227,8 +227,11 @@ final class AvacaApplicationSession {
     FutureOr<List<int>?> Function(String clientId)? pairingSecretResolver,
     String? expectedClientId,
     String authDomain = AvacaHandshakeCodec.controlDomain,
+    Iterable<String>? acceptedAuthDomains,
     Duration timeout = authenticationTimeout,
   }) async {
+    final authDomains = acceptedAuthDomains?.toList(growable: false) ??
+        <String>[authDomain];
     try {
       return await _authenticateServer(
         connection,
@@ -236,7 +239,7 @@ final class AvacaApplicationSession {
         pairingSecret: pairingSecret,
         pairingSecretResolver: pairingSecretResolver,
         expectedClientId: expectedClientId,
-        authDomain: authDomain,
+        authDomains: authDomains,
       ).timeout(timeout);
     } on TimeoutException {
       await _closeQuietly(connection);
@@ -254,7 +257,7 @@ final class AvacaApplicationSession {
     required FutureOr<List<int>?> Function(String clientId)?
     pairingSecretResolver,
     required String? expectedClientId,
-    required String authDomain,
+    required List<String> authDomains,
   }) async {
     final codec = const AvacaHandshakeCodec();
     final channel = _AvacaFrameChannel(connection);
@@ -264,6 +267,17 @@ final class AvacaApplicationSession {
     try {
       _checkHandshakeId(serverId);
       if (expectedClientId != null) _checkHandshakeId(expectedClientId);
+      if (authDomains.isEmpty ||
+          authDomains.any(
+            (domain) =>
+                domain != AvacaHandshakeCodec.controlDomain &&
+                domain != AvacaHandshakeCodec.playbackDomain,
+          )) {
+        throw const AvacaRemoteException(
+          AvacaRemoteFailureCode.invalidInput,
+          'AVACA Server authentication domain is invalid',
+        );
+      }
       if (pairingSecretResolver == null) {
         secret = Uint8List.fromList(pairingSecret);
         _checkSecret(secret);
@@ -295,14 +309,21 @@ final class AvacaApplicationSession {
       secret = Uint8List.fromList(resolvedSecret);
       _checkSecret(secret);
       clientNonce = Uint8List.fromList(hello.clientNonce);
-      final expectedClientProof = codec.clientProof(
-        secret: secret,
-        clientId: hello.clientId,
-        clientNonce: clientNonce,
-        channelBinding: binding,
-        domain: authDomain,
-      );
-      if (!codec.constantTimeEquals(expectedClientProof, hello.proof)) {
+      String? authenticatedDomain;
+      for (final candidateDomain in authDomains) {
+        final expectedClientProof = codec.clientProof(
+          secret: secret,
+          clientId: hello.clientId,
+          clientNonce: clientNonce,
+          channelBinding: binding,
+          domain: candidateDomain,
+        );
+        if (codec.constantTimeEquals(expectedClientProof, hello.proof)) {
+          authenticatedDomain = candidateDomain;
+          break;
+        }
+      }
+      if (authenticatedDomain == null) {
         throw const AvacaRemoteException(
           AvacaRemoteFailureCode.connectionFailed,
           'AVACA client authentication proof was invalid',
@@ -320,7 +341,7 @@ final class AvacaApplicationSession {
           clientNonce: clientNonce,
           serverNonce: serverNonce,
           channelBinding: binding,
-          domain: authDomain,
+          domain: authenticatedDomain,
         ),
       );
       await channel.write(
@@ -346,7 +367,7 @@ final class AvacaApplicationSession {
         clientNonce: clientNonce,
         serverNonce: serverNonce,
         channelBinding: binding,
-        domain: authDomain,
+        domain: authenticatedDomain,
       );
       if (authenticate.serverId != serverId ||
           authenticate.clientId != hello.clientId ||
@@ -374,7 +395,7 @@ final class AvacaApplicationSession {
         role: AvacaApplicationRole.server,
         localId: serverId,
         peerId: hello.clientId,
-        authDomain: authDomain,
+        authDomain: authenticatedDomain,
         connection: connection,
         channel: channel,
       );

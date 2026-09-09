@@ -791,6 +791,11 @@ class _ServersPageState extends State<_ServersPage> {
   StreamSubscription<AvacaRemoteDiscoveryEvent>? _discoverySubscription;
   final List<AvacaRemoteDiscoveryEvent> _discovered =
       <AvacaRemoteDiscoveryEvent>[];
+  final AvacaPairingEndpointResolver _endpointResolver =
+      AvacaPairingEndpointResolver();
+  List<AvacaRemoteDiscoveryEvent> _matchingCandidates =
+      <AvacaRemoteDiscoveryEvent>[];
+  AvacaRemoteDiscoveryEvent? _selectedMatchingCandidate;
   AvacaPairingInvitation? _pendingInvitation;
   Object? _error;
   String? _discoveryError;
@@ -806,18 +811,18 @@ class _ServersPageState extends State<_ServersPage> {
   }
 
   Future<void> _startDiscovery() async {
+    _discovered.clear();
+    _matchingCandidates = <AvacaRemoteDiscoveryEvent>[];
+    _selectedMatchingCandidate = null;
     _discoverySubscription = _discovery.events().listen(
       (event) {
         if (!mounted) return;
-        final duplicate = _discovered.any(
-          (existing) =>
-              existing.candidate.serverId == event.candidate.serverId &&
-              existing.endpoint.host == event.endpoint.host &&
-              existing.endpoint.port == event.endpoint.port,
-        );
-        if (!duplicate) {
-          setState(() => _discovered.add(event));
-        }
+        final key = _candidateKey(event);
+        setState(() {
+          _discovered.removeWhere((existing) => _candidateKey(existing) == key);
+          _discovered.add(event);
+          _refreshMatchingCandidates();
+        });
       },
       onError: (Object error, StackTrace stackTrace) {
         if (mounted) setState(() => _discoveryError = 'Discovery 暫時不可用。');
@@ -843,15 +848,25 @@ class _ServersPageState extends State<_ServersPage> {
     final code = _invitationController.text.trim();
     try {
       final invitation = AvacaPairingInvitationCodec().decode(code);
+      final matches = _endpointResolver.matchingCandidates(
+        invitation,
+        _discovered,
+      );
       _pendingInvitation?.dispose();
       setState(() {
         _pendingInvitation = invitation;
+        _matchingCandidates = matches;
+        _selectedMatchingCandidate = matches.length == 1
+            ? matches.single
+            : null;
         _error = null;
       });
     } on Object catch (error) {
       setState(() {
         _pendingInvitation?.dispose();
         _pendingInvitation = null;
+        _matchingCandidates = <AvacaRemoteDiscoveryEvent>[];
+        _selectedMatchingCandidate = null;
         _error = error;
       });
     }
@@ -899,13 +914,30 @@ class _ServersPageState extends State<_ServersPage> {
     final invitation = _pendingInvitation;
     final callback = widget.onProfileAccepted;
     if (invitation == null || callback == null || _busy) return;
-    final profile = invitation.toProfile();
+    if (_matchingCandidates.length > 1 && _selectedMatchingCandidate == null) {
+      setState(() {
+        _error = StateError('請先選擇符合的區網 Server 端點。');
+      });
+      return;
+    }
+    late final AvacaRemoteClientProfile profile;
+    try {
+      profile = _endpointResolver.createProfile(
+        invitation,
+        selectedMatchingCandidate: _selectedMatchingCandidate,
+      );
+    } on Object catch (error) {
+      if (mounted) setState(() => _error = error);
+      return;
+    }
     setState(() => _busy = true);
     try {
       await callback(profile);
       if (mounted) {
         setState(() {
           _pendingInvitation = null;
+          _matchingCandidates = <AvacaRemoteDiscoveryEvent>[];
+          _selectedMatchingCandidate = null;
           _error = null;
         });
       }
@@ -931,6 +963,48 @@ class _ServersPageState extends State<_ServersPage> {
       if (mounted) setState(() => _busy = false);
     }
   }
+
+  void _refreshMatchingCandidates() {
+    final invitation = _pendingInvitation;
+    if (invitation == null) {
+      _matchingCandidates = <AvacaRemoteDiscoveryEvent>[];
+      _selectedMatchingCandidate = null;
+      return;
+    }
+    try {
+      final matches = _endpointResolver.matchingCandidates(
+        invitation,
+        _discovered,
+      );
+      final selectedKey = _selectedMatchingCandidate == null
+          ? null
+          : _candidateKey(_selectedMatchingCandidate!);
+      AvacaRemoteDiscoveryEvent? selected;
+      if (selectedKey != null) {
+        for (final candidate in matches) {
+          if (_candidateKey(candidate) == selectedKey) {
+            selected = candidate;
+            break;
+          }
+        }
+      }
+      if (selected == null && matches.length == 1) {
+        selected = matches.single;
+      }
+      _matchingCandidates = matches;
+      _selectedMatchingCandidate = selected;
+    } on FormatException {
+      _matchingCandidates = <AvacaRemoteDiscoveryEvent>[];
+      _selectedMatchingCandidate = null;
+    }
+  }
+
+  String _candidateKey(AvacaRemoteDiscoveryEvent event) =>
+      '${event.candidate.serverId}\u0000${event.endpoint.host}\u0000${event.endpoint.port}';
+
+  bool get _canConfirmInvitation =>
+      _pendingInvitation != null &&
+      (_matchingCandidates.length < 2 || _selectedMatchingCandidate != null);
 
   @override
   Widget build(BuildContext context) => SingleChildScrollView(
@@ -1055,16 +1129,7 @@ class _ServersPageState extends State<_ServersPage> {
           ],
           if (_pendingInvitation != null) ...[
             const SizedBox(height: 12),
-            _profileSummary(
-              _pendingInvitation!.toProfile(),
-              title: '請確認這個 Server',
-              expiresAt: _pendingInvitation!.expiresAt,
-            ),
-            const SizedBox(height: 8),
-            FilledButton(
-              onPressed: _busy ? null : _acceptInvitation,
-              child: const Text('確認並保存配對'),
-            ),
+            _pendingInvitationPreview(),
           ],
           if (_error != null) ...[
             const SizedBox(height: 8),
@@ -1097,6 +1162,76 @@ class _ServersPageState extends State<_ServersPage> {
         Text('leaf SHA-256：$pin'),
         if (expiresAt != null)
           Text('有效至：${expiresAt.toLocal().toIso8601String()}'),
+      ],
+    );
+  }
+
+  Widget _pendingInvitationPreview() {
+    final invitation = _pendingInvitation!;
+    final selected = _selectedMatchingCandidate;
+    final hasMultipleMatches = _matchingCandidates.length > 1;
+    final endpoint = selected?.endpoint;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '請確認這個 Server',
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 4),
+        Text('Server ID：${invitation.serverId}'),
+        Text('leaf SHA-256：${_hex(invitation.leafCertificateSha256)}'),
+        Text('有效至：${invitation.expiresAt.toLocal().toIso8601String()}'),
+        if (endpoint != null) ...[
+          Text('端點：${endpoint.host}:${endpoint.port}'),
+          Text(
+            '端點來源：${hasMultipleMatches ? '已選擇的 LAN discovery matched' : 'LAN discovery matched'}',
+          ),
+        ] else if (_matchingCandidates.isEmpty) ...[
+          Text('端點：${invitation.host}:${invitation.port}'),
+          const Text('端點來源：直接 invitation'),
+        ] else ...[
+          const Text('端點：尚未選擇'),
+          const Text('端點來源：多個符合的 LAN discovery 候選'),
+        ],
+        if (hasMultipleMatches) ...[
+          const SizedBox(height: 8),
+          const Text('找到多個完全符合的區網端點，請明確選擇：'),
+          RadioGroup<String>(
+            groupValue: selected == null ? null : _candidateKey(selected),
+            onChanged: (value) {
+              if (value == null) return;
+              for (final item in _matchingCandidates) {
+                if (_candidateKey(item) == value) {
+                  setState(() => _selectedMatchingCandidate = item);
+                  break;
+                }
+              }
+            },
+            child: Column(
+              children: _matchingCandidates
+                  .map(
+                    (candidate) => RadioListTile<String>(
+                      contentPadding: EdgeInsets.zero,
+                      value: _candidateKey(candidate),
+                      title: Text(
+                        '${candidate.endpoint.host}:${candidate.endpoint.port}',
+                      ),
+                      subtitle: Text(
+                        'Server ID：${candidate.candidate.serverId}\n'
+                        'leaf SHA-256：${_hex(candidate.candidate.leafCertificateSha256)}',
+                      ),
+                    ),
+                  )
+                  .toList(growable: false),
+            ),
+          ),
+        ],
+        const SizedBox(height: 8),
+        FilledButton(
+          onPressed: _busy || !_canConfirmInvitation ? null : _acceptInvitation,
+          child: const Text('確認並保存配對'),
+        ),
       ],
     );
   }

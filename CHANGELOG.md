@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.10.4 - 2026-09-09
+
+### Pairing and discovery
+
+- Fixed the Android release target so the AVACA client no longer launches the
+  root migration fixture.
+- Added invitation-scoped LAN endpoint resolution that matches protocol,
+  server identity, port, and certificate pin before accepting a discovered
+  endpoint; mDNS never supplies a pairing secret or trust decision.
+- Added deterministic private IPv4 selection and multi-interface selection to
+  the Windows Server pairing screen, while preserving manual host input.
+- Fixed Windows DNS-SD service-instance names, `.local` browse queries, and
+  `DNS_REQUEST_PENDING` handling for actual registration and discovery.
+
+### Windows and Android release products
+
+- Split the Windows release into independent AVACA client and AVACA Server
+  portable ZIP products with role-specific runtime closure checks.
+- Added the arm64-v8a Android release build gate and pinned MsQuic provenance
+  checks.
+- Added the exact six-asset GitHub Release contract: one Android APK, two
+  Windows ZIPs, and one SHA-256 sidecar for each asset.
+
+### Validation boundary
+
+- Repository, package, application, architecture, Windows bundle, Windows
+  DNS-SD, and separate-process native MsQuic checks pass.
+- Physical Android↔Windows LAN validation and action-level Windows/Android UI
+  evidence remain environment-dependent follow-up evidence and are reported
+  separately when unavailable.
+
 ## 0.10.3 - 2026-09-09
 
 ### Server and Player remote connection

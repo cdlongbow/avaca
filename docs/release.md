@@ -7,7 +7,10 @@
 ## 版本與 Tag
 
 - Release Tag 必須是 `vX.Y.Z`，例如 `v0.8.1`。
-- Tag 的 `X.Y.Z` 必須與 `pubspec.yaml` 的版本完全一致。
+- Tag 的 `X.Y.Z` 必須與 `apps/avaca/pubspec.yaml` 與
+  `apps/server/pubspec.yaml` 的版本完全一致；兩個 app 的完整版本與
+  Android build number 也必須相同。根目錄 `pubspec.yaml` 是 migration
+  fixture，不是正式產品的建置來源。
 - 只發布正式版，不使用 draft 或 prerelease 資產。
 - Android 的 `versionName` 使用 `X.Y.Z`。
 - `v0.8.0` 的歷史 APK 使用 `versionCode=30`；`v0.8.1` 使用
@@ -21,12 +24,14 @@
 
 ## GitHub Release 資產檔名
 
-Release 中的上傳資產必須且只能使用下列四個檔名。`X.Y.Z` 取自 Release Tag 去掉開頭的 `v`：
+Release 中的上傳資產必須且只能使用下列六個檔名。`X.Y.Z` 取自 Release
+Tag 去掉開頭的 `v`：
 
 | 平台 | 正式資產 | SHA-256 sidecar |
 | --- | --- | --- |
-| Android ARM64 | `avaca-X.Y.Z-arm64-v8a.apk` | `avaca-X.Y.Z-arm64-v8a.apk.sha256` |
-| Windows x64 portable | `avaca-X.Y.Z.zip` | `avaca-X.Y.Z.zip.sha256` |
+| Android ARM64 AVACA | `avaca-X.Y.Z-arm64-v8a.apk` | `avaca-X.Y.Z-arm64-v8a.apk.sha256` |
+| Windows x64 AVACA client | `avaca-X.Y.Z.zip` | `avaca-X.Y.Z.zip.sha256` |
+| Windows x64 AVACA Server | `avaca-server-X.Y.Z.zip` | `avaca-server-X.Y.Z.zip.sha256` |
 
 例如 `v0.8.1` 必須產生：
 
@@ -35,6 +40,8 @@ avaca-0.8.1-arm64-v8a.apk
 avaca-0.8.1-arm64-v8a.apk.sha256
 avaca-0.8.1.zip
 avaca-0.8.1.zip.sha256
+avaca-server-0.8.1.zip
+avaca-server-0.8.1.zip.sha256
 ```
 
 命名要求：
@@ -51,21 +58,30 @@ GitHub Release 自動產生的 source code archive 不屬於上述上傳資產�
 
 ## Windows portable 內容
 
-`avaca-X.Y.Z.zip` 解壓後必須包含完整 Windows Flutter bundle，以及：
+`avaca-X.Y.Z.zip` 是 AVACA 用戶端，解壓後必須包含完整 Windows Flutter
+bundle，以及：
 
 - `avaca.exe`
-- `avaca_update.exe`
 - `version.txt`，內容必須是 `X.Y.Z`
+- `msquic.dll`、`avaca_remote_quic.dll` 與 pinned MsQuic provenance
+- player runtime closure 與其授權/來源資料
 
-Windows updater 由 `avaca_update.exe` 提供。AVACA 會先下載並驗證符合
-`avaca-X.Y.Z.zip` 的正式資產，再將 ZIP 解壓到暫存資料夾；原生 helper 會等待
-舊程式退出、以同目錄重新命名完成替換、驗證新程式啟動，失敗時復原原本的
-portable bundle。資料庫與圖片位於 `%LOCALAPPDATA%\AVACA`，不在替換範圍內。
+`avaca-server-X.Y.Z.zip` 是獨立的 AVACA Server，解壓後必須包含：
+
+- `avaca_server.exe`
+- `version.txt`，內容必須是 `X.Y.Z`
+- `msquic.dll`、`avaca_remote_quic.dll` 與 pinned MsQuic provenance
+- 不得包含 `avaca.exe`、`libmpv-2.dll`、`libEGL.dll`、`libGLESv2.dll` 或
+  其他 player runtime。
+
+AVACA client 與 AVACA Server 是分離的 portable products；資料庫與圖片位於
+各自的 app-private data directory，不在 ZIP 替換範圍內。
 
 ## 發布方式
 
-1. 更新 `pubspec.yaml` 的 `X.Y.Z`。
-2. 確認 `pubspec.yaml` 的 Android `versionCode` 會遞增。
+1. 同步更新根目錄 migration fixture、`apps/avaca` 與 `apps/server` 的
+   `X.Y.Z+versionCode`；正式 app 版本必須一致。
+2. 確認 Android `versionCode` 會遞增。
 3. 建立並推送對應的 `vX.Y.Z` Tag。
 4. 由 `release.yml` 建立資產、checksum 並發布 GitHub Release。
 5. 發布前的 workflow 檢查必須通過；不要手動改名或補上不符合規則的資產。
