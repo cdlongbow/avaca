@@ -72,6 +72,9 @@ set(_avaca_msquic_source "${AVACA_MSQUIC_ROOT}")
       "${CMAKE_CURRENT_LIST_DIR}/perl/Pod/Usage.pm"
       DESTINATION
       "${_avaca_msquic_overlay}/submodules/quictls/util/perl/Pod")
+    file(COPY
+      "${CMAKE_CURRENT_LIST_DIR}/normalize_openssl_makefile.cmake"
+      DESTINATION "${_avaca_msquic_overlay}/submodules")
     file(READ
       "${_avaca_msquic_overlay}/submodules/quictls/Configurations/15-android.conf"
       _avaca_android_config)
@@ -143,8 +146,8 @@ avaca_android_globfree(
     file(READ "${_avaca_msquic_overlay}/submodules/CMakeLists.txt"
       _avaca_msquic_submodules)
     string(REPLACE
-      "COMMAND SYSTEM=\${CMAKE_HOST_SYSTEM_NAME}"
-      "COMMAND ${CMAKE_COMMAND} -E env SYSTEM=${CMAKE_HOST_SYSTEM_NAME} ANDROID_NDK_ROOT=${CMAKE_ANDROID_NDK} PATH=${_avaca_make_path} PERL5LIB=${_avaca_perl5lib} ${AVACA_PERL_EXECUTABLE}"
+      "COMMAND SYSTEM=\${CMAKE_HOST_SYSTEM_NAME}\n            \${OPENSSL_CONFIG_CMD} \${OPENSSL_CONFIG_FLAGS}"
+      "COMMAND ${CMAKE_COMMAND} -E env SYSTEM=${CMAKE_HOST_SYSTEM_NAME} ANDROID_NDK_ROOT=${CMAKE_ANDROID_NDK} PATH=${_avaca_make_path} PERL5LIB=${_avaca_perl5lib} ${AVACA_PERL_EXECUTABLE} \${OPENSSL_CONFIG_CMD} \${OPENSSL_CONFIG_FLAGS}\n        COMMAND ${CMAKE_COMMAND} -DOPENSSL_MAKEFILE=\${QUIC_BUILD_DIR}/submodules/\${QUIC_OPENSSL}/Makefile -DOPENSSL_SOURCE=\${CMAKE_CURRENT_SOURCE_DIR}/\${QUIC_OPENSSL} -DOPENSSL_BUILD=\${QUIC_BUILD_DIR}/submodules/\${QUIC_OPENSSL} -P \${CMAKE_CURRENT_LIST_DIR}/normalize_openssl_makefile.cmake"
       _avaca_msquic_submodules "${_avaca_msquic_submodules}")
     string(REPLACE
       "COMMAND make install_dev -j\${NPROCS}"

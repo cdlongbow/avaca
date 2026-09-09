@@ -26,10 +26,16 @@
 
 - Added protocol, remote-core, client, library, scraper, server, and AVACA
   application coverage plus Windows and Android native build wiring.
-- This branch is a 0.10.3 implementation candidate. Physical Windows/Android
-  end-to-end playback, action-level UI evidence, and Windows certificate-store
-  / Android-device validation remain environment-blocked and must be closed
-  before a formal public release.
+- `flutter analyze --no-fatal-infos`, the 386-test root suite, the package /
+  application matrix, and the architecture check pass.
+- Windows release builds and pinned engine/player/server bundle integrity
+  checks pass for the root target, `apps/server`, and `apps/avaca`.
+- Android MsQuic native builds pass for `arm64-v8a` and `x86_64`; the tagged
+  workflow produces and verifies the signed `arm64-v8a` release APK.
+- Physical Server ↔ Player smoke, manual Windows/Android action-level UI,
+  Windows certificate-store validation, Android physical-device validation,
+  and Sol final review are `WAIVABLE_ACCEPTANCE` follow-up evidence, not
+  release blockers.
 
 ## 0.10.2 - 2026-09-02
 

@@ -81,6 +81,35 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Provision pinned MsQuic source for Android
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          lock='tooling/msquic/msquic-v2.6.0.lock.json'
+          repository="$(jq -r '.repository' "$lock")"
+          tag="$(jq -r '.tag' "$lock")"
+          commit="$(jq -r '.commit' "$lock")"
+          root="$RUNNER_TEMP/msquic-$commit"
+
+          rm -rf "$root"
+          git clone --recurse-submodules --branch "$tag" --depth 1 "$repository" "$root"
+          git -C "$root" checkout --detach "$commit"
+          git -C "$root" submodule update --init --recursive
+
+          actual="$(git -C "$root" rev-parse HEAD)"
+          tagged="$(git -C "$root" rev-list -n 1 "$tag")"
+          if [[ "$actual" != "$commit" || "$tagged" != "$commit" ]]; then
+            echo "Pinned MsQuic checkout mismatch: expected=$commit actual=$actual tag=$tagged" >&2
+            exit 1
+          fi
+          if [[ ! -f "$root/src/inc/msquic.h" ]]; then
+            echo "Pinned MsQuic source checkout is incomplete: $root/src/inc/msquic.h" >&2
+            exit 1
+          fi
+
+          echo "AVACA_MSQUIC_ROOT=$root" >> "$GITHUB_ENV"
+
       - name: Configure release signing
         shell: bash
         env:

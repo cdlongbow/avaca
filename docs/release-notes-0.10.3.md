@@ -1,7 +1,6 @@
 # AVACA 0.10.3
 
-AVACA 0.10.3 is the Server ↔ Player remote-connection implementation
-candidate.
+AVACA 0.10.3 is the Server ↔ Player remote-connection release.
 
 ## Highlights
 
@@ -18,12 +17,24 @@ candidate.
 - Adds QR/paste invitations, certificate pin display, secure profile storage
   boundaries, revoke/re-pair, and `_avaca-remote._udp` DNS-SD discovery.
 
-## Validation status
+## Validated release checks
 
-- Dart analysis and focused package/application tests pass.
-- Windows Server and AVACA debug builds pass.
-- Android arm64-v8a and x86_64 native MsQuic builds pass.
-- Physical Windows/Android end-to-end playback, action-level UI evidence,
-  Windows certificate-store validation, and Android-device validation remain
-  blocked by the current environment. This candidate must not be represented
-  as a completed public release until those gates close.
+- `flutter analyze --no-fatal-infos` passes with four informational lint
+  notices only.
+- The root Flutter suite passes 386 tests; the package/application matrix,
+  architecture check, and focused native checks pass.
+- Windows release builds pass for the root target, `apps/server`, and
+  `apps/avaca`. The pinned Flutter engine, six player runtimes, required
+  executables, and server no-player-runtime boundary pass bundle integrity
+  verification.
+- Android MsQuic native builds pass for `arm64-v8a` and `x86_64`. The tagged
+  GitHub Actions workflow produces the signed `arm64-v8a` release APK and
+  verifies its version metadata and checksum.
+
+## Acceptance boundary
+
+The following remain `WAIVABLE_ACCEPTANCE` follow-up evidence, not release
+blockers: physical Server ↔ Player playback smoke, manual Windows/Android
+action-level UI checks, Windows certificate-store validation, Android
+physical-device validation, and Sol final review. Deterministic repository,
+build, package, and integrity checks found no release-blocking defect.

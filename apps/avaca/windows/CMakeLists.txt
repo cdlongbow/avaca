@@ -85,6 +85,33 @@ endfunction()
 set(FLUTTER_MANAGED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/flutter")
 add_subdirectory(${FLUTTER_MANAGED_DIR})
 
+# Keep the separated AVACA client on the same pinned Flutter Windows engine as
+# the root portable bundle.  The stock engine can build successfully while
+# silently reintroducing the unsupported ANGLE swap-chain path, so copy the
+# verified engine and import library into the generated bundle explicitly.
+set(AVACA_PINNED_FLUTTER_ENGINE_DLL
+  "${AVACA_WINDOWS_PLAYER_DEPS_ROOT}/flutter_windows.dll")
+set(AVACA_PINNED_FLUTTER_ENGINE_IMPORT_LIB
+  "${AVACA_WINDOWS_PLAYER_DEPS_ROOT}/flutter_windows.dll.lib")
+if(NOT EXISTS "${AVACA_PINNED_FLUTTER_ENGINE_DLL}" OR
+   NOT EXISTS "${AVACA_PINNED_FLUTTER_ENGINE_IMPORT_LIB}")
+  message(FATAL_ERROR
+    "AVACA pinned Flutter engine requires both flutter_windows.dll and "
+    "flutter_windows.dll.lib")
+endif()
+
+add_custom_target(avaca_pinned_flutter_engine ALL
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "${AVACA_PINNED_FLUTTER_ENGINE_DLL}" "${FLUTTER_LIBRARY}"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "${AVACA_PINNED_FLUTTER_ENGINE_IMPORT_LIB}" "${FLUTTER_LIBRARY}.lib"
+  DEPENDS flutter_assemble
+          "${AVACA_PINNED_FLUTTER_ENGINE_DLL}"
+          "${AVACA_PINNED_FLUTTER_ENGINE_IMPORT_LIB}"
+  VERBATIM)
+add_dependencies(flutter_wrapper_app avaca_pinned_flutter_engine)
+add_dependencies(flutter_wrapper_plugin avaca_pinned_flutter_engine)
+
 # Application build; see runner/CMakeLists.txt.
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../../../packages/avaca_remote_core/windows"
   "avaca_remote_core_build")
