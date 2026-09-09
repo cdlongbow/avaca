@@ -9,7 +9,8 @@ param(
     [ValidateSet('x64', 'arm64')]
     [string]$Architecture = 'x64',
     [ValidateSet('schannel')]
-    [string]$Tls = 'schannel'
+    [string]$Tls = 'schannel',
+    [string]$Generator = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -70,7 +71,16 @@ try {
         }
         $env:Path = "$(Split-Path -Parent $vsCmake.FullName);$env:Path"
     }
-    & $buildScript -Config $Configuration -Arch $Architecture -Platform windows -Tls $Tls
+    $buildArguments = @(
+        '-Config', $Configuration,
+        '-Arch', $Architecture,
+        '-Platform', 'windows',
+        '-Tls', $Tls
+    )
+    if (-not [string]::IsNullOrWhiteSpace($Generator)) {
+        $buildArguments += @('-Generator', $Generator)
+    }
+    & $buildScript @buildArguments
     if ($LASTEXITCODE -ne 0) {
         throw "MsQuic build failed ($LASTEXITCODE)."
     }

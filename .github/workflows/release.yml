@@ -117,7 +117,7 @@ jobs:
           test -f "$root/src/inc/msquic.h"
           echo "AVACA_MSQUIC_ROOT=$root" >> "$GITHUB_ENV"
 
-      - name: Configure Android NDK identity
+      - name: Configure Android NDK toolchain
         shell: bash
         run: |
           set -euo pipefail
@@ -131,7 +131,13 @@ jobs:
             ndk_root="$(find "$sdk_root/ndk" -mindepth 1 -maxdepth 1 -type d -print | sort -V | tail -n 1)"
           fi
           test -d "$ndk_root"
+          ndk_bin="$ndk_root/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          if [[ ! -x "$ndk_bin/clang" || ! -x "$ndk_bin/aarch64-linux-android29-clang" ]]; then
+            echo "Android NDK LLVM toolchain is incomplete: $ndk_bin" >&2
+            exit 1
+          fi
           echo "ANDROID_NDK_ROOT=$ndk_root" >> "$GITHUB_ENV"
+          echo "$ndk_bin" >> "$GITHUB_PATH"
           {
             echo '### Android native provenance'
             echo
@@ -276,7 +282,8 @@ jobs:
           $root = Join-Path $env:RUNNER_TEMP 'msquic-v2.6.0-x64-release'
           $lines = & pwsh -NoProfile -ExecutionPolicy Bypass -File `
             "${{ github.workspace }}\tooling\msquic\provision_windows.ps1" `
-            -ExternalRoot $root -Configuration Release -Architecture x64 -Tls schannel
+            -ExternalRoot $root -Configuration Release -Architecture x64 -Tls schannel `
+            -Generator 'Visual Studio 17 2022'
           if ($LASTEXITCODE -ne 0) { throw "MsQuic provisioning failed: $LASTEXITCODE" }
           foreach ($line in $lines) {
             if ($line -match '^AVACA_(MSQUIC_ROOT|MSQUIC_DLL|MSQUIC_SHA256|MSQUIC_PROVENANCE)=') {
@@ -380,7 +387,8 @@ jobs:
           $root = Join-Path $env:RUNNER_TEMP 'msquic-v2.6.0-x64-release'
           $lines = & pwsh -NoProfile -ExecutionPolicy Bypass -File `
             "${{ github.workspace }}\tooling\msquic\provision_windows.ps1" `
-            -ExternalRoot $root -Configuration Release -Architecture x64 -Tls schannel
+            -ExternalRoot $root -Configuration Release -Architecture x64 -Tls schannel `
+            -Generator 'Visual Studio 17 2022'
           if ($LASTEXITCODE -ne 0) { throw "MsQuic provisioning failed: $LASTEXITCODE" }
           foreach ($line in $lines) {
             if ($line -match '^AVACA_(MSQUIC_ROOT|MSQUIC_DLL|MSQUIC_SHA256|MSQUIC_PROVENANCE)=') {
