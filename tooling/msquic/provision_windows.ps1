@@ -71,16 +71,16 @@ try {
         }
         $env:Path = "$(Split-Path -Parent $vsCmake.FullName);$env:Path"
     }
-    $buildArguments = @(
-        '-Config', $Configuration,
-        '-Arch', $Architecture,
-        '-Platform', 'windows',
-        '-Tls', $Tls
-    )
-    if (-not [string]::IsNullOrWhiteSpace($Generator)) {
-        $buildArguments += @('-Generator', $Generator)
+    $buildParameters = @{
+        Config = $Configuration
+        Arch = $Architecture
+        Platform = 'windows'
+        Tls = $Tls
     }
-    & $buildScript @buildArguments
+    if (-not [string]::IsNullOrWhiteSpace($Generator)) {
+        $buildParameters.Generator = $Generator
+    }
+    & $buildScript @buildParameters
     if ($LASTEXITCODE -ne 0) {
         throw "MsQuic build failed ($LASTEXITCODE)."
     }
