@@ -110,6 +110,30 @@ jobs:
 
           echo "AVACA_MSQUIC_ROOT=$root" >> "$GITHUB_ENV"
 
+      - name: Configure Android NDK toolchain environment
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ndk_root="${ANDROID_NDK_ROOT:-${ANDROID_NDK_HOME:-${ANDROID_NDK_LATEST_HOME:-}}}"
+          if [[ -z "$ndk_root" ]]; then
+            sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+            if [[ -z "$sdk_root" || ! -d "$sdk_root/ndk" ]]; then
+              echo "Unable to locate the Android SDK NDK directory." >&2
+              exit 1
+            fi
+            ndk_root="$(find "$sdk_root/ndk" -mindepth 1 -maxdepth 1 -type d -print | sort -V | tail -n 1)"
+          fi
+
+          ndk_bin="$ndk_root/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          if [[ ! -x "$ndk_bin/clang" || ! -x "$ndk_bin/aarch64-linux-android29-clang" ]]; then
+            echo "Android NDK LLVM toolchain is incomplete: $ndk_bin" >&2
+            exit 1
+          fi
+
+          echo "ANDROID_NDK_ROOT=$ndk_root" >> "$GITHUB_ENV"
+          echo "$ndk_bin" >> "$GITHUB_PATH"
+
       - name: Configure release signing
         shell: bash
         env:
