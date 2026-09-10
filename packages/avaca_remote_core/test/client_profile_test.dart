@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:avaca_remote_core/avaca_remote_core.dart';
@@ -22,6 +23,7 @@ void main() {
       );
       final encoded = codec.encode(invitation);
       expect(encoded, startsWith(AvacaPairingInvitationCodec.prefix));
+      expect(encoded.length, lessThan(300));
       final decoded = codec.decode(encoded);
       expect(decoded.serverId, invitation.serverId);
       expect(decoded.clientId, invitation.clientId);
@@ -42,6 +44,27 @@ void main() {
       decoded.dispose();
     },
   );
+
+  test('v2 decoder keeps accepting the original JSON invitation payload', () {
+    final payload = <String, Object>{
+      'serverId': 'server-legacy',
+      'clientId': 'client-legacy',
+      'host': '192.168.0.2',
+      'port': 4545,
+      'certPin': base64UrlEncode(
+        List<int>.filled(32, 0x31),
+      ).replaceAll('=', ''),
+      'secret': base64UrlEncode(List<int>.filled(32, 0x41)).replaceAll('=', ''),
+      'expiry': now.add(const Duration(minutes: 10)).millisecondsSinceEpoch,
+      'invitationId': 'legacy-invite',
+    };
+    final legacy =
+        '${AvacaPairingInvitationCodec.prefix}${base64UrlEncode(utf8.encode(jsonEncode(payload))).replaceAll('=', '')}';
+    final decoded = codec.decode(legacy);
+    expect(decoded.serverId, 'server-legacy');
+    expect(decoded.invitationId, 'legacy-invite');
+    decoded.dispose();
+  });
 
   test('expired and non-canonical invitations fail closed', () {
     final invitation = codec.issue(

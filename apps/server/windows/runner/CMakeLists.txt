@@ -33,7 +33,7 @@ target_compile_definitions(${BINARY_NAME} PRIVATE "NOMINMAX")
 # Add dependency libraries and include directories. Add any application-specific
 # dependencies here.
 target_link_libraries(${BINARY_NAME} PRIVATE flutter flutter_wrapper_app)
-target_link_libraries(${BINARY_NAME} PRIVATE "dwmapi.lib" "crypt32.lib")
+target_link_libraries(${BINARY_NAME} PRIVATE "dwmapi.lib" "crypt32.lib" "ncrypt.lib")
 target_link_libraries(${BINARY_NAME} PRIVATE avaca_remote_discovery)
 add_dependencies(${BINARY_NAME} avaca_remote_discovery)
 target_include_directories(${BINARY_NAME} PRIVATE

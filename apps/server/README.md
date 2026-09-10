@@ -5,13 +5,24 @@ Library, scraper/catalog adapters, physical media paths, playback grants and
 the QUIC listener. It does not depend on `avaca_player_native` or any video
 rendering infrastructure.
 
-When `AVACA_SERVER_DB` is set, the management shell is rendered first and the
-SQLite catalog is opened asynchronously after the first frame. This keeps the
-Windows window responsive while a new or large catalog is being opened.
+The management shell is rendered first and the SQLite catalog is opened
+asynchronously after the first frame. If `AVACA_SERVER_DB` is omitted, the
+Server uses `%LOCALAPPDATA%\AVACA\server.sqlite`; the path is never exposed to
+the Player. This keeps the Windows window responsive while a new or large
+catalog is being opened.
 
-The real Windows listener is opt-in and is also started after the first frame.
-Set all required values below in the process environment to enable the
-authenticated protocol-v2 listener:
+The authenticated Windows listener is prepared automatically after the first
+frame. The Server selects an available private-key certificate, a usable LAN
+IPv4 address, and a free application port. If the current user's
+`CurrentUser\My` store has no usable certificate, the Windows runner creates a
+self-signed RSA certificate named `AVACA Server QUIC` and keeps its
+non-exportable private key in that store. The user does not upload or choose a
+certificate file. The phone receives only the certificate's SHA-256 pin inside
+the one-time QR; the certificate and private key stay on Windows.
+
+The Server also generates the process bootstrap secret in memory; it is never
+shown or written to catalog data. Environment values remain available for
+controlled deployments and override the automatic values:
 
 ```powershell
 $env:AVACA_SERVER_DB = 'D:\AVACA\server.sqlite'
@@ -23,24 +34,35 @@ $env:AVACA_EXPECTED_CLIENT_ID = 'client-local' # optional
 ```
 
 The certificate value is the 20-byte SHA-1 thumbprint used by the Windows
-transport; the pairing secret is never displayed or written to catalog data.
+transport; it is only needed for controlled deployments. The pairing secret is
+never displayed or written to catalog data.
 If the values are incomplete, malformed, or the adjacent MsQuic/AVACA native
-transport DLLs are unavailable, the shell stays usable and reports a listener
-error instead of blocking startup. The listener still requires a real
-Server-owned catalog repository and playback resolver.
+transport DLLs are unavailable, the shell and local catalog remain usable and
+the pairing card reports a readable listener error instead of blocking startup.
+The listener still requires a real Server-owned catalog repository and playback
+resolver.
 
-When the listener is ready, the pairing panel can enumerate the Windows
-CurrentUser\My certificate store, display the selected leaf SHA-256 pin, and
-render a one-time ten-minute `AVACA-PAIR-V2.` QR/code. The invitation secret is
-held only by the in-memory pairing authority until the first successful HMAC
-authentication; it is not written to the catalog or diagnostics.
+When the listener is ready, the pairing panel exposes one `開始配對` action. It
+automatically creates a one-time ten-minute `AVACA-PAIR-V2.` QR/code for a new
+Player identity. The invitation secret is held only by the in-memory pairing
+authority until the first successful HMAC authentication; it is not written to
+the catalog or diagnostics.
 
-The management shell accepts an injected `AvacaScraper` composition. Once a
-real Server-owned source is supplied, the import panel scans a Windows folder
+The management shell includes a Server-owned HTTPS scraper composition for
+AV-Wiki, AVBase, and JavBus. The import panel scans a Windows folder
 asynchronously, reports scan/resolve/index timings, enforces a file bound, and
-supports cancellation at item boundaries. No client-facing response contains
-the imported physical paths. With no scraper source injected, import remains
-explicitly disabled instead of using placeholder metadata.
+supports cancellation at item boundaries. The v2 catalog migration is
+additive: existing Server rows survive, while `server_library_roots`, physical
+inventory, review state, performers, metadata state, and opaque artwork assets
+are added alongside them.
+
+Physical inventory is authoritative and independent from metadata. A missing
+filename code, ambiguous variant, scraper timeout, or blocked provider keeps
+the file in the Server catalog and places it in the local review panel instead
+of dropping it. The Server UI supports folder picking, manual code correction,
+and a rescan/retry workflow. No client-facing response contains an imported
+physical path, source URL, or SQL key; artwork is served only through the
+bounded v2 `openAsset` range contract.
 
 ```powershell
 flutter pub get --suppress-analytics

@@ -1,7 +1,7 @@
 name: avaca_client_app
 description: AVACA browsing and playback client application.
 publish_to: none
-version: 0.10.4+2052
+version: 0.10.5+2053
 
 environment:
   sdk: ^3.11.5

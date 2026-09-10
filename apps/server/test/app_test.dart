@@ -75,6 +75,55 @@ void main() {
     expect(find.textContaining('QUIC'), findsOneWidget);
   });
 
+  testWidgets('pairing UI exposes one action instead of transport fields', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const AvacaServerApp());
+
+    expect(find.text('開始配對'), findsOneWidget);
+    expect(find.text('Player clientId'), findsNothing);
+    expect(find.text('Server host'), findsNothing);
+    expect(find.textContaining('Windows certificate store'), findsNothing);
+    expect(find.text('產生 invitation code'), findsNothing);
+  });
+
+  testWidgets(
+    'automatic setup keeps catalog available when pairing is unavailable',
+    (tester) async {
+      final root = (await tester.runAsync(
+        () => Directory.systemTemp.createTemp('avaca-server-auto-'),
+      ))!;
+      try {
+        await tester.pumpWidget(
+          AvacaServerApp(
+            autoConfigure: true,
+            databasePath: '${root.path}${Platform.pathSeparator}server.sqlite',
+          ),
+        );
+        for (var index = 0; index < 30; index++) {
+          await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 20)),
+          );
+          await tester.pump(const Duration(milliseconds: 20));
+          if (find
+              .text('Server library authority: ready')
+              .evaluate()
+              .isNotEmpty) {
+            break;
+          }
+        }
+        expect(find.text('Server library authority: ready'), findsOneWidget);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)),
+        );
+        await tester.runAsync(() => root.delete(recursive: true));
+      }
+    },
+    skip: !Platform.isWindows,
+  );
+
   testWidgets(
     'import panel starts and completes without blocking a frame',
     (tester) async {

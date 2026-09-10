@@ -211,16 +211,24 @@ void _scanDart(
   Set<String> skipFileNames = const <String>{},
 }) {
   if (!root.existsSync()) return;
-  for (final entity in root.listSync(recursive: true, followLinks: false)) {
-    if (entity is! File || !entity.path.endsWith('.dart')) {
-      continue;
-    }
-    if (skipFileNames.contains(entity.uri.pathSegments.last)) continue;
-    final content = entity.readAsStringSync();
-    for (final token in forbidden) {
-      if (content.contains(token)) {
-        failures.add('${entity.path} imports forbidden token "$token"');
+  void scan(Directory directory) {
+    for (final entity in directory.listSync(followLinks: false)) {
+      if (entity is Directory) {
+        final name = entity.path.split(Platform.pathSeparator).last;
+        if (name == 'build' || name == '.dart_tool') continue;
+        scan(entity);
+        continue;
+      }
+      if (entity is! File || !entity.path.endsWith('.dart')) continue;
+      if (skipFileNames.contains(entity.uri.pathSegments.last)) continue;
+      final content = entity.readAsStringSync();
+      for (final token in forbidden) {
+        if (content.contains(token)) {
+          failures.add('${entity.path} imports forbidden token "$token"');
+        }
       }
     }
   }
+
+  scan(root);
 }

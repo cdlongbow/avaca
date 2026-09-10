@@ -114,8 +114,9 @@ final class NativeAvacaRemoteProfileStore implements AvacaRemoteProfileStore {
   AvacaRemoteClientProfile _decode(List<int> bytes) {
     try {
       final value = jsonDecode(utf8.decode(bytes));
-      if (value is! Map)
+      if (value is! Map) {
         throw const FormatException('profile is not an object');
+      }
       final map = value.map<String, Object?>(
         (key, value) => MapEntry(key.toString(), value),
       );

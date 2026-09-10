@@ -1420,7 +1420,6 @@ AvacaWindowsPlayerSession::OpenOnWorker(const EncodableMap& request) {
     return OperationResult::Failure(
         "PLAYER_LIFECYCLE", "The Windows player backend is not initialized.");
   }
-  NativeState& state = *native_state_;
   const auto* source = MapMap(request, "source");
   if (source == nullptr) {
     EmitError("invalidSource", "playerErrorInvalidSource", "source_missing",
@@ -1459,7 +1458,12 @@ AvacaWindowsPlayerSession::OpenOnWorker(const EncodableMap& request) {
         "AVACA QUIC resources do not accept HTTP request headers.");
   }
 
-#if defined(AVACA_REMOTE_QUIC_ENABLED)
+#if !defined(AVACA_REMOTE_QUIC_ENABLED)
+  return OperationResult::Failure(
+      "REMOTE_NATIVE_UNAVAILABLE",
+      "The pinned AVACA QUIC native bridge is not available in this build.");
+#else
+  NativeState& state = *native_state_;
   const auto* profile = MapMap(*source, "profile");
   if (profile != nullptr) {
     const auto configured = ConfigureRemoteOnWorker(*profile);
@@ -1534,12 +1538,6 @@ AvacaWindowsPlayerSession::OpenOnWorker(const EncodableMap& request) {
   }
   state.remote_stream.store(opened_stream);
   state.remote_resource_length = remote_descriptor.resource_length;
-#else
-  return OperationResult::Failure(
-      "REMOTE_NATIVE_UNAVAILABLE",
-      "The pinned AVACA QUIC native bridge is not available in this build.");
-#endif
-
   const char* command[] = {"loadfile", target.c_str(), "replace", nullptr};
   const int command_result = state.mpv.command(state.mpv_handle, command);
   if (command_result < 0) {
@@ -1576,6 +1574,7 @@ AvacaWindowsPlayerSession::OpenOnWorker(const EncodableMap& request) {
   state.render_update_requested.store(true);
   EmitState("loading");
   return OperationResult::Success();
+#endif
 }
 
 AvacaWindowsPlayerSession::OperationResult

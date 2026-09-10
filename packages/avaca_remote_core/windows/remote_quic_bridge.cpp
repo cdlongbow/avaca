@@ -35,6 +35,7 @@ namespace {
 constexpr uint32_t kChannelBindingLength = 32;
 constexpr uint64_t kMaxBufferedBytes = 16ull * 1024ull * 1024ull;
 constexpr uint32_t kMaxReceiveBytes = 16u * 1024u * 1024u;
+constexpr uint32_t kMaxBinaryRangeBytes = 700u * 1024u;
 constexpr char kAlpn[] = "avaca-remote/2";
 constexpr char kExporterLabel[] = "EXPORTER-AVACA-REMOTE-V2";
 
@@ -370,6 +371,11 @@ std::string Base64UrlEncode(const std::vector<uint8_t>& bytes) {
     while (bits >= 6) {
       bits -= 6;
       result.push_back(alphabet[(accumulator >> bits) & 0x3f]);
+      if (bits == 0) {
+        accumulator = 0;
+      } else {
+        accumulator &= (1u << bits) - 1u;
+      }
     }
   }
   if (bits > 0) result.push_back(alphabet[(accumulator << (6 - bits)) & 0x3f]);
@@ -396,6 +402,11 @@ std::optional<std::vector<uint8_t>> Base64UrlDecode(const std::string& value) {
     if (bits >= 8) {
       bits -= 8;
       result.push_back(static_cast<uint8_t>((accumulator >> bits) & 0xff));
+      if (bits == 0) {
+        accumulator = 0;
+      } else {
+        accumulator &= (1u << bits) - 1u;
+      }
     }
   }
   if (bits >= 6 || (bits > 0 && (accumulator & ((1u << bits) - 1u)) != 0)) {
@@ -2056,7 +2067,7 @@ avaca_remote_playback_read_at(
   auto* stream = reinterpret_cast<AvacaRemotePlaybackStream*>(stream_handle);
   if (stream == nullptr || bytes_read == nullptr ||
       (destination == nullptr && length != 0) ||
-      length > 4u * 1024u * 1024u) {
+      length > kMaxBinaryRangeBytes) {
     return QUIC_STATUS_INVALID_PARAMETER;
   }
   *bytes_read = 0;

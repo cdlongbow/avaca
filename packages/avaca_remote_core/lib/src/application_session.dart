@@ -230,8 +230,8 @@ final class AvacaApplicationSession {
     Iterable<String>? acceptedAuthDomains,
     Duration timeout = authenticationTimeout,
   }) async {
-    final authDomains = acceptedAuthDomains?.toList(growable: false) ??
-        <String>[authDomain];
+    final authDomains =
+        acceptedAuthDomains?.toList(growable: false) ?? <String>[authDomain];
     try {
       return await _authenticateServer(
         connection,
@@ -535,8 +535,9 @@ final class AvacaApplicationSession {
       'AVACA application session closed',
     );
     for (final pending in _pending.values) {
-      if (!pending.completer.isCompleted)
+      if (!pending.completer.isCompleted) {
         pending.completer.completeError(error);
+      }
     }
     _pending.clear();
     final pump = _clientPump;

@@ -1,110 +1,24 @@
 import 'dart:async';
-import 'dart:ffi';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:avaca_client/avaca_client.dart';
 import 'package:avaca_domain/avaca_domain.dart';
 import 'package:avaca_library/avaca_library.dart';
+import 'package:avaca_protocol/avaca_protocol.dart';
 import 'package:avaca_remote_core/avaca_remote_core.dart';
-import 'package:ffi/ffi.dart';
 
 const _serverId = 'e2e-server-v2';
 const _clientId = 'e2e-client-v2';
-
-final class _NativePlaybackProfile extends Struct {
-  external Pointer<Utf8> serverId;
-
-  @Uint32()
-  external int serverIdLength;
-
-  external Pointer<Utf8> clientId;
-
-  @Uint32()
-  external int clientIdLength;
-
-  external Pointer<Utf8> host;
-
-  @Uint32()
-  external int hostLength;
-
-  @Uint16()
-  external int port;
-
-  external Pointer<Uint8> certificateSha256Pin;
-
-  @Uint32()
-  external int certificateSha256PinLength;
-
-  external Pointer<Uint8> pairingSecret;
-
-  @Uint32()
-  external int pairingSecretLength;
-}
-
-final class _NativePlaybackDescriptor extends Struct {
-  external Pointer<Uint8> resourceId;
-
-  @Uint32()
-  external int resourceIdLength;
-
-  @Uint64()
-  external int resourceLength;
-
-  external Pointer<Utf8> playbackSessionId;
-
-  @Uint32()
-  external int playbackSessionIdLength;
-
-  external Pointer<Uint8> playbackGrant;
-
-  @Uint32()
-  external int playbackGrantLength;
-}
-
-typedef _PlaybackOpenNative =
-    Int32 Function(
-      Pointer<_NativePlaybackProfile>,
-      Pointer<_NativePlaybackDescriptor>,
-      Pointer<Uint64>,
-    );
-typedef _PlaybackOpenDart =
-    int Function(
-      Pointer<_NativePlaybackProfile>,
-      Pointer<_NativePlaybackDescriptor>,
-      Pointer<Uint64>,
-    );
-
-typedef _PlaybackReadNative =
-    Int32 Function(Uint64, Uint64, Pointer<Uint8>, Uint32, Pointer<Uint32>);
-typedef _PlaybackReadDart =
-    int Function(int, int, Pointer<Uint8>, int, Pointer<Uint32>);
-
-typedef _PlaybackCloseNative = Int32 Function(Uint64);
-typedef _PlaybackCloseDart = int Function(int);
-
-final class _NativePlaybackApi {
-  _NativePlaybackApi(DynamicLibrary library)
-    : open = library.lookupFunction<_PlaybackOpenNative, _PlaybackOpenDart>(
-        'avaca_remote_playback_open_native',
-      ),
-      read = library.lookupFunction<_PlaybackReadNative, _PlaybackReadDart>(
-        'avaca_remote_playback_read_at',
-      ),
-      close = library.lookupFunction<_PlaybackCloseNative, _PlaybackCloseDart>(
-        'avaca_remote_playback_close',
-      );
-
-  final _PlaybackOpenDart open;
-  final _PlaybackReadDart read;
-  final _PlaybackCloseDart close;
-}
 
 final class _FixtureCatalog implements ServerCatalogRepository {
   const _FixtureCatalog();
 
   static const workId = AvacaWorkId('work-e2e');
   static const mediaId = AvacaMediaId('media-e2e');
+  static const missingMediaId = AvacaMediaId('media-e2e-missing');
+  static const coverAssetId = 'asset-e2e-cover';
 
   @override
   Future<AvacaCollectionPage> listCollection({
@@ -116,6 +30,7 @@ final class _FixtureCatalog implements ServerCatalogRepository {
         workId: workId,
         code: 'E2E-001',
         title: 'AVACA remote E2E fixture',
+        coverResourceId: coverAssetId,
       ),
     ],
     nextCursor: null,
@@ -138,17 +53,46 @@ final class _FixtureCatalog implements ServerCatalogRepository {
           title: 'AVACA remote E2E fixture',
           availability: AvacaMediaAvailability.available,
         ),
+        AvacaMediaSummary(
+          mediaId: _FixtureCatalog.missingMediaId,
+          workId: workId,
+          code: 'E2E-001',
+          title: 'AVACA missing media fixture',
+          availability: AvacaMediaAvailability.unavailable,
+        ),
       ],
+      coverResourceId: coverAssetId,
+    );
+  }
+}
+
+final class _FixtureAssetCatalog implements ServerAssetCatalogRepository {
+  const _FixtureAssetCatalog({required this.path, required this.length});
+
+  final String path;
+  final int length;
+
+  @override
+  Future<ServerAssetRecord?> findAsset(String assetId, int revision) async {
+    if (assetId != _FixtureCatalog.coverAssetId || revision != 0) {
+      return null;
+    }
+    return ServerAssetRecord(
+      assetId: assetId,
+      revision: revision,
+      absolutePath: path,
+      length: length,
+      mimeType: 'image/jpeg',
     );
   }
 }
 
 Future<void> main(List<String> args) async {
-  if (!Platform.isWindows || args.length < 3 || args.length > 4) {
+  if (!Platform.isWindows || args.length < 3 || args.length > 6) {
     stderr.writeln(
       'usage: dart tooling/remote_server_player_e2e.dart '
       '<server-sha1-40-hex> <server-leaf-sha256-64-hex> <port> '
-      '[native-dll-path]',
+      '[native-dll-path] [native-client-exe-path] [asset-client-exe-path]',
     );
     exitCode = 2;
     return;
@@ -161,7 +105,14 @@ Future<void> main(List<String> args) async {
       ? args[3]
       : '${File(Platform.resolvedExecutable).parent.path}${Platform.pathSeparator}'
             'avaca_remote_quic.dll';
-  final nativeApi = _NativePlaybackApi(DynamicLibrary.open(nativeLibraryPath));
+  final nativeClientExecutablePath = args.length == 5
+      ? args[4]
+      : '${File(Platform.resolvedExecutable).parent.path}${Platform.pathSeparator}'
+            'native_playback_client_e2e.exe';
+  final assetClientExecutablePath = args.length == 6
+      ? args[5]
+      : '${File(Platform.resolvedExecutable).parent.path}${Platform.pathSeparator}'
+            'asset_catalog_client_e2e.exe';
   final sharedSecret = Uint8List.fromList(
     List<int>.generate(32, (index) => (0x40 + index) & 0xff),
   );
@@ -172,7 +123,27 @@ Future<void> main(List<String> args) async {
   final fixtureBytes = Uint8List.fromList(
     List<int>.generate(131072, (index) => (index * 17 + 3) & 0xff),
   );
+  final coverFixture = File(
+    '${Directory.systemTemp.path}${Platform.pathSeparator}'
+    'avaca-remote-e2e-${pid.toRadixString(16)}.jpg',
+  );
+  final coverBytes = Uint8List.fromList(<int>[
+    0xff,
+    0xd8,
+    0xff,
+    0xe0,
+    0x00,
+    0x10,
+    0x41,
+    0x56,
+    0x41,
+    0x43,
+    0x41,
+    0xff,
+    0xd9,
+  ]);
   await fixture.writeAsBytes(fixtureBytes, flush: true);
+  await coverFixture.writeAsBytes(coverBytes, flush: true);
 
   final grants = PlaybackGrantRegistry();
   final resources = ServerMediaResourceService(grants: grants);
@@ -185,6 +156,10 @@ Future<void> main(List<String> args) async {
     catalog: ServerCatalogService(const _FixtureCatalog()),
     playbackSessions: playbackSessions,
     resources: resources,
+    assetCatalog: _FixtureAssetCatalog(
+      path: coverFixture.path,
+      length: coverBytes.length,
+    ),
     resolvePlayback: (mediaId) async => mediaId == _FixtureCatalog.mediaId
         ? ServerPlaybackSelection(
             mediaId: mediaId,
@@ -199,7 +174,10 @@ Future<void> main(List<String> args) async {
   AvacaMsQuicTransport? reconnectTransport;
   AvacaRemoteCatalogClient? catalog;
   AvacaRemoteCatalogClient? reconnectCatalog;
-  var nativeHandle = 0;
+  Process? nativeClientProcess;
+  StreamIterator<String>? nativeClientLines;
+  Process? assetClientProcess;
+  StreamIterator<String>? assetClientLines;
 
   try {
     serverTransport = AvacaMsQuicTransport.server(
@@ -228,46 +206,103 @@ Future<void> main(List<String> args) async {
       throw StateError('catalog list did not return the fixture');
     }
     final detail = await catalog.getWorkDetail(_FixtureCatalog.workId);
-    if (detail.media.length != 1) {
-      throw StateError('detail response did not return the fixture media');
+    if (detail.media.length != 2) {
+      throw StateError('detail response did not return fixture media');
     }
     _pass('browse/detail crossed the authenticated Dart control session');
+
+    assetClientProcess = await Process.start(
+      assetClientExecutablePath,
+      <String>[_hexEncode(serverPin), port.toString()],
+    );
+    assetClientLines = StreamIterator<String>(
+      assetClientProcess.stdout
+          .transform(utf8.decoder)
+          .transform(const LineSplitter()),
+    );
+    unawaited(
+      assetClientProcess.stderr
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .forEach((line) => stderr.writeln('ASSET_CHILD: $line')),
+    );
+    await _expectChildLine(assetClientLines, 'CHILD_ASSET_DETAIL_PASS');
+    await _expectChildLine(assetClientLines, 'CHILD_ASSET_RANGE_PASS');
+    await _expectChildLine(assetClientLines, 'CHILD_MISSING_MEDIA_REJECTED');
+    final assetChildExitCode = await assetClientProcess.exitCode;
+    if (assetChildExitCode != 0) {
+      throw StateError(
+        'asset catalog client process exited with $assetChildExitCode',
+      );
+    }
+    assetClientProcess = null;
+    assetClientLines = null;
+    _pass(
+      'separate Dart client process opened opaque artwork and rejected missing media',
+    );
 
     final descriptor = await catalog.createPlaybackSession(
       _FixtureCatalog.mediaId,
     );
-    nativeHandle = _openNative(
-      nativeApi,
-      host: '127.0.0.1',
-      port: port,
-      serverPin: serverPin,
-      pairingSecret: sharedSecret,
-      descriptor: descriptor,
+    final controlOpened = await catalog.openPlaybackResource(descriptor);
+    final controlChunk = await catalog.session.request(
+      AvacaOpcode.readResource,
+      const AvacaApplicationCodec().encodeRangeRequest(
+        resourceHandle: controlOpened.resourceHandle,
+        offset: 0,
+        length: 4096,
+      ),
+      expectedResponses: const <AvacaOpcode>{AvacaOpcode.resourceChunk},
     );
+    final decodedControlChunk = const AvacaApplicationCodec()
+        .decodeResourceChunk(controlChunk.payload);
+    if (decodedControlChunk.bytes.length != 4096) {
+      throw StateError('control playback range did not return the fixture');
+    }
+    await catalog.closeResource(controlOpened.resourceHandle);
+    _pass('Dart control data-plane opened and read the same resource');
+    nativeClientProcess =
+        await Process.start(nativeClientExecutablePath, <String>[
+          _hexEncode(serverPin),
+          port.toString(),
+          descriptor.sessionId!,
+          descriptor.resourceId,
+          descriptor.length.toString(),
+          _hexEncode(descriptor.playbackGrant!),
+          nativeLibraryPath,
+        ]);
+    nativeClientLines = StreamIterator<String>(
+      nativeClientProcess.stdout
+          .transform(utf8.decoder)
+          .transform(const LineSplitter()),
+    );
+    unawaited(
+      nativeClientProcess.stderr
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .forEach((line) => stderr.writeln('NATIVE_CHILD: $line')),
+    );
+    await _expectChildLine(nativeClientLines, 'CHILD_INITIAL_RANGES_PASS');
+    await _expectChildLine(nativeClientLines, 'CHILD_READY');
     _pass(
-      'second same-clientId native session authenticated and opened range resource',
-    );
-
-    _assertRange(nativeApi, nativeHandle, fixtureBytes, 0, 4096);
-    _assertRange(nativeApi, nativeHandle, fixtureBytes, 65537, 8192);
-    _assertRange(
-      nativeApi,
-      nativeHandle,
-      fixtureBytes,
-      fixtureBytes.length - 73,
-      73,
+      'separate native client process authenticated and opened the range resource',
     );
     _pass('native QUIC range reads and absolute seek returned exact bytes');
 
     await catalog.close();
     catalog = null;
-    await Future<void>.delayed(const Duration(milliseconds: 250));
-    _assertRange(nativeApi, nativeHandle, fixtureBytes, 32768, 4096);
+    await _sendChildCommand(nativeClientProcess, 'READ_AFTER_CONTROL_CLOSE');
+    await _expectChildLine(nativeClientLines, 'CHILD_AFTER_CONTROL_CLOSE_PASS');
     _pass('native lease remained valid after Dart control disconnect');
 
-    _closeNative(nativeApi, nativeHandle);
-    nativeHandle = 0;
-    await Future<void>.delayed(const Duration(milliseconds: 250));
+    await _sendChildCommand(nativeClientProcess, 'CLOSE');
+    await _expectChildLine(nativeClientLines, 'CHILD_CLOSED');
+    final childExitCode = await nativeClientProcess.exitCode;
+    if (childExitCode != 0) {
+      throw StateError('native client process exited with $childExitCode');
+    }
+    nativeClientProcess = null;
+    nativeClientLines = null;
 
     reconnectTransport = AvacaMsQuicTransport.client(
       certificateSha256Pin: serverPin,
@@ -285,7 +320,16 @@ Future<void> main(List<String> args) async {
     }
     _pass('same clientId reconnected after the native lease was released');
   } finally {
-    if (nativeHandle != 0) _closeNative(nativeApi, nativeHandle);
+    final child = nativeClientProcess;
+    if (child != null) {
+      child.kill();
+      await child.exitCode;
+    }
+    final assetChild = assetClientProcess;
+    if (assetChild != null) {
+      assetChild.kill();
+      await assetChild.exitCode;
+    }
     await _closeQuietly(reconnectCatalog);
     await _closeQuietly(catalog);
     await _closeQuietly(host);
@@ -298,121 +342,42 @@ Future<void> main(List<String> args) async {
     } on FileSystemException {
       // The fixture is only a temporary test artifact.
     }
+    try {
+      await coverFixture.delete();
+    } on FileSystemException {
+      // The fixture is only a temporary test artifact.
+    }
   }
   stdout.writeln(
     'PASS: Windows Server -> native AVACA range E2E; no HTTP/SMB/local-path '
     'fallback was used',
   );
+  await stdout.flush();
+  // MsQuic can retain native callback workers after every Dart handle has
+  // closed.  This is a standalone evidence executable, so terminate only
+  // after the async finally block above has released all test resources.
+  exit(0);
 }
 
-int _openNative(
-  _NativePlaybackApi api, {
-  required String host,
-  required int port,
-  required List<int> serverPin,
-  required List<int> pairingSecret,
-  required AvacaAssetDescriptor descriptor,
-}) {
-  final serverId = _serverId.toNativeUtf8();
-  final clientId = _clientId.toNativeUtf8();
-  final endpoint = host.toNativeUtf8();
-  final sessionId = descriptor.sessionId!.toNativeUtf8();
-  final resourceId = calloc<Uint8>(descriptor.resourceId.length);
-  final pin = calloc<Uint8>(serverPin.length);
-  final secret = calloc<Uint8>(pairingSecret.length);
-  final grant = calloc<Uint8>(descriptor.playbackGrant!.length);
-  final profile = calloc<_NativePlaybackProfile>();
-  final nativeDescriptor = calloc<_NativePlaybackDescriptor>();
-  final output = calloc<Uint64>();
-  try {
-    resourceId
-        .asTypedList(descriptor.resourceId.length)
-        .setAll(0, descriptor.resourceId.codeUnits);
-    pin.asTypedList(serverPin.length).setAll(0, serverPin);
-    secret.asTypedList(pairingSecret.length).setAll(0, pairingSecret);
-    grant
-        .asTypedList(descriptor.playbackGrant!.length)
-        .setAll(0, descriptor.playbackGrant!);
-    profile.ref
-      ..serverId = serverId
-      ..serverIdLength = _serverId.length
-      ..clientId = clientId
-      ..clientIdLength = _clientId.length
-      ..host = endpoint
-      ..hostLength = host.length
-      ..port = port
-      ..certificateSha256Pin = pin
-      ..certificateSha256PinLength = serverPin.length
-      ..pairingSecret = secret
-      ..pairingSecretLength = pairingSecret.length;
-    nativeDescriptor.ref
-      ..resourceId = resourceId
-      ..resourceIdLength = descriptor.resourceId.length
-      ..resourceLength = descriptor.length
-      ..playbackSessionId = sessionId
-      ..playbackSessionIdLength = descriptor.sessionId!.length
-      ..playbackGrant = grant
-      ..playbackGrantLength = descriptor.playbackGrant!.length;
-    final status = api.open(profile, nativeDescriptor, output);
-    if (status != 0 || output.value == 0) {
-      throw StateError('native playback open failed with status $status');
-    }
-    return output.value;
-  } finally {
-    calloc.free(serverId);
-    calloc.free(clientId);
-    calloc.free(endpoint);
-    calloc.free(sessionId);
-    calloc.free(resourceId);
-    pin.asTypedList(serverPin.length).fillRange(0, serverPin.length, 0);
-    calloc.free(pin);
-    secret
-        .asTypedList(pairingSecret.length)
-        .fillRange(0, pairingSecret.length, 0);
-    calloc.free(secret);
-    grant
-        .asTypedList(descriptor.playbackGrant!.length)
-        .fillRange(0, descriptor.playbackGrant!.length, 0);
-    calloc.free(grant);
-    calloc.free(profile);
-    calloc.free(nativeDescriptor);
-    calloc.free(output);
+Future<void> _expectChildLine(
+  StreamIterator<String> lines,
+  String expected,
+) async {
+  while (await lines.moveNext()) {
+    final line = lines.current;
+    if (line == expected) return;
+    stderr.writeln('NATIVE_CHILD_STDOUT: $line');
   }
+  throw StateError('native client child ended before $expected');
 }
 
-void _assertRange(
-  _NativePlaybackApi api,
-  int handle,
-  Uint8List expected,
-  int offset,
-  int length,
-) {
-  final buffer = calloc<Uint8>(length);
-  final outputLength = calloc<Uint32>();
-  try {
-    final status = api.read(handle, offset, buffer, length, outputLength);
-    if (status != 0 || outputLength.value != length) {
-      throw StateError(
-        'native range read failed at $offset with status $status '
-        'and length ${outputLength.value}',
-      );
-    }
-    final actual = buffer.asTypedList(length);
-    for (var index = 0; index < length; index++) {
-      if (actual[index] != expected[offset + index]) {
-        throw StateError('native range bytes differ at ${offset + index}');
-      }
-    }
-  } finally {
-    calloc.free(buffer);
-    calloc.free(outputLength);
-  }
+Future<void> _sendChildCommand(Process process, String command) async {
+  process.stdin.writeln(command);
+  await process.stdin.flush();
 }
 
-void _closeNative(_NativePlaybackApi api, int handle) {
-  final status = api.close(handle);
-  if (status != 0) throw StateError('native playback close failed: $status');
-}
+String _hexEncode(List<int> bytes) =>
+    bytes.map((value) => value.toRadixString(16).padLeft(2, '0')).join();
 
 List<int> _parseHex(String value, int expectedBytes, String label) {
   if (value.length != expectedBytes * 2 ||

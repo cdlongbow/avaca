@@ -12,6 +12,10 @@ import 'package:avaca_scraper/avaca_scraper.dart';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import 'src/server_library_models.dart';
+
+export 'src/server_library_models.dart';
+
 class ServerLibraryException implements Exception {
   const ServerLibraryException(this.code, this.message);
 
@@ -383,7 +387,7 @@ class ServerMediaResourceService {
     });
     final tail = result.then<void>(
       (_) {},
-      onError: (Object _, StackTrace __) {},
+      onError: (Object _, StackTrace _) {},
     );
     _readTails[handle.token] = tail;
     try {
@@ -793,6 +797,7 @@ final class AvacaServerApplicationHost {
     required PlaybackSessionService playbackSessions,
     required ServerMediaResourceService resources,
     required ServerPlaybackSelectionResolver resolvePlayback,
+    this.assetCatalog,
     this.pairingSecretResolver,
     this.onClientAuthenticated,
     this.expectedClientId,
@@ -811,6 +816,7 @@ final class AvacaServerApplicationHost {
   final PlaybackSessionService _playbackSessions;
   final ServerMediaResourceService _resources;
   final ServerPlaybackSelectionResolver _resolvePlayback;
+  final ServerAssetCatalogRepository? assetCatalog;
   final Set<AvacaApplicationSession> _sessions = <AvacaApplicationSession>{};
   Future<void> _operationTail = Future<void>.value();
   Future<void>? _closeFuture;
@@ -889,6 +895,7 @@ final class AvacaServerApplicationHost {
         playbackSessions: _playbackSessions,
         resources: _resources,
         resolvePlayback: _resolvePlayback,
+        assetCatalog: assetCatalog,
       );
       await session.serve(handler.handle);
     } on Object {
@@ -959,10 +966,12 @@ final class AvacaServerApplicationHandler {
     required PlaybackSessionService playbackSessions,
     required ServerMediaResourceService resources,
     required ServerPlaybackSelectionResolver resolvePlayback,
+    this.assetCatalog,
     Set<String> features = const <String>{
       'catalog',
       'details',
       'playback-range',
+      'artwork-assets',
     },
   }) : _catalog = catalog,
        _playbackSessions = playbackSessions,
@@ -976,6 +985,7 @@ final class AvacaServerApplicationHandler {
   final PlaybackSessionService _playbackSessions;
   final ServerMediaResourceService _resources;
   final ServerPlaybackSelectionResolver _resolvePlayback;
+  final ServerAssetCatalogRepository? assetCatalog;
   final Set<String> _features;
   final AvacaApplicationCodec _codec = const AvacaApplicationCodec();
   final Map<String, _OpenServerResource> _openResources =
@@ -1018,7 +1028,7 @@ final class AvacaServerApplicationHandler {
               serverId: serverId,
               features: _features,
               maxCollectionPageSize: AvacaApplicationCodec.maxPageSize,
-              maxReadBytes: 4 * 1024 * 1024,
+              maxReadBytes: AvacaApplicationCodec.maxBinaryRangeBytes,
             ),
           ),
         );
@@ -1215,7 +1225,7 @@ final class AvacaServerApplicationHandler {
         );
         final operationDone = operation.then<void>(
           (_) {},
-          onError: (Object _, StackTrace __) {},
+          onError: (Object _, StackTrace _) {},
         );
         read.operationDone = operationDone;
         try {
@@ -1271,10 +1281,80 @@ final class AvacaServerApplicationHandler {
       case AvacaOpcode.ping:
         return _response(request, AvacaOpcode.pong, Uint8List(0));
       case AvacaOpcode.openAsset:
-        throw const ServerProtocolException(
-          'asset_unavailable',
-          false,
-          'asset endpoint is not configured',
+        final assetRequest = _codec.decodeAssetOpenRequest(request.payload);
+        // Asset bytes are carried as base64 inside the framed JSON response;
+        // use the codec's effective bound so a handler-level request can
+        // always be encoded into one legal assetOpened response.
+        const maxAssetBytes = AvacaApplicationCodec.maxBinaryRangeBytes;
+        if (assetRequest.revision < 0 ||
+            assetRequest.offset < 0 ||
+            assetRequest.length <= 0 ||
+            assetRequest.length > maxAssetBytes) {
+          throw const ServerProtocolException(
+            'asset_range_invalid',
+            false,
+            'requested asset range is invalid',
+          );
+        }
+        final assetStore = assetCatalog;
+        if (assetStore == null) {
+          throw const ServerProtocolException(
+            'asset_unavailable',
+            false,
+            'asset endpoint is not configured',
+          );
+        }
+        final asset = await assetStore.findAsset(
+          assetRequest.assetId,
+          assetRequest.revision,
+        );
+        if (asset == null) {
+          throw const ServerProtocolException(
+            'asset_unavailable',
+            false,
+            'requested asset is unavailable',
+          );
+        }
+        if (asset.length < 0 || assetRequest.offset > asset.length) {
+          throw const ServerProtocolException(
+            'asset_range_invalid',
+            false,
+            'requested asset range is invalid',
+          );
+        }
+        final readLength = math.min(
+          assetRequest.length,
+          math.max(0, asset.length - assetRequest.offset),
+        );
+        final file = File(asset.absolutePath);
+        if (!await file.exists() || await file.length() != asset.length) {
+          throw const ServerProtocolException(
+            'asset_unavailable',
+            true,
+            'requested asset is unavailable',
+          );
+        }
+        final handle = await file.open();
+        late final Uint8List bytes;
+        try {
+          await handle.setPosition(assetRequest.offset);
+          bytes = Uint8List.fromList(await handle.read(readLength));
+        } finally {
+          await handle.close();
+        }
+        return _response(
+          request,
+          AvacaOpcode.assetOpened,
+          _codec.encodeAssetOpened(
+            AvacaAssetOpenedDto(
+              assetId: assetRequest.assetId,
+              revision: assetRequest.revision,
+              offset: assetRequest.offset,
+              bytes: bytes,
+              eof: assetRequest.offset + bytes.length >= asset.length,
+              mimeType: asset.mimeType,
+            ),
+          ),
         );
       default:
         throw const ServerProtocolException(
@@ -1404,7 +1484,15 @@ class ServerMediaRecord {
 /// new `server_*` schema and database file; the root app's legacy Library DB
 /// is neither opened nor migrated by this adapter.
 final class ServerSqliteCatalogRepository
-    implements ServerCatalogRepository, ServerCatalogWriter {
+    implements
+        ServerCatalogRepository,
+        ServerCatalogWriter,
+        ServerPhysicalCatalogWriter,
+        ServerMetadataCatalogWriter,
+        ServerMetadataFailureWriter,
+        ServerReviewCatalogRepository,
+        ServerManualCodeCatalog,
+        ServerAssetCatalogRepository {
   ServerSqliteCatalogRepository._(this._database);
 
   final Database _database;
@@ -1424,7 +1512,7 @@ final class ServerSqliteCatalogRepository
     final database = await databaseFactoryFfi.openDatabase(
       databasePath,
       options: OpenDatabaseOptions(
-        version: 1,
+        version: 2,
         onCreate: (db, _) async => _createSchema(db),
         onUpgrade: _upgradeSchema,
       ),
@@ -1440,7 +1528,14 @@ final class ServerSqliteCatalogRepository
         code TEXT NOT NULL,
         title TEXT NOT NULL,
         cover_resource_id TEXT,
-        modified_at TEXT NOT NULL
+        modified_at TEXT NOT NULL,
+        description TEXT,
+        release_date TEXT,
+        metadata_state TEXT NOT NULL DEFAULT 'pending',
+        metadata_error TEXT,
+        metadata_source TEXT,
+        metadata_source_uri TEXT,
+        metadata_updated_at TEXT
       )
     ''');
     await database.execute('''
@@ -1452,14 +1547,130 @@ final class ServerSqliteCatalogRepository
         mime_type TEXT NOT NULL,
         duration_ms INTEGER,
         modified_at TEXT NOT NULL,
+        library_root_id TEXT,
+        relative_path TEXT,
+        file_name TEXT,
+        identity_key TEXT,
+        parsed_code TEXT,
+        manual_code TEXT,
+        parse_status TEXT NOT NULL DEFAULT 'unrecognized',
+        variant_token TEXT,
+        part_number INTEGER,
+        is_present INTEGER NOT NULL DEFAULT 1,
+        last_seen_at TEXT,
+        metadata_state TEXT NOT NULL DEFAULT 'pending',
+        parse_diagnostic TEXT,
         FOREIGN KEY(work_portable_id) REFERENCES server_works(portable_id)
       )
     ''');
+    await database.execute('''
+      CREATE TABLE IF NOT EXISTS server_library_roots (
+        root_id TEXT PRIMARY KEY,
+        absolute_path TEXT NOT NULL UNIQUE,
+        display_name TEXT,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL,
+        modified_at TEXT NOT NULL
+      )
+    ''');
+    await database.execute('''
+      CREATE TABLE IF NOT EXISTS server_performers (
+        portable_id TEXT PRIMARY KEY,
+        external_id TEXT,
+        display_name TEXT NOT NULL,
+        modified_at TEXT NOT NULL
+      )
+    ''');
+    await database.execute('''
+      CREATE TABLE IF NOT EXISTS server_work_performers (
+        work_portable_id TEXT NOT NULL,
+        performer_portable_id TEXT NOT NULL,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY(work_portable_id, performer_portable_id),
+        FOREIGN KEY(work_portable_id) REFERENCES server_works(portable_id),
+        FOREIGN KEY(performer_portable_id) REFERENCES server_performers(portable_id)
+      )
+    ''');
+    await database.execute('''
+      CREATE TABLE IF NOT EXISTS server_assets (
+        asset_id TEXT NOT NULL,
+        revision INTEGER NOT NULL,
+        work_portable_id TEXT,
+        absolute_path TEXT NOT NULL,
+        length_bytes INTEGER NOT NULL,
+        mime_type TEXT NOT NULL,
+        modified_at TEXT NOT NULL,
+        PRIMARY KEY(asset_id, revision),
+        FOREIGN KEY(work_portable_id) REFERENCES server_works(portable_id)
+      )
+    ''');
+    await _ensureColumn(database, 'server_works', 'description', 'TEXT');
+    await _ensureColumn(database, 'server_works', 'release_date', 'TEXT');
+    await _ensureColumn(
+      database,
+      'server_works',
+      'metadata_state',
+      "TEXT NOT NULL DEFAULT 'pending'",
+    );
+    await _ensureColumn(database, 'server_works', 'metadata_error', 'TEXT');
+    await _ensureColumn(database, 'server_works', 'metadata_source', 'TEXT');
+    await _ensureColumn(
+      database,
+      'server_works',
+      'metadata_source_uri',
+      'TEXT',
+    );
+    await _ensureColumn(
+      database,
+      'server_works',
+      'metadata_updated_at',
+      'TEXT',
+    );
+    await _ensureColumn(database, 'server_media', 'library_root_id', 'TEXT');
+    await _ensureColumn(database, 'server_media', 'relative_path', 'TEXT');
+    await _ensureColumn(database, 'server_media', 'file_name', 'TEXT');
+    await _ensureColumn(database, 'server_media', 'identity_key', 'TEXT');
+    await _ensureColumn(database, 'server_media', 'parsed_code', 'TEXT');
+    await _ensureColumn(database, 'server_media', 'manual_code', 'TEXT');
+    await _ensureColumn(
+      database,
+      'server_media',
+      'parse_status',
+      "TEXT NOT NULL DEFAULT 'unrecognized'",
+    );
+    await _ensureColumn(database, 'server_media', 'variant_token', 'TEXT');
+    await _ensureColumn(database, 'server_media', 'part_number', 'INTEGER');
+    await _ensureColumn(
+      database,
+      'server_media',
+      'is_present',
+      'INTEGER NOT NULL DEFAULT 1',
+    );
+    await _ensureColumn(database, 'server_media', 'last_seen_at', 'TEXT');
+    await _ensureColumn(
+      database,
+      'server_media',
+      'metadata_state',
+      "TEXT NOT NULL DEFAULT 'pending'",
+    );
+    await _ensureColumn(database, 'server_media', 'parse_diagnostic', 'TEXT');
     await database.execute(
       'CREATE INDEX IF NOT EXISTS idx_server_works_code ON server_works(code)',
     );
     await database.execute(
       'CREATE INDEX IF NOT EXISTS idx_server_media_work ON server_media(work_portable_id)',
+    );
+    await database.execute(
+      'CREATE INDEX IF NOT EXISTS idx_server_media_root ON server_media(library_root_id, is_present)',
+    );
+    await database.execute(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_server_media_identity ON server_media(identity_key) WHERE identity_key IS NOT NULL',
+    );
+    await database.execute(
+      'CREATE INDEX IF NOT EXISTS idx_server_media_review ON server_media(parse_status, metadata_state, is_present)',
+    );
+    await database.execute(
+      'CREATE INDEX IF NOT EXISTS idx_server_assets_work ON server_assets(work_portable_id)',
     );
   }
 
@@ -1467,18 +1678,42 @@ final class ServerSqliteCatalogRepository
     Database database,
     int oldVersion,
     int newVersion,
-  ) => _createSchema(database);
+  ) async {
+    // v1 contained the original Server catalog.  Migration is additive and
+    // intentionally never drops or recreates the existing tables/rows.
+    await _createSchema(database);
+  }
+
+  static Future<void> _ensureColumn(
+    DatabaseExecutor database,
+    String table,
+    String column,
+    String declaration,
+  ) async {
+    final columns = await database.rawQuery('PRAGMA table_info($table)');
+    if (columns.any((row) => row['name']?.toString() == column)) return;
+    await database.execute(
+      'ALTER TABLE $table ADD COLUMN $column $declaration',
+    );
+  }
 
   @override
   Future<void> upsertWork(AvacaWorkSummary work) async {
     _ensureOpen();
-    await _database.insert('server_works', {
-      'portable_id': work.workId.value,
-      'code': work.code,
-      'title': work.title,
-      'cover_resource_id': work.coverResourceId,
-      'modified_at': DateTime.now().toUtc().toIso8601String(),
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
+    final now = DateTime.now().toUtc().toIso8601String();
+    await _database.rawInsert(
+      '''
+      INSERT INTO server_works
+        (portable_id, code, title, cover_resource_id, modified_at)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(portable_id) DO UPDATE SET
+        code = excluded.code,
+        title = excluded.title,
+        cover_resource_id = COALESCE(excluded.cover_resource_id, server_works.cover_resource_id),
+        modified_at = excluded.modified_at
+      ''',
+      [work.workId.value, work.code, work.title, work.coverResourceId, now],
+    );
   }
 
   @override
@@ -1491,15 +1726,434 @@ final class ServerSqliteCatalogRepository
         'media length is invalid',
       );
     }
-    await _database.insert('server_media', {
-      'portable_id': media.mediaId.value,
-      'work_portable_id': media.workId.value,
-      'absolute_path': p.normalize(p.absolute(media.absolutePath)),
-      'length_bytes': media.length,
-      'mime_type': media.mimeType,
-      'duration_ms': media.durationMs,
-      'modified_at': DateTime.now().toUtc().toIso8601String(),
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
+    final now = DateTime.now().toUtc().toIso8601String();
+    await _database.rawInsert(
+      '''
+      INSERT INTO server_media
+        (portable_id, work_portable_id, absolute_path, length_bytes,
+         mime_type, duration_ms, modified_at, is_present, last_seen_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)
+      ON CONFLICT(portable_id) DO UPDATE SET
+        work_portable_id = excluded.work_portable_id,
+        absolute_path = excluded.absolute_path,
+        length_bytes = excluded.length_bytes,
+        mime_type = excluded.mime_type,
+        duration_ms = excluded.duration_ms,
+        modified_at = excluded.modified_at,
+        is_present = 1,
+        last_seen_at = excluded.last_seen_at
+      ''',
+      [
+        media.mediaId.value,
+        media.workId.value,
+        p.normalize(p.absolute(media.absolutePath)),
+        media.length,
+        media.mimeType,
+        media.durationMs,
+        now,
+        now,
+      ],
+    );
+  }
+
+  @override
+  Future<void> upsertLibraryRoot(ServerLibraryRoot root) async {
+    _ensureOpen();
+    final now = DateTime.now().toUtc().toIso8601String();
+    final absolutePath = p.normalize(p.absolute(root.absolutePath));
+    await _database.rawInsert(
+      '''
+      INSERT INTO server_library_roots
+        (root_id, absolute_path, display_name, enabled, created_at, modified_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(root_id) DO UPDATE SET
+        absolute_path = excluded.absolute_path,
+        display_name = excluded.display_name,
+        enabled = excluded.enabled,
+        modified_at = excluded.modified_at
+      ''',
+      [
+        root.rootId,
+        absolutePath,
+        root.displayName,
+        root.enabled ? 1 : 0,
+        now,
+        now,
+      ],
+    );
+  }
+
+  @override
+  Future<void> upsertPhysicalMedia(ServerPhysicalMediaRecord media) async {
+    _ensureOpen();
+    if (media.length < 0) {
+      throw const ServerProtocolException(
+        'invalid_media_length',
+        false,
+        'media length is invalid',
+      );
+    }
+    final now = DateTime.now().toUtc().toIso8601String();
+    final workId =
+        media.workId ??
+        AvacaWorkId('work.pending.${_stableToken(media.mediaId.value)}');
+    final code = media.parse.code ?? '';
+    final title = p.basenameWithoutExtension(media.fileName).trim();
+    await _database.rawInsert(
+      '''
+      INSERT INTO server_works
+        (portable_id, code, title, modified_at, metadata_state)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(portable_id) DO UPDATE SET
+        code = CASE WHEN server_works.code = '' THEN excluded.code ELSE server_works.code END,
+        title = CASE WHEN server_works.title = '' THEN excluded.title ELSE server_works.title END,
+        modified_at = excluded.modified_at
+      ''',
+      [
+        workId.value,
+        code,
+        title.isEmpty ? media.fileName : title,
+        now,
+        media.parse.isRecognized
+            ? ServerMetadataState.pending.value
+            : ServerMetadataState.pending.value,
+      ],
+    );
+    final normalizedAbsolute = p.normalize(p.absolute(media.absolutePath));
+    await _database.rawInsert(
+      '''
+      INSERT INTO server_media
+        (portable_id, work_portable_id, absolute_path, length_bytes,
+         mime_type, duration_ms, modified_at, library_root_id, relative_path,
+         file_name, identity_key, parsed_code, parse_status, variant_token,
+         part_number, is_present, last_seen_at, metadata_state, parse_diagnostic)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+      ON CONFLICT(portable_id) DO UPDATE SET
+        work_portable_id = excluded.work_portable_id,
+        absolute_path = excluded.absolute_path,
+        length_bytes = excluded.length_bytes,
+        mime_type = excluded.mime_type,
+        duration_ms = excluded.duration_ms,
+        modified_at = excluded.modified_at,
+        library_root_id = excluded.library_root_id,
+        relative_path = excluded.relative_path,
+        file_name = excluded.file_name,
+        identity_key = excluded.identity_key,
+        parsed_code = COALESCE(server_media.manual_code, excluded.parsed_code),
+        parse_status = CASE
+          WHEN server_media.manual_code IS NOT NULL THEN 'recognized'
+          ELSE excluded.parse_status
+        END,
+        variant_token = excluded.variant_token,
+        part_number = excluded.part_number,
+        is_present = 1,
+        last_seen_at = excluded.last_seen_at,
+        parse_diagnostic = excluded.parse_diagnostic
+      ''',
+      [
+        media.mediaId.value,
+        workId.value,
+        normalizedAbsolute,
+        media.length,
+        media.mimeType,
+        media.durationMs,
+        now,
+        media.rootId,
+        media.relativePath,
+        media.fileName,
+        media.mediaId.value,
+        media.parse.code,
+        media.parse.status.value,
+        media.parse.variantToken,
+        media.parse.partNumber,
+        now,
+        media.parse.isRecognized
+            ? ServerMetadataState.pending.value
+            : ServerMetadataState.pending.value,
+        media.parse.diagnostic,
+      ],
+    );
+  }
+
+  @override
+  Future<void> markMissingPhysicalMedia({
+    required String rootId,
+    required Set<String> seenMediaIds,
+  }) async {
+    _ensureOpen();
+    final rows = await _database.query(
+      'server_media',
+      columns: const ['portable_id'],
+      where: 'library_root_id = ?',
+      whereArgs: [rootId],
+    );
+    final now = DateTime.now().toUtc().toIso8601String();
+    for (final row in rows) {
+      final mediaId = row['portable_id']?.toString();
+      if (mediaId == null || seenMediaIds.contains(mediaId)) continue;
+      await _database.update(
+        'server_media',
+        {'is_present': 0, 'modified_at': now},
+        where: 'portable_id = ?',
+        whereArgs: [mediaId],
+      );
+    }
+  }
+
+  @override
+  Future<void> upsertWorkMetadata(ServerWorkMetadataRecord metadata) async {
+    _ensureOpen();
+    final now = DateTime.now().toUtc().toIso8601String();
+    await _database.rawInsert(
+      '''
+      INSERT INTO server_works
+        (portable_id, code, title, modified_at, description, release_date,
+         metadata_state, metadata_error, metadata_source, metadata_source_uri,
+         metadata_updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(portable_id) DO UPDATE SET
+        code = excluded.code,
+        title = excluded.title,
+        modified_at = excluded.modified_at,
+        description = excluded.description,
+        release_date = excluded.release_date,
+        metadata_state = excluded.metadata_state,
+        metadata_error = excluded.metadata_error,
+        metadata_source = excluded.metadata_source,
+        metadata_source_uri = excluded.metadata_source_uri,
+        metadata_updated_at = excluded.metadata_updated_at
+      ''',
+      [
+        metadata.workId.value,
+        metadata.code,
+        metadata.title,
+        now,
+        metadata.description,
+        metadata.releaseDate,
+        metadata.state.value,
+        metadata.error,
+        metadata.source,
+        metadata.sourceUri,
+        now,
+      ],
+    );
+    await _database.update(
+      'server_media',
+      {
+        'work_portable_id': metadata.workId.value,
+        'metadata_state': metadata.state.value,
+      },
+      where: 'parsed_code = ?',
+      whereArgs: [metadata.code],
+    );
+    await _database.delete(
+      'server_work_performers',
+      where: 'work_portable_id = ?',
+      whereArgs: [metadata.workId.value],
+    );
+    for (var index = 0; index < metadata.performers.length; index++) {
+      final performer = metadata.performers[index];
+      await _database.rawInsert(
+        '''
+        INSERT INTO server_performers
+          (portable_id, external_id, display_name, modified_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(portable_id) DO UPDATE SET
+          external_id = excluded.external_id,
+          display_name = excluded.display_name,
+          modified_at = excluded.modified_at
+        ''',
+        [
+          performer.performerId.value,
+          performer.externalId,
+          performer.displayName,
+          now,
+        ],
+      );
+      await _database.insert('server_work_performers', {
+        'work_portable_id': metadata.workId.value,
+        'performer_portable_id': performer.performerId.value,
+        'sort_order': index,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    final artwork = metadata.artwork;
+    if (artwork != null) {
+      await _database.insert('server_assets', {
+        'asset_id': artwork.assetId,
+        'revision': artwork.revision,
+        'work_portable_id': metadata.workId.value,
+        'absolute_path': p.normalize(p.absolute(artwork.absolutePath)),
+        'length_bytes': artwork.length,
+        'mime_type': artwork.mimeType,
+        'modified_at': now,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+      await _database.update(
+        'server_works',
+        {'cover_resource_id': artwork.assetId},
+        where: 'portable_id = ?',
+        whereArgs: [metadata.workId.value],
+      );
+    }
+  }
+
+  @override
+  Future<void> markMetadataFailure({
+    required AvacaMediaId mediaId,
+    required String message,
+  }) async {
+    _ensureOpen();
+    final safeMessage = message.trim();
+    await _database.update(
+      'server_media',
+      {
+        'metadata_state': ServerMetadataState.failed.value,
+        'parse_diagnostic': safeMessage.isEmpty
+            ? 'metadata resolution failed'
+            : safeMessage.substring(0, math.min(safeMessage.length, 1024)),
+      },
+      where: 'portable_id = ?',
+      whereArgs: [mediaId.value],
+    );
+  }
+
+  @override
+  Future<List<ServerReviewItem>> listReviewItems({
+    String? rootId,
+    int limit = 100,
+  }) async {
+    _ensureOpen();
+    if (limit < 1 || limit > AvacaApplicationCodec.maxPageSize) {
+      throw const ServerProtocolException(
+        'invalid_review_limit',
+        false,
+        'review page limit is invalid',
+      );
+    }
+    final rows = await _database.query(
+      'server_media',
+      columns: const [
+        'portable_id',
+        'file_name',
+        'relative_path',
+        'parse_status',
+        'parse_diagnostic',
+        'parsed_code',
+        'variant_token',
+        'metadata_state',
+        'library_root_id',
+      ],
+      where: rootId == null
+          ? "COALESCE(parse_status, 'unrecognized') <> 'recognized' OR COALESCE(metadata_state, 'pending') IN ('pending', 'failed', 'stale', 'manual')"
+          : "library_root_id = ? AND (COALESCE(parse_status, 'unrecognized') <> 'recognized' OR COALESCE(metadata_state, 'pending') IN ('pending', 'failed', 'stale', 'manual'))",
+      whereArgs: rootId == null ? null : [rootId],
+      orderBy: 'modified_at DESC, portable_id ASC',
+      limit: limit,
+    );
+    return rows
+        .map(
+          (row) => ServerReviewItem(
+            mediaId: AvacaMediaId(row['portable_id']!.toString()),
+            fileName: row['file_name']?.toString() ?? '',
+            relativePath: row['relative_path']?.toString() ?? '',
+            parseStatus: ServerPhysicalParseStatus.fromValue(
+              row['parse_status']?.toString(),
+            ),
+            diagnostic: row['parse_diagnostic']?.toString() ?? '',
+            code: row['parsed_code']?.toString(),
+            variantToken: row['variant_token']?.toString(),
+            metadataState: ServerMetadataState.fromValue(
+              row['metadata_state']?.toString(),
+            ),
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  Future<void> applyManualCode({
+    required AvacaMediaId mediaId,
+    required String code,
+  }) async {
+    _ensureOpen();
+    final normalized = code.trim().toUpperCase();
+    final parsed = const ServerFilenameParser().parse('$normalized.mkv');
+    if (normalized.isEmpty ||
+        normalized.length > 64 ||
+        !parsed.isRecognized ||
+        parsed.code == null) {
+      throw const ServerProtocolException(
+        'invalid_manual_code',
+        false,
+        'manual work code is invalid',
+      );
+    }
+    final changed = await _database.update(
+      'server_media',
+      {
+        'parsed_code': parsed.code,
+        'manual_code': parsed.code,
+        'parse_status': ServerPhysicalParseStatus.recognized.value,
+        'parse_diagnostic': 'manual code correction validated',
+        'metadata_state': ServerMetadataState.manual.value,
+      },
+      where: 'portable_id = ?',
+      whereArgs: [mediaId.value],
+    );
+    if (changed == 0) {
+      throw const ServerProtocolException(
+        'media_not_found',
+        false,
+        'requested physical media was not found',
+      );
+    }
+  }
+
+  @override
+  Future<String?> findManualCode(AvacaMediaId mediaId) async {
+    _ensureOpen();
+    final rows = await _database.query(
+      'server_media',
+      columns: const ['manual_code'],
+      where: 'portable_id = ?',
+      whereArgs: [mediaId.value],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    final value = rows.single['manual_code']?.toString().trim();
+    return value == null || value.isEmpty ? null : value;
+  }
+
+  @override
+  Future<ServerAssetRecord?> findAsset(String assetId, int revision) async {
+    _ensureOpen();
+    if (assetId.trim().isEmpty || revision < 0) return null;
+    final rows = await _database.query(
+      'server_assets',
+      columns: const [
+        'asset_id',
+        'revision',
+        'absolute_path',
+        'length_bytes',
+        'mime_type',
+      ],
+      where: 'asset_id = ? AND revision = ?',
+      whereArgs: [assetId, revision],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    final row = rows.single;
+    return ServerAssetRecord(
+      assetId: row['asset_id']!.toString(),
+      revision: (row['revision'] as num).toInt(),
+      absolutePath: row['absolute_path']!.toString(),
+      length: (row['length_bytes'] as num).toInt(),
+      mimeType: row['mime_type']!.toString(),
+    );
+  }
+
+  String _stableToken(String value) {
+    final digest = crypto.sha256.convert(utf8.encode(value));
+    return digest.toString().substring(0, 32);
   }
 
   @override
@@ -1594,8 +2248,8 @@ final class ServerSqliteCatalogRepository
   Future<bool> _workHasPlayableMedia(String workId) async {
     final rows = await _database.query(
       'server_media',
-      columns: const ['absolute_path', 'length_bytes'],
-      where: 'work_portable_id = ?',
+      columns: const ['absolute_path', 'length_bytes', 'is_present'],
+      where: 'work_portable_id = ? AND COALESCE(is_present, 1) = 1',
       whereArgs: [workId],
       limit: AvacaApplicationCodec.maxPageSize,
     );
@@ -1623,7 +2277,14 @@ final class ServerSqliteCatalogRepository
     _ensureOpen();
     final rows = await _database.query(
       'server_works',
-      columns: const ['portable_id', 'code', 'title', 'cover_resource_id'],
+      columns: const [
+        'portable_id',
+        'code',
+        'title',
+        'cover_resource_id',
+        'description',
+        'release_date',
+      ],
       where: 'portable_id = ?',
       whereArgs: [workId.value],
       limit: 1,
@@ -1644,7 +2305,10 @@ final class ServerSqliteCatalogRepository
         'work_portable_id',
         'absolute_path',
         'length_bytes',
+        'mime_type',
         'duration_ms',
+        'is_present',
+        'parsed_code',
       ],
       where: 'work_portable_id = ?',
       whereArgs: [resolvedWorkId.value],
@@ -1658,7 +2322,10 @@ final class ServerSqliteCatalogRepository
         final expectedLength =
             (mediaRow['length_bytes'] as num?)?.toInt() ?? -1;
         var availability = AvacaMediaAvailability.unknown;
-        if (path.isNotEmpty && expectedLength >= 0) {
+        final isPresent = (mediaRow['is_present'] as num?)?.toInt() != 0;
+        if (!isPresent) {
+          availability = AvacaMediaAvailability.unavailable;
+        } else if (path.isNotEmpty && expectedLength >= 0) {
           final file = File(path);
           if (await file.exists()) {
             availability = await file.length() == expectedLength
@@ -1671,17 +2338,41 @@ final class ServerSqliteCatalogRepository
         return AvacaMediaSummary(
           mediaId: mediaId,
           workId: resolvedWorkId,
-          code: row['code']!.toString(),
+          code: mediaRow['parsed_code']?.toString().isNotEmpty == true
+              ? mediaRow['parsed_code']!.toString()
+              : row['code']!.toString(),
           title: row['title']!.toString(),
           durationMs: (mediaRow['duration_ms'] as num?)?.toInt(),
           availability: availability,
         );
       }),
     );
+    final performerRows = await _database.rawQuery(
+      '''
+      SELECT p.portable_id, p.external_id, p.display_name
+      FROM server_performers p
+      INNER JOIN server_work_performers wp
+        ON wp.performer_portable_id = p.portable_id
+      WHERE wp.work_portable_id = ?
+      ORDER BY wp.sort_order ASC, p.portable_id ASC
+      LIMIT ?
+      ''',
+      [resolvedWorkId.value, 1024],
+    );
     return AvacaWorkDetail(
       workId: resolvedWorkId,
       code: row['code']!.toString(),
       title: row['title']!.toString(),
+      description: row['description']?.toString(),
+      releaseDate: row['release_date']?.toString(),
+      performers: performerRows
+          .map(
+            (performer) => AvacaPerformerSummary(
+              actressId: AvacaActressId(performer['portable_id']!.toString()),
+              displayName: performer['display_name']!.toString(),
+            ),
+          )
+          .toList(growable: false),
       coverResourceId: row['cover_resource_id']?.toString(),
       media: media,
     );
@@ -1698,6 +2389,7 @@ final class ServerSqliteCatalogRepository
         'length_bytes',
         'mime_type',
         'duration_ms',
+        'is_present',
       ],
       where: 'portable_id = ?',
       whereArgs: [mediaId.value],
@@ -1705,6 +2397,7 @@ final class ServerSqliteCatalogRepository
     );
     if (rows.isEmpty) return null;
     final row = rows.single;
+    if ((row['is_present'] as num?)?.toInt() == 0) return null;
     final path = row['absolute_path']?.toString().trim() ?? '';
     final file = File(path);
     if (path.isEmpty || !await file.exists()) return null;
@@ -1755,7 +2448,14 @@ final class ServerSqliteCatalogRepository
   String _encodeCursor(int value) => value.toString();
 }
 
-enum ServerImportStage { scanning, resolving, indexing, completed, cancelled }
+enum ServerImportStage {
+  scanning,
+  resolving,
+  indexing,
+  reviewing,
+  completed,
+  cancelled,
+}
 
 class ServerImportProgress {
   const ServerImportProgress({
@@ -1783,6 +2483,10 @@ class ServerImportResult {
     required this.scanDuration,
     required this.resolveDuration,
     required this.indexDuration,
+    this.physicalIndexed = 0,
+    this.needsReview = 0,
+    this.metadataResolved = 0,
+    this.metadataFailed = 0,
   });
 
   final int scanned;
@@ -1793,6 +2497,10 @@ class ServerImportResult {
   final Duration scanDuration;
   final Duration resolveDuration;
   final Duration indexDuration;
+  final int physicalIndexed;
+  final int needsReview;
+  final int metadataResolved;
+  final int metadataFailed;
 
   Duration get totalDuration => scanDuration + resolveDuration + indexDuration;
 }
@@ -1807,7 +2515,7 @@ typedef ServerImportProgressCallback =
 final class ServerFolderImportService {
   ServerFolderImportService({
     required this.catalogWriter,
-    required this.scraper,
+    this.scraper,
     this.maxFiles = 10000,
   });
 
@@ -1826,8 +2534,9 @@ final class ServerFolderImportService {
   };
 
   final ServerCatalogWriter catalogWriter;
-  final AvacaScraper scraper;
+  final AvacaScraper? scraper;
   final int maxFiles;
+  final ServerFilenameParser parser = const ServerFilenameParser();
 
   Future<ServerImportResult> importFolder(
     String folderPath, {
@@ -1867,6 +2576,24 @@ final class ServerFolderImportService {
     }
 
     final stopwatch = Stopwatch()..start();
+    final rootId = _rootId(root);
+    final physicalWriter = catalogWriter is ServerPhysicalCatalogWriter
+        ? catalogWriter as ServerPhysicalCatalogWriter
+        : null;
+    final metadataWriter = catalogWriter is ServerMetadataCatalogWriter
+        ? catalogWriter as ServerMetadataCatalogWriter
+        : null;
+    final failureWriter = catalogWriter is ServerMetadataFailureWriter
+        ? catalogWriter as ServerMetadataFailureWriter
+        : null;
+    final manualCodeCatalog = catalogWriter is ServerManualCodeCatalog
+        ? catalogWriter as ServerManualCodeCatalog
+        : null;
+    if (physicalWriter != null) {
+      await physicalWriter.upsertLibraryRoot(
+        ServerLibraryRoot(rootId: rootId, absolutePath: root),
+      );
+    }
     final files = <_ServerImportFile>[];
     var failed = 0;
     var limitExceeded = false;
@@ -1904,9 +2631,12 @@ final class ServerFolderImportService {
             break;
           }
           final stat = await entity.stat();
+          final absolutePath = p.normalize(p.absolute(entity.path));
           files.add(
             _ServerImportFile(
-              path: p.normalize(p.absolute(entity.path)),
+              path: absolutePath,
+              relativePath: p.normalize(p.relative(absolutePath, from: root)),
+              fileName: p.basename(absolutePath),
               extension: extension,
               size: stat.size,
               modifiedAt: stat.modified,
@@ -1950,6 +2680,11 @@ final class ServerFolderImportService {
     var skipped = 0;
     var resolveDuration = Duration.zero;
     var indexDuration = Duration.zero;
+    var physicalIndexed = 0;
+    var needsReview = 0;
+    var metadataResolved = 0;
+    var metadataFailed = 0;
+    final seenMediaIds = <String>{};
     for (var index = 0; index < files.length; index++) {
       final item = files[index];
       if (isCancelled?.call() ?? false) {
@@ -1973,46 +2708,88 @@ final class ServerFolderImportService {
           indexDuration: indexDuration,
         );
       }
-      final code = _ServerFilenameCodeParser.parse(p.basename(item.path));
-      if (code == null) {
-        skipped++;
-        onProgress?.call(
-          ServerImportProgress(
-            stage: ServerImportStage.resolving,
-            completed: index + 1,
-            total: files.length,
-            elapsed: stopwatch.elapsed,
-            fileName: p.basename(item.path),
-          ),
-        );
-        continue;
+      final mediaId = AvacaMediaId(_mediaId(rootId, item.relativePath));
+      var parse = parser.parse(item.fileName);
+      final manualCode = await manualCodeCatalog?.findManualCode(mediaId);
+      if (manualCode != null) {
+        parse = parser.applyManualCode(parse, manualCode);
       }
       onProgress?.call(
         ServerImportProgress(
-          stage: ServerImportStage.resolving,
+          stage: parse.isRecognized
+              ? ServerImportStage.resolving
+              : ServerImportStage.reviewing,
           completed: index,
           total: files.length,
           elapsed: stopwatch.elapsed,
           fileName: p.basename(item.path),
         ),
       );
-      final resolveStart = stopwatch.elapsed;
-      AvacaWorkSummary work;
-      try {
-        work = await scraper.resolveWork(code);
-      } on Object {
-        failed++;
-        resolveDuration += stopwatch.elapsed - resolveStart;
+      if (physicalWriter != null) {
+        try {
+          await physicalWriter.upsertPhysicalMedia(
+            ServerPhysicalMediaRecord(
+              mediaId: mediaId,
+              rootId: rootId,
+              absolutePath: item.path,
+              relativePath: item.relativePath,
+              fileName: item.fileName,
+              length: item.size,
+              modifiedAt: item.modifiedAt,
+              parse: parse,
+              mimeType: _mimeType(item.extension),
+            ),
+          );
+          imported++;
+          physicalIndexed++;
+          seenMediaIds.add(mediaId.value);
+        } on Object {
+          failed++;
+        }
+      } else if (!parse.isRecognized) {
+        // Legacy test compositions that only implement the pre-recovery
+        // writer cannot persist a physical review row.  Production Server
+        // repositories always implement ServerPhysicalCatalogWriter, so a
+        // real scan never silently drops this item.
+        skipped++;
+      }
+
+      if (!parse.isRecognized) {
+        needsReview++;
         onProgress?.call(
           ServerImportProgress(
-            stage: ServerImportStage.indexing,
+            stage: ServerImportStage.reviewing,
             completed: index + 1,
             total: files.length,
             elapsed: stopwatch.elapsed,
-            fileName: p.basename(item.path),
+            fileName: item.fileName,
           ),
         );
         continue;
+      }
+
+      final code = parse.code!;
+      final resolveStart = stopwatch.elapsed;
+      AvacaWorkSummary? work;
+      AvacaWorkMetadata? richMetadata;
+      try {
+        final currentScraper = scraper;
+        if (currentScraper is AvacaRichScraper) {
+          final details = await (currentScraper as AvacaRichScraper)
+              .resolveWorkDetails(code);
+          richMetadata = details;
+          work = details.summary;
+        } else if (currentScraper != null) {
+          work = await currentScraper.resolveWork(code);
+        }
+      } on Object catch (error) {
+        failed++;
+        metadataFailed++;
+        resolveDuration += stopwatch.elapsed - resolveStart;
+        await failureWriter?.markMetadataFailure(
+          mediaId: mediaId,
+          message: error.toString(),
+        );
       }
       resolveDuration += stopwatch.elapsed - resolveStart;
       if (isCancelled?.call() ?? false) {
@@ -2034,35 +2811,70 @@ final class ServerFolderImportService {
           scanDuration: scanDuration,
           resolveDuration: resolveDuration,
           indexDuration: indexDuration,
+          physicalIndexed: physicalIndexed,
+          needsReview: needsReview,
+          metadataResolved: metadataResolved,
+          metadataFailed: metadataFailed,
         );
       }
-      final indexStart = stopwatch.elapsed;
-      try {
-        await catalogWriter.upsertWork(work);
-        await catalogWriter.upsertMedia(
-          ServerMediaRecord(
-            mediaId: AvacaMediaId(
-              _mediaId(item.path, item.size, item.modifiedAt),
-            ),
-            workId: work.workId,
-            absolutePath: item.path,
-            length: item.size,
-            mimeType: _mimeType(item.extension),
-          ),
-        );
-        imported++;
-      } on Object {
-        failed++;
+      if (work == null) {
+        if (scraper == null) needsReview++;
+      } else {
+        final indexStart = stopwatch.elapsed;
+        try {
+          if (metadataWriter != null) {
+            final metadata = richMetadata;
+            await metadataWriter.upsertWorkMetadata(
+              metadata == null
+                  ? ServerWorkMetadataRecord(
+                      workId: work.workId,
+                      code: work.code,
+                      title: work.title,
+                      state: ServerMetadataState.resolved,
+                    )
+                  : ServerWorkMetadataRecord.fromScrape(metadata),
+            );
+            metadataResolved++;
+          } else {
+            await catalogWriter.upsertWork(work);
+            if (physicalWriter == null) {
+              await catalogWriter.upsertMedia(
+                ServerMediaRecord(
+                  mediaId: mediaId,
+                  workId: work.workId,
+                  absolutePath: item.path,
+                  length: item.size,
+                  mimeType: _mimeType(item.extension),
+                ),
+              );
+              imported++;
+            }
+            metadataResolved++;
+          }
+        } on Object catch (error) {
+          failed++;
+          metadataFailed++;
+          await failureWriter?.markMetadataFailure(
+            mediaId: mediaId,
+            message: error.toString(),
+          );
+        }
+        indexDuration += stopwatch.elapsed - indexStart;
       }
-      indexDuration += stopwatch.elapsed - indexStart;
       onProgress?.call(
         ServerImportProgress(
           stage: ServerImportStage.indexing,
           completed: index + 1,
           total: files.length,
           elapsed: stopwatch.elapsed,
-          fileName: p.basename(item.path),
+          fileName: item.fileName,
         ),
+      );
+    }
+    if (physicalWriter != null) {
+      await physicalWriter.markMissingPhysicalMedia(
+        rootId: rootId,
+        seenMediaIds: seenMediaIds,
       );
     }
     onProgress?.call(
@@ -2082,16 +2894,23 @@ final class ServerFolderImportService {
       scanDuration: scanDuration,
       resolveDuration: resolveDuration,
       indexDuration: indexDuration,
+      physicalIndexed: physicalIndexed,
+      needsReview: needsReview,
+      metadataResolved: metadataResolved,
+      metadataFailed: metadataFailed,
     );
   }
 
-  String _mediaId(String absolutePath, int size, DateTime modifiedAt) {
+  String _mediaId(String rootId, String relativePath) {
     final digest = crypto.sha256.convert(
-      utf8.encode(
-        '$absolutePath\u0000$size\u0000${modifiedAt.toUtc().microsecondsSinceEpoch}',
-      ),
+      utf8.encode('$rootId\u0000$relativePath'),
     );
     return 'media.${digest.toString().substring(0, 32)}';
+  }
+
+  String _rootId(String root) {
+    final digest = crypto.sha256.convert(utf8.encode(root.toLowerCase()));
+    return 'root.${digest.toString().substring(0, 24)}';
   }
 
   String _mimeType(String extension) => switch (extension) {
@@ -2106,52 +2925,17 @@ final class ServerFolderImportService {
 final class _ServerImportFile {
   const _ServerImportFile({
     required this.path,
+    required this.relativePath,
+    required this.fileName,
     required this.extension,
     required this.size,
     required this.modifiedAt,
   });
 
   final String path;
+  final String relativePath;
+  final String fileName;
   final String extension;
   final int size;
   final DateTime modifiedAt;
-}
-
-final class _ServerFilenameCodeParser {
-  static final RegExp _pattern = RegExp(
-    r'(?:[A-Z]_[0-9]{3}[A-Z]{2,10}[0-9]{3,6}|'
-    r'[0-9]?[A-Z]{2,10}-[0-9]{3,6}[A-Z]?|'
-    r'[0-9]?[A-Z]{2,10}[0-9]{3,6})',
-  );
-
-  static String? parse(String fileName) {
-    final stem = p.basenameWithoutExtension(fileName).trim().toUpperCase();
-    final matches = _pattern
-        .allMatches(stem)
-        .where((match) => _safeBoundary(stem, match))
-        .map((match) => _normalize(match.group(0)!))
-        .toSet();
-    return matches.length == 1 ? matches.single : null;
-  }
-
-  static bool _safeBoundary(String value, RegExpMatch match) {
-    bool isWord(String? character) {
-      if (character == null) return false;
-      final code = character.codeUnitAt(0);
-      return (code >= 48 && code <= 57) || (code >= 65 && code <= 90);
-    }
-
-    final before = match.start == 0 ? null : value[match.start - 1];
-    final after = match.end >= value.length ? null : value[match.end];
-    return !isWord(before) && !isWord(after);
-  }
-
-  static String _normalize(String value) {
-    final match = RegExp(
-      r'^([0-9]?[A-Z]{2,10})(?:[-_]?)([0-9]{3,6})([A-Z]?)$',
-    ).firstMatch(value);
-    if (match == null) return value;
-    final numeric = match.group(2)!.replaceFirst(RegExp(r'^0+(?=\d)'), '');
-    return '${match.group(1)}-$numeric${match.group(3)}';
-  }
 }

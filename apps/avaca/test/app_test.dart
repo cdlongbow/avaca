@@ -5,6 +5,7 @@ import 'package:avaca_client/avaca_client.dart';
 import 'package:avaca_domain/avaca_domain.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:avaca_protocol/avaca_protocol.dart';
 import 'package:avaca_remote_core/avaca_remote_core.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -179,6 +180,24 @@ final class _FixtureCatalog implements AvacaRemoteCatalogApi {
               availability: AvacaMediaAvailability.available,
             ),
           ],
+        ),
+      );
+
+  @override
+  Future<AvacaAssetOpenedDto> openAsset(
+    String assetId, {
+    int revision = 0,
+    int offset = 0,
+    int length = 256 * 1024,
+  }) =>
+      Future<AvacaAssetOpenedDto>.value(
+        AvacaAssetOpenedDto(
+          assetId: assetId,
+          revision: revision,
+          offset: offset,
+          bytes: const <int>[],
+          eof: true,
+          mimeType: 'image/jpeg',
         ),
       );
 

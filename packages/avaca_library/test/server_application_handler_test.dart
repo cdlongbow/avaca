@@ -710,6 +710,215 @@ void main() {
       await host.close();
     },
   );
+
+  test(
+    'asset endpoint returns bounded bytes without leaking the cache path',
+    () async {
+      final directory = await Directory.systemTemp.createTemp('avaca-asset-');
+      final assetFile = File(
+        '${directory.path}${Platform.pathSeparator}cover.jpg',
+      );
+      await assetFile.writeAsBytes(const <int>[10, 11, 12, 13]);
+      final grants = PlaybackGrantRegistry();
+      final sessions = PlaybackSessionService(grants: grants);
+      final resources = ServerMediaResourceService(grants: grants);
+      final handler = AvacaServerApplicationHandler(
+        serverId: const AvacaServerId('server-asset'),
+        catalog: ServerCatalogService(_Catalog()),
+        playbackSessions: sessions,
+        resources: resources,
+        resolvePlayback: (_) async => null,
+        assetCatalog: _AssetCatalog(
+          ServerAssetRecord(
+            assetId: 'asset-cover',
+            revision: 2,
+            absolutePath: assetFile.path,
+            length: 4,
+            mimeType: 'image/jpeg',
+          ),
+        ),
+      );
+      try {
+        const codec = AvacaApplicationCodec();
+        final response = await handler.handle(
+          AvacaFrame(
+            opcode: AvacaOpcode.openAsset,
+            requestId: 1,
+            payload: codec.encodeAssetOpenRequest(
+              const AvacaAssetOpenRequestDto(
+                assetId: 'asset-cover',
+                revision: 2,
+                offset: 1,
+                length: 2,
+              ),
+            ),
+          ),
+        );
+        expect(response.opcode, AvacaOpcode.assetOpened);
+        final opened = codec.decodeAssetOpened(response.payload);
+        expect(opened.bytes, orderedEquals(const <int>[11, 12]));
+        expect(
+          String.fromCharCodes(response.payload),
+          isNot(contains(assetFile.path)),
+        );
+        expect(String.fromCharCodes(response.payload), isNot(contains('\\')));
+      } finally {
+        await handler.close();
+        await directory.delete(recursive: true);
+      }
+    },
+  );
+
+  test(
+    'asset endpoint fails closed for unknown, stale, missing, and mismatched assets',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'avaca-asset-negative-',
+      );
+      final assetFile = File(
+        '${directory.path}${Platform.pathSeparator}cover.jpg',
+      );
+      await assetFile.writeAsBytes(const <int>[10, 11, 12, 13]);
+      final grants = PlaybackGrantRegistry();
+      final sessions = PlaybackSessionService(grants: grants);
+      final resources = ServerMediaResourceService(grants: grants);
+      final asset = ServerAssetRecord(
+        assetId: 'asset-cover',
+        revision: 2,
+        absolutePath: assetFile.path,
+        length: 4,
+        mimeType: 'image/jpeg',
+      );
+      final handler = AvacaServerApplicationHandler(
+        serverId: const AvacaServerId('server-asset-negative'),
+        catalog: ServerCatalogService(_Catalog()),
+        playbackSessions: sessions,
+        resources: resources,
+        resolvePlayback: (_) async => null,
+        assetCatalog: _AssetCatalog(asset),
+      );
+      const codec = AvacaApplicationCodec();
+
+      Future<void> expectUnavailable(AvacaAssetOpenRequestDto request) async {
+        await expectLater(
+          handler.handle(
+            AvacaFrame(
+              opcode: AvacaOpcode.openAsset,
+              requestId: 20,
+              payload: codec.encodeAssetOpenRequest(request),
+            ),
+          ),
+          throwsA(
+            isA<ServerProtocolException>().having(
+              (error) => error.code,
+              'code',
+              anyOf('asset_unavailable', 'asset_range_invalid'),
+            ),
+          ),
+        );
+      }
+
+      try {
+        await expectUnavailable(
+          const AvacaAssetOpenRequestDto(
+            assetId: 'unknown',
+            revision: 2,
+            offset: 0,
+            length: 1,
+          ),
+        );
+        await expectUnavailable(
+          const AvacaAssetOpenRequestDto(
+            assetId: 'asset-cover',
+            revision: 1,
+            offset: 0,
+            length: 1,
+          ),
+        );
+        await expectUnavailable(
+          const AvacaAssetOpenRequestDto(
+            assetId: 'asset-cover',
+            revision: 2,
+            offset: 5,
+            length: 1,
+          ),
+        );
+        await expectUnavailable(
+          const AvacaAssetOpenRequestDto(
+            assetId: 'asset-cover',
+            revision: 2,
+            offset: 1 << 62,
+            length: 1,
+          ),
+        );
+
+        await assetFile.writeAsBytes(const <int>[10, 11, 12]);
+        await expectUnavailable(
+          const AvacaAssetOpenRequestDto(
+            assetId: 'asset-cover',
+            revision: 2,
+            offset: 0,
+            length: 1,
+          ),
+        );
+
+        await assetFile.writeAsBytes(const <int>[10, 11, 12, 13]);
+        final missing = File(
+          '${directory.path}${Platform.pathSeparator}missing.jpg',
+        );
+        final missingHandler = AvacaServerApplicationHandler(
+          serverId: const AvacaServerId('server-asset-missing'),
+          catalog: ServerCatalogService(_Catalog()),
+          playbackSessions: PlaybackSessionService(
+            grants: PlaybackGrantRegistry(),
+          ),
+          resources: ServerMediaResourceService(
+            grants: PlaybackGrantRegistry(),
+          ),
+          resolvePlayback: (_) async => null,
+          assetCatalog: _AssetCatalog(
+            ServerAssetRecord(
+              assetId: 'asset-missing',
+              revision: 2,
+              absolutePath: missing.path,
+              length: 1,
+              mimeType: 'image/jpeg',
+            ),
+          ),
+        );
+        try {
+          await expectLater(
+            missingHandler.handle(
+              AvacaFrame(
+                opcode: AvacaOpcode.openAsset,
+                requestId: 21,
+                payload: codec.encodeAssetOpenRequest(
+                  const AvacaAssetOpenRequestDto(
+                    assetId: 'asset-missing',
+                    revision: 2,
+                    offset: 0,
+                    length: 1,
+                  ),
+                ),
+              ),
+            ),
+            throwsA(
+              isA<ServerProtocolException>().having(
+                (error) => error.code,
+                'code',
+                'asset_unavailable',
+              ),
+            ),
+          );
+        } finally {
+          await missingHandler.close();
+        }
+      } finally {
+        await handler.close();
+        await directory.delete(recursive: true);
+      }
+    },
+  );
 }
 
 final class _Catalog implements ServerCatalogRepository {
@@ -731,6 +940,16 @@ final class _Catalog implements ServerCatalogRepository {
   @override
   Future<AvacaWorkDetail> getWorkDetail(AvacaWorkId workId) async =>
       AvacaWorkDetail(workId: workId, code: 'ABC-001', title: 'Fixture');
+}
+
+final class _AssetCatalog implements ServerAssetCatalogRepository {
+  _AssetCatalog(this.asset);
+
+  final ServerAssetRecord asset;
+
+  @override
+  Future<ServerAssetRecord?> findAsset(String assetId, int revision) async =>
+      asset.assetId == assetId && asset.revision == revision ? asset : null;
 }
 
 final class _BlockingResourceService extends ServerMediaResourceService {

@@ -69,6 +69,41 @@ class AvacaAssetRefDto {
   final int revision;
 }
 
+/// Request for one bounded artwork/asset range.  The asset id and revision
+/// are opaque catalog references; the Server resolves their private cache
+/// path after the authenticated session has been established.
+class AvacaAssetOpenRequestDto {
+  const AvacaAssetOpenRequestDto({
+    required this.assetId,
+    required this.revision,
+    required this.offset,
+    required this.length,
+  });
+
+  final String assetId;
+  final int revision;
+  final int offset;
+  final int length;
+}
+
+class AvacaAssetOpenedDto {
+  AvacaAssetOpenedDto({
+    required this.assetId,
+    required this.revision,
+    required this.offset,
+    required List<int> bytes,
+    required this.eof,
+    this.mimeType,
+  }) : bytes = Uint8List.fromList(bytes);
+
+  final String assetId;
+  final int revision;
+  final int offset;
+  final Uint8List bytes;
+  final bool eof;
+  final String? mimeType;
+}
+
 class AvacaCollectionPageDto {
   const AvacaCollectionPageDto({required this.items, this.nextCursor});
 
@@ -209,6 +244,10 @@ class AvacaApplicationCodec {
   static const maxPayloadBytes = AvacaFrameCodec.applicationMax;
   static const maxPageSize = 100;
   static const maxStringBytes = 4096;
+  // Binary ranges are base64 encoded inside the framed JSON payload.  Keep
+  // the decoded bound below the frame limit so the response can carry its
+  // JSON/base64 overhead without exceeding the application frame.
+  static const maxBinaryRangeBytes = 700 * 1024;
 
   Uint8List encodeCapabilities(AvacaCapabilitiesDto value) => _encode({
     'serverId': _id(value.serverId.value),
@@ -383,6 +422,78 @@ class AvacaApplicationCodec {
     });
   }
 
+  Uint8List encodeAssetOpenRequest(AvacaAssetOpenRequestDto value) {
+    if (value.revision < 0 ||
+        value.offset < 0 ||
+        value.length <= 0 ||
+        value.length > maxBinaryRangeBytes) {
+      throw const AvacaProtocolException('asset range is invalid');
+    }
+    return _encode({
+      'assetId': _id(value.assetId),
+      'revision': value.revision,
+      'offset': value.offset,
+      'length': value.length,
+    });
+  }
+
+  AvacaAssetOpenRequestDto decodeAssetOpenRequest(List<int> payload) {
+    final map = _map(payload);
+    final revision = _int(map, 'revision');
+    final offset = _int(map, 'offset');
+    final length = _int(map, 'length');
+    if (revision < 0 ||
+        offset < 0 ||
+        length <= 0 ||
+        length > maxBinaryRangeBytes) {
+      throw const AvacaProtocolException('asset range is invalid');
+    }
+    return AvacaAssetOpenRequestDto(
+      assetId: _id(map['assetId']),
+      revision: revision,
+      offset: offset,
+      length: length,
+    );
+  }
+
+  Uint8List encodeAssetOpened(AvacaAssetOpenedDto value) {
+    if (value.revision < 0 ||
+        value.offset < 0 ||
+        value.bytes.length > maxBinaryRangeBytes) {
+      throw const AvacaProtocolException('asset response is invalid');
+    }
+    return _encode({
+      'assetId': _id(value.assetId),
+      'revision': value.revision,
+      'offset': value.offset,
+      'bytes': base64UrlEncode(value.bytes).replaceAll('=', ''),
+      'eof': value.eof,
+      'mimeType': value.mimeType,
+    });
+  }
+
+  AvacaAssetOpenedDto decodeAssetOpened(List<int> payload) {
+    final map = _map(payload);
+    final revision = _int(map, 'revision');
+    final offset = _int(map, 'offset');
+    final bytes = _decodeBase64Bytes(
+      map,
+      'bytes',
+      error: 'asset bytes are invalid',
+    );
+    if (revision < 0 || offset < 0) {
+      throw const AvacaProtocolException('asset response is invalid');
+    }
+    return AvacaAssetOpenedDto(
+      assetId: _id(map['assetId']),
+      revision: revision,
+      offset: offset,
+      bytes: bytes,
+      eof: _bool(map, 'eof'),
+      mimeType: _optionalString(map, 'mimeType'),
+    );
+  }
+
   AvacaResourceOpenRequestDto decodeResourceOpenRequest(List<int> payload) {
     final map = _map(payload);
     final encoded = _stringValue(map, 'playbackGrant');
@@ -425,7 +536,7 @@ class AvacaApplicationCodec {
   }
 
   Uint8List encodeResourceChunk(AvacaResourceChunkDto value) {
-    if (value.offset < 0 || value.bytes.length > 4 * 1024 * 1024) {
+    if (value.offset < 0 || value.bytes.length > maxBinaryRangeBytes) {
       throw const AvacaProtocolException('resource chunk range is invalid');
     }
     return _encode({
@@ -437,15 +548,11 @@ class AvacaApplicationCodec {
 
   AvacaResourceChunkDto decodeResourceChunk(List<int> payload) {
     final map = _map(payload);
-    final encoded = _stringValue(map, 'bytes');
-    late final Uint8List bytes;
-    try {
-      bytes = Uint8List.fromList(
-        base64Url.decode(base64Url.normalize(encoded)),
-      );
-    } on FormatException {
-      throw const AvacaProtocolException('resource chunk bytes are invalid');
-    }
+    final bytes = _decodeBase64Bytes(
+      map,
+      'bytes',
+      error: 'resource chunk bytes are invalid',
+    );
     return AvacaResourceChunkDto(
       offset: _int(map, 'offset'),
       bytes: bytes,
@@ -485,7 +592,7 @@ class AvacaApplicationCodec {
     if (handle == null) {
       throw const AvacaProtocolException('resource handle is missing');
     }
-    if (offset < 0 || length < 0 || length > 4 * 1024 * 1024) {
+    if (offset < 0 || length < 0 || length > maxBinaryRangeBytes) {
       throw const AvacaProtocolException('resource range is invalid');
     }
     return _encode({
@@ -500,17 +607,12 @@ class AvacaApplicationCodec {
     final map = _map(payload);
     final offset = _int(map, 'offset');
     final length = _int(map, 'length');
-    if (offset < 0 || length < 0 || length > 4 * 1024 * 1024) {
+    if (offset < 0 || length < 0 || length > maxBinaryRangeBytes) {
       throw const AvacaProtocolException('resource range is invalid');
     }
     final handle = map['resourceHandle'] ?? map['resourceId'];
     final id = _id(handle);
-    return (
-      resourceId: id,
-      resourceHandle: id,
-      offset: offset,
-      length: length,
-    );
+    return (resourceId: id, resourceHandle: id, offset: offset, length: length);
   }
 
   Uint8List encodeCancelReadRequest(AvacaCancelReadDto value) {
@@ -685,6 +787,33 @@ class AvacaApplicationCodec {
 
   String _stringValue(Map<String, Object?> map, String key) =>
       _string(map[key] is String ? map[key] as String : '');
+
+  Uint8List _decodeBase64Bytes(
+    Map<String, Object?> map,
+    String key, {
+    required String error,
+  }) {
+    final value = map[key];
+    if (value is! String ||
+        value.isEmpty ||
+        value.contains('\u0000') ||
+        utf8.encode(value).length > maxPayloadBytes) {
+      throw AvacaProtocolException(error);
+    }
+    try {
+      final bytes = Uint8List.fromList(
+        base64Url.decode(base64Url.normalize(value)),
+      );
+      if (bytes.length > maxBinaryRangeBytes) {
+        throw AvacaProtocolException(error);
+      }
+      return bytes;
+    } on AvacaProtocolException {
+      rethrow;
+    } on FormatException {
+      throw AvacaProtocolException(error);
+    }
+  }
 
   String? _optionalString(Map<String, Object?> map, String key) {
     final value = map[key];

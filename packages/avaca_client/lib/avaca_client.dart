@@ -20,6 +20,13 @@ abstract interface class AvacaRemoteCatalogApi {
 
   Future<AvacaWorkDetail> getWorkDetail(AvacaWorkId workId);
 
+  Future<AvacaAssetOpenedDto> openAsset(
+    String assetId, {
+    int revision = 0,
+    int offset = 0,
+    int length = 256 * 1024,
+  });
+
   Future<AvacaAssetDescriptor> createPlaybackSession(AvacaMediaId mediaId);
 
   Future<void> closePlaybackSession(String sessionId);
@@ -136,6 +143,28 @@ final class AvacaRemoteCatalogClient implements AvacaRemoteCatalogApi {
           .toList(growable: false),
       coverResourceId: detail.artwork?.assetId,
     );
+  }
+
+  @override
+  Future<AvacaAssetOpenedDto> openAsset(
+    String assetId, {
+    int revision = 0,
+    int offset = 0,
+    int length = 256 * 1024,
+  }) async {
+    final frame = await _session.request(
+      AvacaOpcode.openAsset,
+      _codec.encodeAssetOpenRequest(
+        AvacaAssetOpenRequestDto(
+          assetId: assetId,
+          revision: revision,
+          offset: offset,
+          length: length,
+        ),
+      ),
+      expectedResponses: const <AvacaOpcode>{AvacaOpcode.assetOpened},
+    );
+    return _codec.decodeAssetOpened(frame.payload);
   }
 
   @override

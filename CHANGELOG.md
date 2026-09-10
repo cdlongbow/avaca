@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.10.5 - 2026-09-10
+
+### Pairing and Server management
+
+- Simplified Windows Server pairing to one automatic `開始配對` action that
+  selects the certificate and usable LAN endpoint before showing a one-time
+  QR invitation.
+- Kept catalog and physical-media import available independently from pairing;
+  folder scans now preserve physical inventory when metadata needs review or a
+  scraper is unavailable.
+- Added additive Server library recovery, bounded metadata scraping, and
+  allow-listed artwork caching without exposing Server paths to clients.
+
+### Remote transport and release products
+
+- Added the Android native MsQuic transport and completed the v2 opaque asset,
+  playback, channel-binding, and secure pairing integration across the Client
+  and Server compositions.
+- Added release coverage for the separate Windows AVACA client and Windows
+  AVACA Server portable bundles, including the pinned MsQuic runtime closure.
+
 ## 0.10.4 - 2026-09-09
 
 ### Pairing and discovery

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:developer' as developer;
 import 'dart:ffi';
 import 'dart:io';
 import 'dart:typed_data';
@@ -270,10 +271,10 @@ final class AvacaMsQuicTransport implements AvacaRemoteTransport {
   }
 
   void _initialize() {
-    if (!Platform.isWindows) {
+    if (!Platform.isWindows && !Platform.isAndroid) {
       throw const AvacaRemoteException(
         AvacaRemoteFailureCode.unsupported,
-        'the MsQuic transport is only available on Windows',
+        'the MsQuic transport is only available on Windows and Android',
       );
     }
     _bindings = _NativeQuicBindings.open();
@@ -300,6 +301,12 @@ final class AvacaMsQuicTransport implements AvacaRemoteTransport {
               output,
             );
       if (status != 0 || output.value == 0) {
+        final unsignedStatus = status & 0xffffffff;
+        developer.log(
+          'AVACA MsQuic ${role.name} initialization failed: '
+          'status=0x${unsignedStatus.toRadixString(16).padLeft(8, '0')}, '
+          'handle=${output.value}',
+        );
         throw _nativeError(
           status,
           AvacaRemoteFailureCode.unsupported,
@@ -544,7 +551,9 @@ final class _NativeQuicBindings {
   static _NativeQuicBindings open() {
     try {
       final directory = File(Platform.resolvedExecutable).parent.path;
-      final path = '$directory${Platform.pathSeparator}avaca_remote_quic.dll';
+      final path = Platform.isWindows
+          ? '$directory${Platform.pathSeparator}avaca_remote_quic.dll'
+          : 'libavaca_remote_android.so';
       return _NativeQuicBindings(DynamicLibrary.open(path));
     } on Object {
       throw const AvacaRemoteException(
@@ -656,6 +665,11 @@ final class _AvacaQuicConnection implements AvacaRemoteConnection {
         operation,
       );
       if (status != 0) {
+        developer.log(
+          'AVACA QUIC write rejected: operation=$operation '
+          'status=0x${(status & 0xffffffff).toRadixString(16).padLeft(8, '0')}',
+          name: 'avaca.quic',
+        );
         _writes.remove(operation);
         _bufferedBytes -= bytes.length;
         throw _nativeError(
@@ -738,6 +752,11 @@ final class _AvacaQuicConnection implements AvacaRemoteConnection {
   }
 
   void _onError(int status) {
+    developer.log(
+      'AVACA QUIC connection error: handle=$_handle '
+      'status=0x${(status & 0xffffffff).toRadixString(16).padLeft(8, '0')}',
+      name: 'avaca.quic',
+    );
     final error = _nativeError(
       status,
       AvacaRemoteFailureCode.connectionFailed,
@@ -754,6 +773,11 @@ final class _AvacaQuicConnection implements AvacaRemoteConnection {
 
   void _onClosed(int status) {
     if (_closed.isCompleted) return;
+    developer.log(
+      'AVACA QUIC connection closed: handle=$_handle '
+      'status=0x${(status & 0xffffffff).toRadixString(16).padLeft(8, '0')}',
+      name: 'avaca.quic',
+    );
     _open = false;
     if (!_connected.isCompleted) {
       _connected.completeError(

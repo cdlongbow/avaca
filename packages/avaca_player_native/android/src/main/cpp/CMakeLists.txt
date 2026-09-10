@@ -134,7 +134,9 @@ if(ANDROID)
     "-include${CMAKE_CURRENT_LIST_DIR}/android_glob_compat.h")
 endif()
 
-add_library(avaca_remote_android SHARED avaca_android_remote_quic.cpp)
+add_library(avaca_remote_android SHARED
+  avaca_android_remote_quic.cpp
+  avaca_android_remote_transport.cpp)
 target_compile_features(avaca_remote_android PRIVATE cxx_std_17)
 target_compile_definitions(avaca_remote_android PRIVATE
   QUIC_API_ENABLE_PREVIEW_FEATURES)

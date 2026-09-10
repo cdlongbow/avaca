@@ -337,10 +337,12 @@ class AvacaPlayerNativePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                         result.error("INVALID_PROFILE", "The remote profile payload is invalid.", null)
                         return
                     }
-                    val iv = ByteArray(12)
-                    SecureRandom().nextBytes(iv)
                     val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-                    cipher.init(Cipher.ENCRYPT_MODE, profileKey(), GCMParameterSpec(128, iv))
+                    // Let Android Keystore choose the randomized GCM nonce.
+                    // Supplying an app-generated nonce is rejected by newer
+                    // Android providers with CALLER_NONCE_PROHIBITED.
+                    cipher.init(Cipher.ENCRYPT_MODE, profileKey())
+                    val iv = cipher.iv
                     val ciphertext = cipher.doFinal(cleartext)
                     val envelope = ByteArray(iv.size + ciphertext.size)
                     iv.copyInto(envelope, 0)

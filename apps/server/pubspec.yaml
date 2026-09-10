@@ -1,7 +1,7 @@
 name: avaca_server
 description: Windows-only AVACA Server application.
 publish_to: none
-version: 0.10.4+2052
+version: 0.10.5+2053
 
 environment:
   sdk: ^3.11.5
@@ -20,6 +20,8 @@ dependencies:
     path: ../../packages/avaca_remote_core
   avaca_scraper:
     path: ../../packages/avaca_scraper
+  file_picker: ^8.1.7
+  path: ^1.9.1
   qr_flutter: ^4.1.0
 
 dev_dependencies:

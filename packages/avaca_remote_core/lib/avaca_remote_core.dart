@@ -45,7 +45,7 @@ class AvacaRemoteEndpoint {
 abstract final class AvacaRemoteLimits {
   static const maxFrameBytes = 1024 * 1024;
   static const maxBufferedBytes = 16 * 1024 * 1024;
-  static const maxReadBytes = 4 * 1024 * 1024;
+  static const maxReadBytes = 700 * 1024;
   static const connectionTimeout = Duration(seconds: 15);
 }
 

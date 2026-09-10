@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:avaca_client/avaca_client.dart';
@@ -171,9 +172,18 @@ class _ClientBootstrapState extends State<_ClientBootstrap> {
       });
       previous?.dispose();
       await _connectProfile(profile);
-    } on Object catch (error) {
+    } on Object catch (error, stackTrace) {
+      developer.log(
+        'AVACA profile save/connect failed',
+        name: 'avaca.pairing',
+        error: error,
+        stackTrace: stackTrace,
+      );
       if (mounted) {
-        setState(() => _connectionError = error);
+        setState(() {
+          _connecting = false;
+          _connectionError = error;
+        });
       }
       // The profile remains in the secure store after a network/auth failure
       // so the user can retry without re-exposing the secret.
@@ -186,30 +196,38 @@ class _ClientBootstrapState extends State<_ClientBootstrap> {
       _connecting = true;
       _connectionError = null;
     });
-    final transport = AvacaMsQuicTransport.client(
-      certificateSha256Pin: profile.leafCertificateSha256,
-    );
-    final host = AvacaClientApplicationHost(transport: transport);
+    AvacaClientApplicationHost? host;
     try {
-      await host.connect(
+      final transport = AvacaMsQuicTransport.client(
+        certificateSha256Pin: profile.leafCertificateSha256,
+      );
+      final connectedHost = AvacaClientApplicationHost(transport: transport);
+      host = connectedHost;
+      await connectedHost.connect(
         endpoint: profile.endpoint,
         clientId: profile.clientId,
         expectedServerId: profile.serverId,
         pairingSecret: profile.pairingSecret,
       );
       if (!mounted) {
-        await host.close();
+        await connectedHost.close();
         return;
       }
       final previousHost = _host;
       setState(() {
-        _host = host;
-        _catalog = host.catalog;
+        _host = connectedHost;
+        _catalog = connectedHost.catalog;
         _connecting = false;
       });
       await previousHost?.close();
-    } on Object catch (error) {
-      await host.close();
+    } on Object catch (error, stackTrace) {
+      developer.log(
+        'AVACA profile connection failed',
+        name: 'avaca.pairing',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      await host?.close();
       if (mounted) {
         setState(() {
           _connecting = false;

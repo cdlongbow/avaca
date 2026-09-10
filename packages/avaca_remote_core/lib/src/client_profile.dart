@@ -149,6 +149,10 @@ final class AvacaPairingInvitationCodec {
 
   static const prefix = 'AVACA-PAIR-V2.';
   static const maxLifetime = Duration(minutes: 10);
+  // Keep the public V2 prefix while avoiding the JSON/base64 overhead that
+  // made a normal server invitation unnecessarily dense for camera scanners.
+  // decode() still accepts the original JSON payload for older Servers.
+  static const _compactMarker = 0xa2;
   static const _keys = <String>[
     'serverId',
     'clientId',
@@ -194,20 +198,9 @@ final class AvacaPairingInvitationCodec {
         invitation.expiresAt.isAfter(now.add(maxLifetime))) {
       throw const FormatException('pairing invitation is outside its lifetime');
     }
-    final profile = invitation.toProfile();
-    profile.dispose();
-    final payload = <String, Object?>{
-      'serverId': invitation.serverId,
-      'clientId': invitation.clientId,
-      'host': invitation.host,
-      'port': invitation.port,
-      'certPin': _encodeBytes(invitation.leafCertificateSha256),
-      'secret': _encodeBytes(invitation.pairingSecret),
-      'expiry': expiry,
-      'invitationId': invitation.invitationId,
-    };
-    final json = jsonEncode(payload);
-    final encoded = base64UrlEncode(utf8.encode(json)).replaceAll('=', '');
+    final encoded = base64UrlEncode(
+      _encodeCompact(invitation, expiry),
+    ).replaceAll('=', '');
     return '$prefix$encoded';
   }
 
@@ -226,6 +219,9 @@ final class AvacaPairingInvitationCodec {
       final bytes = base64Url.decode(base64Url.normalize(encoded));
       if (base64UrlEncode(bytes).replaceAll('=', '') != encoded) {
         throw const FormatException('pairing invitation is not canonical');
+      }
+      if (bytes.isNotEmpty && bytes.first == _compactMarker) {
+        return _decodeCompact(bytes);
       }
       json = utf8.decode(bytes);
     } on Object {
@@ -272,6 +268,104 @@ final class AvacaPairingInvitationCodec {
       throw const FormatException('pairing invitation has expired');
     }
     return invitation;
+  }
+
+  Uint8List _encodeCompact(AvacaPairingInvitation invitation, int expiry) {
+    final builder = BytesBuilder(copy: false)..addByte(_compactMarker);
+    _addCompactString(builder, invitation.serverId);
+    _addCompactString(builder, invitation.clientId);
+    _addCompactString(builder, invitation.host);
+
+    final numeric = ByteData(10)
+      ..setUint16(0, invitation.port, Endian.big)
+      ..setUint64(2, expiry, Endian.big);
+    builder.add(numeric.buffer.asUint8List());
+    builder.add(invitation.leafCertificateSha256);
+    builder.add(invitation.pairingSecret);
+    _addCompactString(builder, invitation.invitationId);
+    return builder.takeBytes();
+  }
+
+  AvacaPairingInvitation _decodeCompact(Uint8List bytes) {
+    var offset = 1;
+
+    int readUint16() {
+      if (offset + 2 > bytes.length) {
+        throw const FormatException('pairing invitation payload is invalid');
+      }
+      final value = ByteData.sublistView(
+        bytes,
+        offset,
+        offset + 2,
+      ).getUint16(0, Endian.big);
+      offset += 2;
+      return value;
+    }
+
+    String readString() {
+      final length = readUint16();
+      if (offset + length > bytes.length) {
+        throw const FormatException('pairing invitation payload is invalid');
+      }
+      late final String value;
+      try {
+        value = utf8.decode(bytes.sublist(offset, offset + length));
+      } on Object {
+        throw const FormatException('pairing invitation payload is invalid');
+      }
+      offset += length;
+      return value;
+    }
+
+    final serverId = readString();
+    final clientId = readString();
+    final host = readString();
+    if (offset + 2 + 8 + 32 + 32 > bytes.length) {
+      throw const FormatException('pairing invitation payload is invalid');
+    }
+    final fixed = ByteData.sublistView(bytes, offset, offset + 10);
+    final port = fixed.getUint16(0, Endian.big);
+    final expiry = fixed.getUint64(2, Endian.big);
+    offset += 10;
+    final pin = Uint8List.fromList(bytes.sublist(offset, offset + 32));
+    offset += 32;
+    final secret = Uint8List.fromList(bytes.sublist(offset, offset + 32));
+    offset += 32;
+    final invitationId = readString();
+    if (offset != bytes.length) {
+      throw const FormatException('pairing invitation payload is invalid');
+    }
+
+    late final AvacaPairingInvitation invitation;
+    try {
+      invitation = AvacaPairingInvitation(
+        serverId: serverId,
+        clientId: clientId,
+        host: host,
+        port: port,
+        leafCertificateSha256: pin,
+        pairingSecret: secret,
+        expiresAt: DateTime.fromMillisecondsSinceEpoch(expiry, isUtc: true),
+        invitationId: invitationId,
+      );
+    } on Object {
+      throw const FormatException('pairing invitation payload is invalid');
+    }
+    if (!invitation.expiresAt.isAfter(_clock().toUtc())) {
+      invitation.dispose();
+      throw const FormatException('pairing invitation has expired');
+    }
+    return invitation;
+  }
+
+  void _addCompactString(BytesBuilder builder, String value) {
+    final bytes = utf8.encode(value);
+    if (bytes.isEmpty || bytes.length > 0xffff) {
+      throw const FormatException('pairing invitation string is invalid');
+    }
+    final length = ByteData(2)..setUint16(0, bytes.length, Endian.big);
+    builder.add(length.buffer.asUint8List());
+    builder.add(bytes);
   }
 
   bool _keysEqual(List<String> actual) =>
